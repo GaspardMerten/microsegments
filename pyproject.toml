@@ -1,0 +1,62 @@
+[project]
+name = "microsegments"
+dynamic = ["version"]
+description = "Where do transit vehicles linger? Count vehicle position observations per micro-segment of a line, from GTFS + AVL / GTFS-RT positions."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Gaspard Merten", email = "gaspard.mp.work@gmail.com" },
+]
+keywords = ["gtfs", "gtfs-rt", "avl", "transit", "bus", "tram", "hotspots", "polars"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Typing :: Typed",
+]
+dependencies = [
+    "polars>=1.0",
+    "numpy>=1.26",
+    "shapely>=2.0",
+    "gtfs-parquet>=0.7",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.8"]
+mobilitytwin = ["requests>=2.31"]
+gtfsrt = ["gtfs-realtime-bindings>=1.0"]
+dev = ["pytest>=8.0", "hypothesis>=6.0", "matplotlib>=3.8"]
+
+[project.scripts]
+microsegments = "microsegments.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/GaspardMerten/microsegments"
+Repository = "https://github.com/GaspardMerten/microsegments"
+Issues = "https://github.com/GaspardMerten/microsegments/issues"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/microsegments/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/microsegments"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["regression: needs the local BrusselsTransitStuck prototype data (MS_PROTOTYPE_DATA)"]
+addopts = "-m 'not regression'"
