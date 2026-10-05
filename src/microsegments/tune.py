@@ -21,7 +21,11 @@ deviance within one standard error of the minimum. Fallback: the CV minimum.
 ``sensitivity`` re-runs the analysis over phase offsets, gap caps (needs ``coverage_fn``), stop zones
 (incl. one estimated from the stop-aligned occupancy profile), references and passage sources, and
 compares each variant with the baseline (Spearman on a 5 m profile, hotspot Jaccard, link total change,
-share of the baseline hotspots found again).
+share of the baseline hotspots found again), and over other segment lengths (``lengths``).
+
+``sensitivity_table`` runs the suite over several configurations (lines) and returns one tidy table
+(line, mode, param, value, spearman, jaccard, link_total_change, hotspots_stable_share, stable) plus a
+markdown summary.
 """
 from __future__ import annotations
 
@@ -55,6 +59,7 @@ class SensitivityResult:
     hotspots: pl.DataFrame               # baseline top hotspots: boot share, phase count, stable
     stable: bool
     baseline_hotspots: pl.DataFrame = field(repr=False, default_factory=pl.DataFrame)
+    n_days: int = 0                      # included days of the baseline analysis
 
 
 # ------------------------------------------------------------------------------------ helpers
@@ -419,11 +424,13 @@ def sensitivity(placed: pl.DataFrame, segment_fn: SegmentFn, length: float = 30.
                 per_vehicle: bool = False, phases=(0.0, 0.25, 0.5, 0.75), gap_caps=(30.0, 40.0, 60.0, float("inf")),
                 stop_zones=((15.0, 15.0), (30.0, 60.0), (50.0, 100.0), "data"),
                 references=(("evening", (20, 23)), ("evening", (21, 23)), ("freeflow", (20, 23)), ("evening", (5, 6))),
-                passage_sources=("n_feed", "n_events", "n"), B: int | None = None, top: int = 10,
-                grid_m: float = 5.0, seed: int = 0, hotspot_kw: dict | None = None) -> SensitivityResult:
+                passage_sources=("n_feed", "n_events", "n"), lengths=(15.0, 30.0, 60.0), B: int | None = None,
+                top: int = 10, grid_m: float = 5.0, seed: int = 0, hotspot_kw: dict | None = None) -> SensitivityResult:
     """Sensitivity suite around a baseline (``length``, phase 0, ``params``). ``phases`` are fractions of
     L. Gap-cap variants need ``coverage_fn(gap_cap_s) -> COVERAGE``; stop-zone variants need a
-    ``segment_fn`` accepting a ``stop_zone`` keyword. Variants that cannot run are skipped."""
+    ``segment_fn`` accepting a ``stop_zone`` keyword. ``lengths``: other segment lengths compared with
+    the baseline (``length`` itself is skipped; profiles are compared on the same 5 m grid, hotspots
+    with a tolerance of the baseline length). Variants that cannot run are skipped."""
     params = params or Params()
     if per_vehicle:  # grid once, then every variant counts the same rows
         from .aggregate import per_vehicle_grid
@@ -454,6 +461,11 @@ def sensitivity(placed: pl.DataFrame, segment_fn: SegmentFn, length: float = 30.
         if f == 0:
             continue
         variants.append(("phase", f * length, lambda f=f: run(("phase", f), segment_fn(length, f * length), coverage, params, "n")))
+    for L in lengths or ():
+        if float(L) == float(length):
+            continue
+        variants.append(("segment_m", float(L), lambda L=float(L): run(("L", L), segment_fn(L, 0.0), coverage,
+                                                                       replace(params, segment_m=L), "n")))
     if coverage_fn is not None:
         for g in gap_caps:
             variants.append(("gap_cap_s", g, lambda g=g: run(("phase", 0.0), base_segs, coverage_fn(g), replace(params, gap_cap_s=g), "n")))
@@ -534,4 +546,70 @@ def sensitivity(placed: pl.DataFrame, segment_fn: SegmentFn, length: float = 30.
     summary = pl.DataFrame(summ) if summ else pl.DataFrame()
     stable = bool((summary["stable"].all() if summary.height else True) and (hdf["stable"].all() if hdf.height else True))
     return SensitivityResult(table=pl.concat(tidy, how="vertical_relaxed"), summary=summary, hotspots=hdf,
-                             stable=stable, baseline_hotspots=hs_base)
+                             stable=stable, baseline_hotspots=hs_base, n_days=len(base.days))
+
+
+# ------------------------------------------------------------------------------------ several lines
+SENSITIVITY_COLUMNS = ["line", "mode", "param", "value", "spearman", "jaccard", "link_total_change",
+                       "hotspots_stable_share", "n_hotspots", "stable"]
+
+
+def sensitivity_table(configs, *, length: float | None = None, B: int = 100, dates: str | None = None,
+                      log: Callable[[str], None] | None = None, **kw) -> tuple[pl.DataFrame, str]:
+    """Run :func:`sensitivity` for every config (``Config`` or TOML path) at its ``params.segment_m``
+    (or ``length``), gap-cap variants included (coverage recomputed from the snapshots). Returns one
+    tidy table (``SENSITIVITY_COLUMNS``, plus ``days`` and ``baseline_hotspots``) and a markdown summary
+    (per line: share of stable variants, the unstable ones; per parameter: worst values)."""
+    from .config import Config
+    from .pipeline import prepare
+    say = log or (lambda s: None)
+    frames, hs_rows = [], []
+    for c in configs:
+        cfg = c if isinstance(c, Config) else Config.from_toml(c)
+        if dates:
+            cfg = replace(cfg, select=replace(cfg.select, dates=dates))
+        pre = prepare(cfg, log=log)
+        L = float(length or cfg.params.segment_m)
+        sr = sensitivity(pre.placed, pre.segment_fn(), L, coverage=pre.coverage, coverage_fn=pre.coverage_fn(),
+                         passages=pre.passages, pattern_days=pre.network.pattern_days, select=cfg.select,
+                         params=replace(cfg.params, segment_m=L), quality=cfg.quality, per_vehicle=pre.per_vehicle,
+                         B=B, **kw)
+        n_days = sr.n_days
+        line = str(cfg.select.route)
+        say(f"line {line}: {sr.summary.height} variants, {'stable' if sr.stable else 'NOT stable'}")
+        if sr.summary.height:
+            frames.append(sr.summary.with_columns(pl.lit(line).alias("line"), pl.lit(pre.mode).alias("mode"),
+                                                  pl.lit(sr.baseline_hotspots.height).alias("baseline_hotspots"),
+                                                  pl.lit(n_days).alias("days")))
+        hs_rows.append((line, pre.mode, sr.hotspots.height, int(sr.hotspots["stable"].sum()) if sr.hotspots.height else 0))
+    table = (pl.concat(frames, how="diagonal_relaxed").select(SENSITIVITY_COLUMNS + ["days", "baseline_hotspots"])
+             if frames else pl.DataFrame(schema={c: pl.Utf8 for c in SENSITIVITY_COLUMNS}))
+    return table, _markdown(table, hs_rows)
+
+
+def _fmt(v, nd=2):
+    return "–" if v is None or (isinstance(v, float) and not np.isfinite(v)) else f"{v:.{nd}f}"
+
+
+def _markdown(t: pl.DataFrame, hs_rows) -> str:
+    out = ["# Sensitivity", "",
+           "A variant is *stable* when Spearman (day-band profile, 5 m grid) >= 0.9, hotspot Jaccard >= 0.7 "
+           "and link totals within 5 % of the baseline.", ""]
+    if not t.height:
+        return "\n".join(out + ["No variant ran."])
+    out += ["| line | mode | days | variants stable | top hotspots stable (boot >= 80 %, >= 3 phases) | unstable variants |",
+            "|---|---|---|---|---|---|"]
+    tops = {r[0]: r for r in hs_rows}
+    for (line,), g in t.group_by(["line"], maintain_order=True):
+        bad = g.filter(~pl.col("stable"))
+        bad_s = ", ".join(f"{p}={v}" for p, v in bad.select("param", "value").iter_rows()) or "none"
+        h = tops.get(line, (line, None, 0, 0))
+        out.append(f"| {line} | {g['mode'][0] or ''} | {g['days'][0]} | {int(g['stable'].sum())}/{g.height} | "
+                   f"{h[3]}/{h[2]} | {bad_s} |")
+    out += ["", "## Per variant", "", "| line | param | value | Spearman | Jaccard | link total change | baseline hotspots found | stable |",
+            "|---|---|---|---|---|---|---|---|"]
+    for r in t.iter_rows(named=True):
+        out.append(f"| {r['line']} | {r['param']} | {r['value']} | {_fmt(r['spearman'], 3)} | {_fmt(r['jaccard'])} | "
+                   f"{_fmt(100 * r['link_total_change'], 1)} % | {_fmt(100 * r['hotspots_stable_share'], 0)} % | "
+                   f"{'yes' if r['stable'] else 'no'} |")
+    return "\n".join(out) + "\n"

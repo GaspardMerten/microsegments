@@ -227,16 +227,21 @@ class Network:
             .sort("direction_id", "service_date", "link_idx").drop("link_idx")
 
     def display_pattern(self, direction: int) -> str | None:
-        """Main pattern with the most days (ties: the latest)."""
+        """Main pattern of the link_key sequence with the most days (patterns that differ only by
+        shape edits are pooled), and within it the one with the most days (ties: the latest)."""
         m = self.mains().filter(pl.col("direction_id") == direction)
         if not len(m):
             return None
+        seq = {u: "|".join(self.links_of(u)["link_key"].to_list()) for u in m["pattern_uid"].unique().to_list()}
         c = (m.group_by("pattern_uid").agg(n=pl.len(), last=pl.col("service_date").max())
-             .sort("n", "last", "pattern_uid", descending=True))
+             .with_columns(pl.col("pattern_uid").replace_strict(seq, return_dtype=pl.Utf8).alias("_seq"))
+             .with_columns(pl.col("n").sum().over("_seq").alias("_ns"))
+             .sort("_ns", "n", "last", "pattern_uid", descending=True))
         return c["pattern_uid"][0]
 
     def versions(self, direction: int | None = None) -> pl.DataFrame:
-        """Runs of consecutive dates (among the network's dates) sharing the same main pattern."""
+        """Runs of consecutive dates (among the network's dates) whose main pattern has the same
+        link_key sequence (patterns differing only by small shape edits are one version)."""
         rows = []
         dirs = self.directions if direction is None else [direction]
         for d in dirs:
@@ -244,16 +249,23 @@ class Network:
             if not len(m):
                 continue
             disp = self.display_pattern(d)
+            disp_seq = "|".join(self.links_of(disp)["link_key"].to_list())
             disp_keys = set(self.links_of(disp)["link_key"].to_list())
-            runs = (m.with_columns(run=(pl.col("pattern_uid") != pl.col("pattern_uid").shift(1)).fill_null(True).cum_sum())
+            # a run = consecutive dates whose main pattern has the same link_key sequence: patterns that
+            # differ only by small shape edits (same keys) are one version
+            seq = {u: "|".join(self.links_of(u)["link_key"].to_list()) for u in m["pattern_uid"].unique().to_list()}
+            runs = (m.with_columns(pl.col("pattern_uid").replace_strict(seq, return_dtype=pl.Utf8).alias("_seq"))
+                    .with_columns(run=(pl.col("_seq") != pl.col("_seq").shift(1)).fill_null(True).cum_sum())
                     .group_by("run", maintain_order=True)
-                    .agg(pl.col("pattern_uid").first(), first=pl.col("service_date").min(),
+                    .agg(pl.col("pattern_uid").mode().sort().first(), pl.col("pattern_uid").alias("_uids"),
+                         pl.col("_seq").first(), first=pl.col("service_date").min(),
                          last=pl.col("service_date").max(), n_days=pl.len()))
             for k, r in enumerate(runs.iter_rows(named=True)):
-                keys = self.links_of(r["pattern_uid"])["link_key"].to_list()
-                rows.append({"direction_id": d, "version": k, "pattern_uid": r["pattern_uid"],
+                uid = disp if r["_seq"] == disp_seq and disp in r["_uids"] else r["pattern_uid"]
+                keys = self.links_of(uid)["link_key"].to_list()
+                rows.append({"direction_id": d, "version": k, "pattern_uid": uid,
                              "first": r["first"], "last": r["last"], "n_days": r["n_days"],
-                             "display": r["pattern_uid"] == disp,
+                             "display": r["_seq"] == disp_seq,
                              "links_added": [x for x in keys if x not in disp_keys],
                              "links_removed": [x for x in self.links_of(disp)["link_key"].to_list() if x not in set(keys)]})
         return pl.DataFrame(rows, schema=VERSIONS_SCHEMA)

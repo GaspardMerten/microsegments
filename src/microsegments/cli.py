@@ -1,4 +1,5 @@
-"""Command line: ``microsegments run | tune | hotspots | inspect CONFIG``."""
+"""Command line: ``microsegments run | tune | hotspots | inspect | compare CONFIG``, ``microsegments
+sensitivity-table CONFIG...``."""
 from __future__ import annotations
 
 import argparse
@@ -99,7 +100,9 @@ def cmd_tune(args) -> int:
         tr.table.write_parquet(out / "tune.parquet")
     sr = None
     if args.sensitivity:
-        sr = tune.sensitivity(pre.placed, pre.segment_fn(), tr.recommended, B=args.bootstrap, **kw)
+        kw["params"] = replace(cfg.params, segment_m=float(tr.recommended))
+        sr = tune.sensitivity(pre.placed, pre.segment_fn(), tr.recommended, B=args.bootstrap,
+                              coverage_fn=pre.coverage_fn(), **kw)
         with pl.Config(tbl_rows=50, tbl_cols=20, tbl_width_chars=200, float_precision=3):
             print(sr.summary)
             print(sr.hotspots)
@@ -156,6 +159,70 @@ def cmd_inspect(args) -> int:
         p = pre.passages
         print(f"\npassages: {p['n'].sum():,.0f} link passages"
               + (f" (feed {p['n_feed'].sum():,.0f}, events {p['n_events'].sum():,.0f})" if p["n_events"].null_count() < p.height else ""))
+    if not args.no_agreement:
+        from .metrics import reference_agreement
+        from .pipeline import run
+        res = run(cfg, prepared=pre, hotspot_kw={"B": min(cfg.params.bootstrap, 100)})
+        ag = reference_agreement(res.analysis, res.hotspots)
+        print(f"\nreferences: evening {cfg.params.reference_hours[0]}-{cfg.params.reference_hours[1]} h vs line level "
+              "(median running obs / passage / m, 6-23 h); day-band excess profiles:")
+        with pl.Config(tbl_rows=10, tbl_cols=20, tbl_width_chars=200, float_precision=3):
+            print(ag)
+    return 0
+
+
+def _period(s: str) -> str:
+    a, b = s.split("..")
+    import datetime as dt
+    dt.date.fromisoformat(a), dt.date.fromisoformat(b)
+    return s
+
+
+def cmd_compare(args) -> int:
+    from .compare import run_compare
+    cfg = _cfg(args)
+    res = run_compare(cfg, args.a, args.b, B=args.bootstrap, log=_log(args))
+    paths = res.save(args.out, html=not args.no_html, lang=args.lang, title=args.title, source=args.source)
+    st = res.comparison.stretches
+    if st.height:
+        from .report import name_map
+        nm = name_map(cfg.report.names, res.prepared.network)
+        fix = lambda c: pl.col(c).replace(nm) if nm else pl.col(c)  # noqa: E731
+        t = st.select("direction_id", "rank",
+                      pl.concat_str([fix("from_stop_name"), pl.lit(" -> "), fix("to_stop_name")]).alias("stretch"),
+                      pl.col("x0_m").round(0), pl.col("x1_m").round(0), "zone",
+                      pl.col("hours").cast(pl.List(pl.Utf8)).list.join(",").alias("hours"),
+                      pl.col("delta_s").round(0).alias("delta_s_per_veh"),
+                      (pl.col("veh_time_s_per_day") / 60).round(1).alias("veh_min_per_day"),
+                      pl.col("passages_per_h_a").round(1).alias("veh_h_a"), pl.col("passages_per_h_b").round(1).alias("veh_h_b"),
+                      "frequency_changed")
+        with pl.Config(tbl_rows=60, tbl_cols=20, fmt_str_lengths=60, tbl_width_chars=220):
+            print(t.head(args.top) if args.top else t)
+    else:
+        print("no significant change")
+    for p in paths.values():
+        print(p)
+    return 0
+
+
+def cmd_sensitivity_table(args) -> int:
+    from . import tune
+    configs = [Config.from_toml(c) for c in args.configs]
+    if args.segment_m:
+        configs = [replace(c, params=replace(c.params, segment_m=float(args.segment_m))) for c in configs]
+    table, md = tune.sensitivity_table(configs, B=args.bootstrap, dates=args.dates, log=_log(args))
+    with pl.Config(tbl_rows=200, tbl_cols=20, tbl_width_chars=200, float_precision=3):
+        print(table)
+    if args.out:
+        out = Path(args.out)
+        out.mkdir(parents=True, exist_ok=True)
+        table.write_parquet(out / "sensitivity_table.parquet")
+        table.write_csv(out / "sensitivity_table.csv")
+        (out / "sensitivity_table.md").write_text(md)
+        print(out / "sensitivity_table.parquet")
+        print(out / "sensitivity_table.md")
+    else:
+        print(md)
     return 0
 
 
@@ -193,9 +260,32 @@ def main(argv=None) -> int:
     p.add_argument("-o", "--out", help="write .parquet, .csv or .geojson")
     p.set_defaults(fn=cmd_hotspots)
 
-    p = sub.add_parser("inspect", help="coverage, GTFS versions, placement / drop counts")
+    p = sub.add_parser("inspect", help="coverage, GTFS versions, placement / drop counts, reference agreement")
     common(p)
+    p.add_argument("--no-agreement", action="store_true", help="skip the analysis (evening vs line-level reference)")
     p.set_defaults(fn=cmd_inspect)
+
+    p = sub.add_parser("compare", help="compare two periods of the same line: parquet + JSON + HTML")
+    common(p)
+    p.add_argument("--a", required=True, type=_period, help="period A, before (YYYY-MM-DD..YYYY-MM-DD)")
+    p.add_argument("--b", required=True, type=_period, help="period B, after (YYYY-MM-DD..YYYY-MM-DD)")
+    p.add_argument("-o", "--out", default="out_compare", help="output directory (default: out_compare)")
+    p.add_argument("--bootstrap", type=int, help="bootstrap draws (default: params.bootstrap)")
+    p.add_argument("--top", type=int, default=20, help="changes printed (0: all)")
+    p.add_argument("--lang", default="fr", choices=["fr", "en"])
+    p.add_argument("--title")
+    p.add_argument("--source", help="data credit shown in the page footer")
+    p.add_argument("--no-html", action="store_true")
+    p.set_defaults(fn=cmd_compare)
+
+    p = sub.add_parser("sensitivity-table", help="sensitivity suite over several configs -> one tidy table + markdown")
+    p.add_argument("configs", nargs="+", help="TOML configurations (one per line)")
+    p.add_argument("--segment-m", type=float, help="baseline segment length (default: each config's params.segment_m)")
+    p.add_argument("--dates", help="override select.dates for every config")
+    p.add_argument("--bootstrap", type=int, default=100)
+    p.add_argument("-o", "--out", help="directory for sensitivity_table.{parquet,csv,md}")
+    p.add_argument("-q", "--quiet", action="store_true")
+    p.set_defaults(fn=cmd_sensitivity_table)
 
     args = ap.parse_args(argv)
     return args.fn(args)

@@ -10,7 +10,14 @@ Additive keys beyond ``contract.py`` (all optional for consumers):
 * ``dirs[].versions``: the ``pattern_uid`` list of the direction, display first;
 * ``hotspots[].dir``: alias of ``direction_id``;
 * ``hotspots_status``: "computed" or "not_computed" (e.g. too few days);
-* ``source``, ``title``: free text for the page footer / heading (``None`` when unknown).
+* ``source``, ``title``: free text for the page footer / heading (``None`` when unknown);
+* ``dirs[].wk.n``: [dow][h][link] included day-hours, so ``p / n`` = passages (vehicles) per hour;
+* ``dirs[].ref``: both references per segment over all included days, obs per passage:
+  ``{"evening": [...], "line": [...], "line_level_per_m": m}`` (line = m x segment length, m = median
+  over running segments of the 6-23 h obs / passage / metre);
+* ``reference_agreement``: per direction, ``metrics.reference_agreement`` (Spearman of the two day-band
+  excess profiles, top-segment overlap, hotspots per criterion and share found by both);
+* ``compare``: present on a two-period page (``compare.Comparison.to_contract``), see ``contract.py``.
 """
 from __future__ import annotations
 
@@ -141,8 +148,20 @@ def _dir_entry(an: Analysis, dirid: int, uid: str, links: pl.DataFrame | None, s
             "c": [_round_ll(geo.get(k)) for k in keys],
             "flags": [seg_flags(k) for k in keys],
         },
-        "wk": {k: wk[k] for k in ("obs", "cov", "p", "days")},
+        "wk": {k: wk[k] for k in ("obs", "cov", "p", "days", "n")},
+        "ref": _refs(an, dirid, keys),
     }
+
+
+def _refs(an: Analysis, dirid: int, keys: list[str]) -> dict[str, Any]:
+    """Both references per segment (all included days, obs per passage): evening and line level."""
+    dd = an.dirs[dirid]
+    est = an.estimate(dirid)
+    kpos = {k: i for i, k in enumerate(dd.seg_keys.tolist())}
+    idx = [kpos[k] for k in keys]
+    r4 = lambda a: [None if not np.isfinite(v) else round(float(v), 4) for v in a]  # noqa: E731
+    return {"evening": r4(est["ref"][0][idx]), "line": r4(est["ref_line"][0][idx]),
+            "line_level_per_m": _jsonable(float(est["line_level"][0]))}
 
 
 NAME_PARTICLES = frozenset({"du", "de", "la", "des", "le", "van", "aux"})
@@ -212,7 +231,8 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
         if len(dd.days) == 0:
             continue
         e = _dir_entry(an, dirid, dd.display_uid, links, stops, names)
-        others = [u for u in dd.pattern_segs if u != dd.display_uid and (dd.main_uid == u).any()]
+        from .metrics import version_groups
+        others = [u for u in version_groups(dd) if u != dd.display_uid]   # one per distinct link sequence
         e["versions"] = [dd.display_uid] + others
         e["alt"] = [{k: v for k, v in _dir_entry(an, dirid, u, links, stops, names).items() if k != "dir"}
                     for u in others]
@@ -247,6 +267,8 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
                          "first": _jsonable(r["first"]), "last": _jsonable(r["last"]), "n_days": int(r["n_days"]),
                          "links_added": list(r["links_added"] or []), "links_removed": list(r["links_removed"] or []),
                          "display": bool(r["display"])})
+    from .metrics import reference_agreement
+    agree = frame_records(reference_agreement(an, hotspots if hotspots is not None and hotspots.height else None))
     from .hotspots import hotspot_status
     hs_status = "computed" if hotspots is not None and hotspot_status(an)[0] else "not_computed"
     hs = []
@@ -277,6 +299,7 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
         "dirs": dirs,
         "hotspots": hs,
         "hotspots_status": hs_status,
+        "reference_agreement": agree,
         "ctx": ctx or [],
     }
 

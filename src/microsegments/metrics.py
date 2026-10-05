@@ -25,6 +25,9 @@ weekday)::
     excess_per_passage = O - r
     excess_obs_per_h   = (Σ N - r Σ P) / Σ C
     log2_ratio         = log2((O + .5) / (r + .5))
+    line reference r_l = m * len_k, m = median over running segments of Σ_{6-23 h} N / Σ P / len
+                         (the typical running occupancy per metre of the direction; extra result
+                         columns ``ref_line_obs_per_passage`` and ``excess_line_per_passage`` = O - r_l)
 
 Bands are emitted as extra rows with ``hour`` = -1 (am 7-10), -2 (pm 16-19), -3 (day 6-21),
 -4 (evening 20-23), all [start, end).
@@ -44,6 +47,7 @@ from .schema import RESULT, Flag, conform
 BANDS: dict[str, tuple[int, int]] = {"am": (7, 10), "pm": (16, 19), "day": (6, 21), "evening": (20, 23)}
 BAND_HOUR: dict[str, int] = {"am": -1, "pm": -2, "day": -3, "evening": -4}
 DAY_HOURS = (6, 21)
+LINE_HOURS = (6, 23)     # [start, end): window of the line-level reference (same as hotspots.ALLDAY_HOURS)
 EXCLUDING = Flag.LOW_COVERAGE | Flag.FROZEN | Flag.LINE_ABSENT | Flag.DEVIATION | Flag.VEHICLE_RATIO
 _REASONS = ((Flag.FROZEN, "frozen"), (Flag.LINE_ABSENT, "line_absent"), (Flag.DEVIATION, "deviation"),
             (Flag.VEHICLE_RATIO, "vehicle_ratio"))
@@ -135,13 +139,16 @@ class Analysis:
     pi: np.ndarray = field(repr=False, default_factory=lambda: np.full(7, 1 / 7))  # weekday weights
 
     # ------------------------------------------------------------------ estimation
-    def estimate(self, direction_id: int, W: np.ndarray | None = None, params: Params | None = None) -> dict[str, np.ndarray]:
+    def estimate(self, direction_id: int, W: np.ndarray | None = None, params: Params | None = None, *,
+                 coverage: bool = True) -> dict[str, np.ndarray]:
         """Indicators for one direction with day weights W (B, D) (bootstrap multiplicities);
-        arrays (B, Hx, K) except ``ref`` (B, K)."""
+        arrays (B, Hx, K) except ``ref``, ``ref_line`` (B, K) and ``line_level`` (B,).
+        ``coverage=False`` skips the covered-hour sums (``obs_per_h`` and ``excess_obs_per_h`` are then
+        NaN): a quarter less work in per-passage bootstraps."""
         dd = self.dirs[direction_id]
         if W is None:
             W = np.ones((1, len(dd.days)), np.float32)
-        return _estimate(dd, W, params or self.params, self.quality, self.pi if self.stratify else None)
+        return _estimate(dd, W, params or self.params, self.quality, self.pi if self.stratify else None, coverage)
 
     def subset(self, days) -> "Analysis":
         """Same analysis on a subset of the included days (split-half, leave-out)."""
@@ -163,7 +170,7 @@ class Analysis:
     def to_contract_wk(self, direction_id: int | None = None, pattern_uid: str | None = None) -> dict[str, Any]:
         """Per-weekday totals for the JSON contract (``contract.py``), for the display pattern of each
         direction (or ``pattern_uid``): obs[dow][h][seg], cov[dow][h][link], p[dow][h][link],
-        days[dow][link]. Hours are ``self.hours``. Returns {direction_id: wk} if direction_id is None."""
+        days[dow][link], n[dow][h][link] (included day-hours, so p / n = passages per hour). Hours are ``self.hours``. Returns {direction_id: wk} if direction_id is None."""
         if direction_id is None:
             return {k: self.to_contract_wk(k) for k in self.dirs}
         dd = self.dirs[direction_id]
@@ -175,15 +182,17 @@ class Analysis:
         LM = dd.E[:, :, None] & dd.LV[:, None, :]
         CL = np.where(LM, dd.C[:, :, None], 0.0)[:, hi][:, :, ls]
         PL = np.where(LM, dd.P, 0.0)[:, hi][:, :, ls]
-        obs, cov, p, days = [], [], [], []
+        NL = LM[:, hi][:, :, ls]
+        obs, cov, p, days, n = [], [], [], [], []
         for w in range(7):
             m = dd.dow == w
             obs.append(np.rint(NM[m].sum(0)).astype(int).tolist())
             cov.append(np.round(CL[m].sum(0), 3).tolist())
             p.append(np.round(PL[m].sum(0), 2).tolist())
             days.append(dd.LV[m][:, ls].sum(0).astype(int).tolist())
+            n.append(NL[m].sum(0).astype(int).tolist())
         return {"pattern_uid": uid, "hours": list(self.hours), "seg_key": dd.seg_keys[ks].tolist(),
-                "link_key": dd.link_keys[ls].tolist(), "obs": obs, "cov": cov, "p": p, "days": days}
+                "link_key": dd.link_keys[ls].tolist(), "obs": obs, "cov": cov, "p": p, "days": days, "n": n}
 
 
 # ------------------------------------------------------------------------------------ estimator
@@ -208,14 +217,19 @@ def _ratio(num: np.ndarray, den: np.ndarray, pi: np.ndarray | None, ok: np.ndarr
         return out
 
 
-def _estimate(dd: DirData, W: np.ndarray, params: Params, quality: Quality, pi: np.ndarray | None) -> dict[str, np.ndarray]:
+def _estimate(dd: DirData, W: np.ndarray, params: Params, quality: Quality, pi: np.ndarray | None,
+              coverage: bool = True) -> dict[str, np.ndarray]:
     X = dd.stacked()
     D, Hx, K = X["NM"].shape
     W = np.asarray(W, np.float32)
     B = W.shape[0]
 
     def sums(Wm):
-        return {k: (Wm @ X[k].reshape(D, -1)).reshape(B, Hx, K).astype(np.float64) for k in ("NM", "PM", "CM", "M")}
+        out = {k: (Wm @ X[k].reshape(D, -1)).reshape(B, Hx, K).astype(np.float64)
+               for k in (("NM", "PM", "CM", "M") if coverage else ("NM", "PM", "M"))}
+        if not coverage:
+            out["CM"] = np.zeros((B, Hx, K))
+        return out
 
     if pi is None:
         s = sums(W)
@@ -263,9 +277,31 @@ def _estimate(dd: DirData, W: np.ndarray, params: Params, quality: Quality, pi: 
         else:
             exc_oph = _ratio(S["NM"] - ref[None, :, None, :] * S["PM"], S["CM"], pi)
         log2 = np.log2((opp + ALPHA) / (ref[:, None, :] + ALPHA))
+    level, ref_line = line_level(obs[:, hc], pas[:, hc], hours, dd.seg_len, dd.seg_zone == "running")
+    with np.errstate(divide="ignore", invalid="ignore"):
+        exc_line = opp - ref_line[:, None, :]
     return {"obs": obs, "passages": pas, "covered_h": cov, "n_cells": ncell, "obs_per_h": oph,
             "obs_per_passage": opp, "ref": ref, "excess_per_passage": exc_pp, "excess_obs_per_h": exc_oph,
-            "log2_ratio": log2}
+            "log2_ratio": log2, "line_level": level, "ref_line": ref_line, "excess_line_per_passage": exc_line}
+
+
+def line_level(obs: np.ndarray, pas: np.ndarray, hours: np.ndarray, seg_len: np.ndarray, running: np.ndarray,
+               window: tuple[int, int] = LINE_HOURS) -> tuple[np.ndarray, np.ndarray]:
+    """Line-level reference. ``obs``, ``pas``: (B, H, K) sums per hour column (``hours`` labels).
+    Level m (B,) = median over running segments of the ``window`` hours' obs / passages / metre (the
+    typical running occupancy per metre of the direction, the "persistent" hotspot criterion's level);
+    reference per segment (B, K) = m x length. NaN when no running segment has passages."""
+    import warnings
+    sel = (hours >= window[0]) & (hours < window[1])
+    B, K = obs.shape[0], obs.shape[-1]
+    if not sel.any() or not running.any():
+        return np.full(B, np.nan), np.full((B, K), np.nan)
+    with np.errstate(divide="ignore", invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        O, P = obs[:, sel].sum(1), pas[:, sel].sum(1)
+        occ = np.where(P > 0, O / np.where(P > 0, P, 1), np.nan)
+        m = np.nanmedian(np.where(running[None, :], occ / seg_len[None, :], np.nan), axis=1)
+    return m, m[:, None] * seg_len[None, :]
 
 
 # ------------------------------------------------------------------------------------ analyse
@@ -389,7 +425,14 @@ def _build_dir(dirid, md, seg, cube, passages, passage_col, covA, ex, day_pos, h
     if not days_l:
         return None
     uids, counts = np.unique(main_uid, return_counts=True)
-    order = np.argsort(-counts, kind="stable")
+    # display: the most frequent link_key sequence (patterns differing by shape edits only are pooled),
+    # and within it the pattern with the most days
+    seq = {u: tuple(g.sort("link_idx")["link_key"].unique(maintain_order=True).to_list())
+           for (u,), g in seg.filter(pl.col("pattern_uid").is_in(uids.tolist())).group_by(["pattern_uid"])}
+    tot: dict[tuple, int] = {}
+    for u, c in zip(uids, counts):
+        tot[seq.get(u, (u,))] = tot.get(seq.get(u, (u,)), 0) + int(c)
+    order = sorted(range(len(uids)), key=lambda i: (-tot[seq.get(uids[i], (uids[i],))], -counts[i]))
     uids = uids[order]
     display = str(uids[0])
     s = seg.filter(pl.col("pattern_uid").is_in(uids.tolist()))
@@ -456,14 +499,28 @@ def _build_dir(dirid, md, seg, cube, passages, passage_col, covA, ex, day_pos, h
                    pattern_links=pattern_links, V=V, LV=LV, E=E, C=C, N=N, P=P)
 
 
+def version_groups(dd: DirData) -> dict[str, list[str]]:
+    """Main patterns of a direction grouped by link_key sequence: {representative uid: uids}, the
+    display pattern first. Patterns that differ only by small shape edits (same link keys, hence the
+    same segments) are one version; the representative is the display pattern or the one with most days."""
+    seqs: dict[tuple, list[str]] = {}
+    for u in dd.pattern_segs:
+        if (dd.main_uid == u).any():
+            seqs.setdefault(tuple(dd.link_keys[dd.pattern_links[u]].tolist()), []).append(u)
+    out: dict[str, list[str]] = {}
+    groups = sorted(seqs.values(), key=lambda us: (dd.display_uid not in us, -sum(int((dd.main_uid == u).sum()) for u in us)))
+    for us in groups:
+        rep = dd.display_uid if dd.display_uid in us else max(us, key=lambda u: int((dd.main_uid == u).sum()))
+        out[rep] = us
+    return out
+
+
 def _versions(dirs: dict[int, DirData]) -> tuple[pl.DataFrame, pl.DataFrame]:
     rows, val = [], []
     for k, dd in dirs.items():
         disp = set(dd.link_keys[dd.pattern_links[dd.display_uid]].tolist())
-        for u in dd.pattern_segs:
-            m = dd.main_uid == u
-            if not m.any():
-                continue
+        for u, us in version_groups(dd).items():
+            m = np.isin(dd.main_uid, np.array(us, dtype=object))
             links = set(dd.link_keys[dd.pattern_links[u]].tolist())
             rows.append({"direction_id": k, "pattern_uid": u, "first": dd.days[m].min().item(), "last": dd.days[m].max().item(),
                          "n_days": int(m.sum()), "display": u == dd.display_uid,
@@ -492,6 +549,7 @@ def _result(an: Analysis) -> pl.DataFrame:
             def g(name):
                 return est[name][0][ci][:, ks].T.reshape(-1)       # seg-major
             ref = np.repeat(est["ref"][0][ks], nc)
+            ref_line = np.repeat(est["ref_line"][0][ks], nc)
             frames.append(pl.DataFrame({
                 "pattern_uid": [u] * (nk * nc),
                 "direction_id": np.full(nk * nc, dirid),
@@ -514,7 +572,69 @@ def _result(an: Analysis) -> pl.DataFrame:
                 "len_m": np.repeat(dd.seg_len[ks], nc),
                 "zone": np.repeat(dd.seg_zone[ks], nc).tolist(),
                 "n_cells": g("n_cells"),
+                "ref_line_obs_per_passage": ref_line,
+                "excess_line_per_passage": g("excess_line_per_passage"),
             }, nan_to_null=True))
     if not frames:
         return conform(pl.DataFrame(schema=RESULT), RESULT)
     return conform(pl.concat(frames), RESULT)
+
+
+# ------------------------------------------------------------------------------------ references
+def _spearman(a: np.ndarray, b: np.ndarray) -> float:
+    ok = np.isfinite(a) & np.isfinite(b)
+    if ok.sum() < 3:
+        return float("nan")
+    ra = pl.Series(a[ok]).rank("average").to_numpy()
+    rb = pl.Series(b[ok]).rank("average").to_numpy()
+    if ra.std() == 0 or rb.std() == 0:
+        return float("nan")
+    return float(np.corrcoef(ra, rb)[0, 1])
+
+
+def reference_agreement(an: Analysis, hotspots: pl.DataFrame | None = None, *, top: float = 0.1) -> pl.DataFrame:
+    """How much the two references agree, per direction (display pattern):
+
+    * ``line_level_per_m``: line-level reference, obs / passage / m (running segments, 6-23 h);
+    * ``evening_ref_per_m``: median over running segments of the evening reference per metre;
+    * ``spearman_day``: Spearman correlation, over running segments, of the day-band (6-21 h) excess
+      per passage vs the evening and vs the line level (1 = same ranking of where vehicles linger);
+      ``spearman_day_all``: same over every segment (stop zones included);
+    * ``top_overlap``: share of the top ``top`` running segments by excess vs the evening that are
+      also in the top ``top`` by excess vs the line level;
+    * with ``hotspots`` (``hotspots.hotspots`` output): counts per criterion ("peak" = vs the evening,
+      "persistent" = vs the line level, "both") and ``hotspots_both_share`` = n_both / n_hotspots.
+    """
+    rows = []
+    day_col = BAND_HOUR["day"]
+    for dirid, dd in an.dirs.items():
+        if len(dd.days) == 0:
+            continue
+        ks = dd.pattern_segs[dd.display_uid]
+        est = an.estimate(dirid)
+        c = int(np.flatnonzero(dd.cols == day_col)[0])
+        xe = est["excess_per_passage"][0][c][ks]
+        xl = est["excess_line_per_passage"][0][c][ks]
+        run = dd.seg_zone[ks] == "running"
+        ln = dd.seg_len[ks]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ev = np.nanmedian(np.where(run, est["ref"][0][ks] / ln, np.nan)) if run.any() else np.nan
+        ok = run & np.isfinite(xe) & np.isfinite(xl)
+        n_top = max(1, int(round(top * ok.sum())))
+        if ok.sum() >= 3 and np.ptp(xe[ok]) > 0 and np.ptp(xl[ok]) > 0:
+            ie = np.flatnonzero(ok)[np.argsort(-xe[ok])[:n_top]]
+            il = np.flatnonzero(ok)[np.argsort(-xl[ok])[:n_top]]
+            ov = len(set(ie.tolist()) & set(il.tolist())) / n_top
+        else:
+            ov = float("nan")
+        r = {"direction_id": int(dirid), "line_level_per_m": float(est["line_level"][0]), "evening_ref_per_m": float(ev),
+             "spearman_day": _spearman(np.where(run, xe, np.nan), np.where(run, xl, np.nan)),
+             "spearman_day_all": _spearman(xe, xl), "top_overlap": float(ov)}
+        if hotspots is not None:
+            h = hotspots.filter(pl.col("direction_id") == dirid)
+            crit = h["criterion"].to_list() if "criterion" in h.columns else ["peak"] * h.height
+            n = len(crit)
+            r.update({"n_hotspots": n, "n_peak": crit.count("peak"), "n_persistent": crit.count("persistent"),
+                      "n_both": crit.count("both"), "hotspots_both_share": crit.count("both") / n if n else float("nan")})
+        rows.append(r)
+    return pl.DataFrame(rows)

@@ -71,6 +71,17 @@ class Prepared:
             return segment(self.network, length, phase, p.grid, stop_zone or p.stop_zone, geometry=False)
         return f
 
+    def coverage_fn(self) -> Callable[[float], pl.DataFrame]:
+        """``f(gap_cap_s) -> COVERAGE`` recomputed from the snapshots (``tune.sensitivity`` gap-cap variants)."""
+        from dataclasses import replace
+        dates = _dates(self.cfg, self.observations)
+        rng = (min(dates), max(dates)) if dates else None
+
+        def f(gap_cap_s: float) -> pl.DataFrame:
+            cfg = replace(self.cfg, params=replace(self.cfg.params, gap_cap_s=float(gap_cap_s)))
+            return coverage_from_config(self.snapshots, cfg, dates=rng)
+        return f
+
 
 @dataclass
 class RunResult(Prepared):

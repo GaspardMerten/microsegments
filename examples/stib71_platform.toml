@@ -1,0 +1,23 @@
+# LOCAL EXAMPLE (not shipped data): STIB line 71 from the StibMicrosegments platform's local ingest
+# (raw/vd/date=.../{vd,snaps}.parquet with a line column, raw/punctuality, gtfs/index.parquet + gtfs/feeds/<sha>).
+#   microsegments sensitivity-table examples/stib55_full.toml examples/stib71_platform.toml examples/stib1_platform.toml -o out/sens
+
+[input]
+paths = ["/home/gaspard/Documents/Dev/CoDE/StibMicrosegments/data/ms/raw/vd/date=2025-0[2-5]-*/*.parquet"]
+kind = "stib"
+events = "/home/gaspard/Documents/Dev/CoDE/StibMicrosegments/data/ms/raw/punctuality/date=2025-0[2-5]-*/p.parquet"
+
+[gtfs]
+index = "/home/gaspard/Documents/Dev/CoDE/StibMicrosegments/data/ms/gtfs/index.parquet"
+
+[select]
+route = "71"
+dates = "2025-03-03..2025-03-28"
+weekdays = [0, 1, 2, 3, 4]
+
+[params]
+segment_m = 30
+bootstrap = 200
+
+[report]
+names = "title"

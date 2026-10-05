@@ -94,7 +94,9 @@ Stages are usable on their own: `read_observations`, `build_network`, `segment`,
 microsegments run CONFIG -o OUT [--lang en] [--segment-m 20] [--dates A..B] [--source "credit"]
 microsegments tune CONFIG [--lengths 10,20,30,50] [--sensitivity] [-o OUT]
 microsegments hotspots CONFIG [-o hotspots.geojson|.csv|.parquet]
-microsegments inspect CONFIG        # coverage per day, GTFS versions, placement / drop counts
+microsegments inspect CONFIG        # coverage per day, GTFS versions, placement, evening vs line reference
+microsegments compare CONFIG --a 2025-02-17..2025-03-31 --b 2025-04-01..2025-05-15 -o OUT
+microsegments sensitivity-table CONFIG [CONFIG ...] -o OUT    # one tidy table + markdown over several lines
 ```
 
 ## What the numbers mean
@@ -131,7 +133,8 @@ fixed per metric (p98 over 6–21 h), so hours and weekdays compare directly.
 split-half reliability, hotspot localisation spread and Jaccard) and picks the smallest L with reliability
 ≥ 0.8, spread ≤ 30 m and deviance within one standard error of the minimum. 30 m is a good default for
 20 s polling at urban speeds; go shorter only with dense GTFS-RT fixes and many days. `--sensitivity`
-re-runs phase offsets, gap caps, stop zones, references and passage sources.
+re-runs phase offsets, gap caps (30, 40, 60, ∞ s), stop zones, references, passage sources and segment
+lengths 15 / 30 / 60 m around the baseline.
 
 ## Hotspots
 
@@ -140,6 +143,15 @@ positive on ≥ 60 % of days, survives Benjamini–Hochberg (q = 0.1) and lasts 
 Adjacent bins merge, never across a stop / running border. Classes: *infrastructure* (all day),
 *congestion* (peak only), *mixed*. Needs at least 5 included days. Export as GeoJSON with
 `microsegments hotspots CONFIG -o hotspots.geojson`.
+
+## Comparing two periods
+
+`microsegments compare` (or `ms.compare(analysis_a, analysis_b)`) compares observations per passage
+segment by segment and hour by hour, each period with its own days and references, with a day bootstrap
+of the difference. Segments are matched by key (or by stop pair when a new GTFS version moved the shape a
+little); the others are listed and left out. Adjacent significant segments form stretches, ranked by the
+change in vehicle time per day; stretches whose frequency changed by more than 20 % are flagged, since a
+timetable change can explain part of the difference. The HTML page gets a "compare two periods" view.
 
 ## License
 

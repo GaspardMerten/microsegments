@@ -67,3 +67,39 @@ def test_stib55_example(tmp_path):
     assert len(res.analysis.days) == 2 and res.hotspots is None    # too few days for hotspots
     p = ms.export(res, tmp_path / "55.html")
     assert "Rogier".upper() in p.read_text().upper()
+
+
+def test_cli_inspect_reference_agreement(synth, capsys):
+    from microsegments.cli import main
+    assert main(["inspect", str(synth), "-q"]) == 0
+    out = capsys.readouterr().out
+    assert "line level" in out and "spearman_day" in out
+
+
+def test_cli_compare(synth, tmp_path, capsys):
+    from microsegments.cli import main
+    out = tmp_path / "cmp"
+    assert main(["compare", str(synth), "--a", "2025-03-03..2025-03-09", "--b", "2025-03-10..2025-03-16",
+                 "--bootstrap", "40", "-o", str(out), "-q"]) == 0
+    for f in ("compare_bins.parquet", "compare_changes.parquet", "compare.json", "compare.html"):
+        assert (out / f).exists(), f
+    c = json.loads((out / "compare.json").read_text())
+    cp = c["compare"]
+    assert cp["a"]["first"] == "2025-03-03" and cp["b"]["last"] <= "2025-03-16"
+    assert len(cp["dirs"]) == len(c["dirs"]) and cp["cols"][-4:] == ["am", "pm", "day", "evening"]
+    assert all(len(d["d"]) == len(cp["cols"]) and len(d["d"][0]) == len(d["seg_key"]) for d in cp["dirs"])
+    html = (out / "compare.html").read_text()
+    assert not re.findall(r"__[A-Z]+__", html) and "Comparer" in html
+
+
+def test_cli_sensitivity_table(synth, tmp_path):
+    from microsegments.cli import main
+    out = tmp_path / "sens"
+    assert main(["sensitivity-table", str(synth), "--bootstrap", "20", "-o", str(out), "-q"]) == 0
+    import polars as pl
+    t = pl.read_parquet(out / "sensitivity_table.parquet")
+    assert {"line", "mode", "param", "value", "spearman", "jaccard", "link_total_change",
+            "hotspots_stable_share", "stable"} <= set(t.columns)
+    assert {"gap_cap_s", "segment_m", "phase"} <= set(t["param"].to_list())
+    assert set(t.filter(pl.col("param") == "segment_m")["value"].to_list()) == {"15.0", "60.0"}
+    assert "| line |" in (out / "sensitivity_table.md").read_text()

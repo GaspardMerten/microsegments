@@ -126,6 +126,26 @@ def _bh(p: np.ndarray, q: float) -> np.ndarray:
 _erfc = np.frompyfunc(math.erfc, 1, 1)
 
 
+def nanquantile0(a: np.ndarray, qs) -> np.ndarray:
+    """``np.nanquantile(a, qs, axis=0)`` (linear interpolation), vectorised: one sort along axis 0
+    instead of numpy's per-column loop (tens of times faster on (B, H, K) bootstrap draws)."""
+    a = np.asarray(a)
+    qs = np.atleast_1d(np.asarray(qs, float))
+    srt = np.sort(a, axis=0)                          # NaN last
+    n = np.isfinite(a).sum(0)
+    out = np.full((len(qs),) + a.shape[1:], np.nan, dtype=np.float64)
+    for i, q in enumerate(qs):
+        pos = (n - 1) * q
+        lo = np.floor(pos).astype(np.int64)
+        hi = np.minimum(lo + 1, np.maximum(n - 1, 0))
+        lo = np.clip(lo, 0, None)
+        vlo = np.take_along_axis(srt, lo[None], 0)[0].astype(np.float64)
+        vhi = np.take_along_axis(srt, hi[None], 0)[0].astype(np.float64)
+        v = vlo + (pos - np.floor(pos)) * (vhi - vlo)
+        out[i] = np.where(n > 0, v, np.nan)
+    return out
+
+
 def bin_stats(an: Analysis, direction_id: int, *, B: int | None = None, theta_s: float = 2.0, q: float = 0.1,
               level: float = 0.95, min_persistence: float = 0.6, seed: int = 0, stratified: bool = True,
               chunk: int = 50, theta_persistent_s: float | None = None, min_hour_share: float = 0.75,
@@ -155,7 +175,7 @@ def bin_stats(an: Analysis, direction_id: int, *, B: int | None = None, theta_s:
         p_draws = np.empty((B, len(ks)), np.float32)
         p_draws_h = np.empty((B, len(pcols), len(ks)), np.float32)
     for a in range(0, B, chunk):
-        e = an.estimate(direction_id, W[a:a + chunk])
+        e = an.estimate(direction_id, W[a:a + chunk], coverage=False)
         draws[a:a + chunk] = e["excess_per_passage"][:, ci][:, :, ks]
         if do_p:
             _, xa, xh = _persistent_level(e["obs"][:, pcols][:, :, ks], e["passages"][:, pcols][:, :, ks], length, running)
@@ -166,7 +186,7 @@ def bin_stats(an: Analysis, direction_id: int, *, B: int | None = None, theta_s:
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
-            lo, hi = np.nanquantile(draws, [alpha / 2, 1 - alpha / 2], axis=0)
+            lo, hi = nanquantile0(draws, [alpha / 2, 1 - alpha / 2])
             se = np.nanstd(draws, axis=0, ddof=1)
     with np.errstate(divide="ignore", invalid="ignore"):
         z = (x - theta) / se
@@ -184,9 +204,11 @@ def bin_stats(an: Analysis, direction_id: int, *, B: int | None = None, theta_s:
         nval = np.isfinite(daily).sum(0)
         pers = np.where(nval > 0, npos / nval, np.nan)
     cand = (lo > theta) & (pers >= min_persistence) & reject
-    cut = {k: v[0][ci][:, ks] for k, v in est.items() if k != "ref"}
+    cube_keys = [k for k, v in est.items() if np.ndim(v) == 3]       # (B, Hx, K) arrays
+    cut = {k: est[k][0][ci][:, ks] for k in cube_keys}
     cut["ref"] = ref
-    cut["all"] = {k: v[0][:, ks] for k, v in est.items() if k != "ref"}
+    cut["ref_line"] = est["ref_line"][0][ks]
+    cut["all"] = {k: est[k][0][:, ks] for k in cube_keys}
     u = dd.display_uid
     st = BinStats(dd=dd, ks=ks, seg_idx=dd.pattern_seg_idx[u], x0=dd.pattern_x0[u], length=dd.seg_len[ks],
                   zone=dd.seg_zone[ks], cols=cols, x=x, est=cut, ci_lo=lo, ci_hi=hi, se=se, p=p, reject=reject,
@@ -230,7 +252,7 @@ def _persistent_stats(st: BinStats, an, est, X, pcols, p_draws, p_draws_h, runni
     alpha = 1 - level
     with np.errstate(all="ignore"), warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
-        lo, hi = np.nanquantile(p_draws, [alpha / 2, 1 - alpha / 2], axis=0)
+        lo, hi = nanquantile0(p_draws, [alpha / 2, 1 - alpha / 2])
         se = np.nanstd(p_draws, axis=0, ddof=1)
         z = (xa - theta) / se
         z = np.where(se > 0, z, np.where(xa > theta, np.inf, -np.inf))

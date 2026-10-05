@@ -15,6 +15,7 @@ except ImportError:  # pragma: no cover
     __version__ = "0.0.0"
 
 from .aggregate import count
+from .compare import Comparison, compare, run_compare
 from .config import Config
 from .hotspots import hotspots
 from .html import export
@@ -28,8 +29,8 @@ from .segments import segment
 from .simulate import simulate
 from . import tune
 
-__all__ = ["Analysis", "Config", "Flag", "RunResult", "__version__", "analyse", "build_network", "count", "export",
-           "hotspots", "plot", "prepare", "read_observations", "run", "segment", "simulate", "to_contract", "tune"]
+__all__ = ["Analysis", "Comparison", "Config", "Flag", "RunResult", "__version__", "analyse", "build_network", "compare", "count", "export",
+           "hotspots", "plot", "prepare", "read_observations", "run", "run_compare", "segment", "simulate", "to_contract", "tune"]
 
 
 def __getattr__(name: str):

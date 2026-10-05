@@ -53,7 +53,9 @@ def test_sensitivity():
     r = tune.sensitivity(sim.placed, sim.segment_fn, 30, coverage=sim.coverage, coverage_fn=cov_fn,
                          passages=sim.passages, pattern_days=sim.pattern_days, B=100)
     s = r.summary
-    assert set(s["param"]) == {"phase", "gap_cap_s", "stop_zone", "reference", "passages"}
+    assert set(s["param"]) == {"phase", "gap_cap_s", "stop_zone", "reference", "passages", "segment_m"}
+    sm = s.filter(pl.col("param") == "segment_m")
+    assert set(sm["value"]) == {"15.0", "60.0"} and (sm["link_total_change"] < 1e-9).all()
     assert (s.filter(pl.col("param") == "phase")["link_total_change"] < 1e-9).all()
     assert (s.filter(pl.col("param") == "gap_cap_s")["spearman"] > 0.999).all()
     assert (s["hotspots_stable_share"] >= 0.75).all()

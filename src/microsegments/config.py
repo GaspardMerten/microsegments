@@ -56,6 +56,10 @@ class Input:
 class Gtfs:
     path: str | None = None                   # zip / directory / gtfs-parquet directory
     dated: str | None = None                  # template with {date} (YYYY-MM-DD) for one feed per day
+    # index of dated feeds: parquet / csv with service_date and either path or sha; a sha resolves to
+    # feeds_dir.format(sha=...) (default: "<index dir>/feeds/{sha}", the StibMicrosegments layout)
+    index: str | None = None
+    feeds_dir: str | None = None
     route_key: Literal["route_short_name", "route_id"] = "route_short_name"
 
 
@@ -126,7 +130,8 @@ class Config:
         cfg = cls.from_dict(tomllib.loads(path.read_text()))
         base = path.parent
         cfg.input.paths = [p if Path(p).is_absolute() else str(base / p) for p in cfg.input.paths]
-        for obj, attr in ((cfg.gtfs, "path"), (cfg.gtfs, "dated"), (cfg.input, "snapshots"), (cfg.input, "events")):
+        for obj, attr in ((cfg.gtfs, "path"), (cfg.gtfs, "dated"), (cfg.gtfs, "index"), (cfg.gtfs, "feeds_dir"),
+                          (cfg.input, "snapshots"), (cfg.input, "events")):
             v = getattr(obj, attr)
             if v and not Path(v).is_absolute():
                 setattr(obj, attr, str(base / v))

@@ -6,7 +6,8 @@ A :class:`GtfsSource` is either
   of ``.parquet`` tables;
 * daily snapshots (``dated``): a path template containing ``{date}`` (``YYYY-MM-DD``) or ``{yyyymmdd}``;
   a date without a snapshot uses the latest earlier one (up to ``max_back_days``);
-* a mapping ``{date: feed path}``: each feed is valid from its date until the next one.
+* a mapping ``{date: feed path}``: each feed is valid from its date until the next one (also built
+  from an index table, ``feeds_from_index`` / ``config.Gtfs.index``).
 
 Feeds are loaded restricted to one route (gtfs-parquet tables are scanned lazily and filtered
 before reading, so a whole-network feed costs only the route's rows) and cached (LRU).
@@ -140,6 +141,21 @@ def service_dates(feed: Feed) -> tuple[dt.date, dt.date] | None:
 
 
 # ---------------------------------------------------------------- source
+def feeds_from_index(index: str | Path, feeds_dir: str | None = None) -> dict[dt.date, str]:
+    """{service_date: feed path} from an index table (parquet or csv) with ``service_date`` and
+    ``path`` or ``sha``; ``sha`` -> ``feeds_dir.format(sha=sha)`` (default ``<index dir>/feeds/{sha}``)."""
+    p = Path(index)
+    df = pl.read_parquet(p) if p.suffix == ".parquet" else pl.read_csv(p, try_parse_dates=True)
+    df = df.with_columns(pl.col("service_date").cast(pl.Date))
+    tmpl = feeds_dir or str(p.parent / "feeds" / "{sha}")
+    out = {}
+    for r in df.drop_nulls("service_date").iter_rows(named=True):
+        path = r.get("path") or (tmpl.format(sha=r["sha"]) if r.get("sha") else None)
+        if path:
+            out[r["service_date"]] = str(path)
+    return out
+
+
 class GtfsSource:
     """One GTFS feed, or one feed per date (template or mapping). See module docstring."""
 
@@ -158,7 +174,9 @@ class GtfsSource:
 
     @classmethod
     def from_config(cls, gtfs) -> GtfsSource:
-        """From a ``config.Gtfs`` (``path`` or ``dated``)."""
+        """From a ``config.Gtfs`` (``path``, ``dated`` or ``index``)."""
+        if getattr(gtfs, "index", None):
+            return cls(feeds=feeds_from_index(gtfs.index, getattr(gtfs, "feeds_dir", None)), route_key=gtfs.route_key)
         if gtfs.dated:
             return cls(dated=gtfs.dated, route_key=gtfs.route_key)
         return cls(gtfs.path, route_key=gtfs.route_key)
