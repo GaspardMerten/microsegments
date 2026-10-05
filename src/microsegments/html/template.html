@@ -213,7 +213,7 @@ const MODE = {fr: {tram: 'Tram', bus: 'Bus', trolleybus: 'Trolleybus', metro: 'M
 const T = {
   fr: {
     title: (m, l) => `Où les ${m} s'attardent-ils\u00a0?`,
-    lede: (L, tk, m1, m) => `La ligne est découpée en microsegments d'environ ${L} m. Toutes les ${tk} s environ, on relève la position de chaque ${m1} et on compte une observation dans le microsegment où il se trouve. Plus un microsegment cumule d'observations, plus les ${m} y restent longtemps : arrêts, feux, carrefours, files. Une observation correspond à peu près à ${tk} secondes de présence.`,
+    lede: (L, tk, m1, m) => `Toutes les ${tk} secondes, on note la position de chaque ${m1}. La ligne est découpée en tronçons d'environ ${L} m et on compte combien de fois un ${m1} y est vu : 1 observation ≈ ${tk} s passées là. Vert = ça roule, rouge = ça bloque. « Écart avec le soir » : le temps en plus par rapport à ${REFH[0]}–${REFH[1]} h, quand la circulation est fluide.`,
     days: 'Jours', dir: 'Sens', ver: 'Version du tracé', bands: 'Moyennes', metric: 'Mesure', unit: 'Par', stops: 'Arrêts',
     dow: ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'], dowl: ['lundis', 'mardis', 'mercredis', 'jeudis', 'vendredis', 'samedis', 'dimanches'],
     dowd: ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'],
@@ -300,7 +300,7 @@ const T = {
   },
   en: {
     title: (m, l) => `Where do ${m} linger?`,
-    lede: (L, tk, m1, m) => `The line is cut into micro-segments of about ${L} m. Roughly every ${tk} s, each ${m1}'s position is recorded and counts as one observation in the micro-segment it is in. The more observations a micro-segment collects, the longer ${m} stay there: stops, traffic lights, junctions, queues. One observation is about ${tk} seconds of presence.`,
+    lede: (L, tk, m1, m) => `Every ${tk} seconds, we note where each ${m1} is. The line is cut into stretches of about ${L} m and we count how often a ${m1} is seen there: 1 observation ≈ ${tk} s spent there. Green = moving, red = stuck. "Excess over the evening": the extra time compared with ${REFH[0]}–${REFH[1]} h, when traffic flows.`,
     days: 'Days', dir: 'Direction', ver: 'Route version', bands: 'Averages', metric: 'Measure', unit: 'Per', stops: 'Stops',
     dow: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'], dowl: ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'],
     dowd: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
@@ -516,7 +516,11 @@ const fmtShort = s => fmtDate(s, {day: '2-digit', month: '2-digit', year: '2-dig
 const DIRS = D.dirs || [];
 const PRESENT = [0,1,2,3,4,5,6].filter(w => (D.period.per_dow || [])[w] > 0);
 st.days = PRESENT.slice();
-st.dir = DIRS.length ? DIRS[0].dir : null;
+// direction: ?dir= (or the embedding page's own control, see DIR_CONTROL), else the first one
+st.dir = DIRS.some(d => String(d.dir) === qs.get('dir')) ? +qs.get('dir') : DIRS.length ? DIRS[0].dir : null;
+// contract options for an embedding page: dir_control false hides the page's direction buttons (the
+// host drives the direction with postMessage({ms: 'dir', dir})); method false drops the method section
+const DIR_CONTROL = D.dir_control !== false, METHOD = D.method !== false;
 st.hour = D.hours.includes(8) ? 8 : D.hours[0];
 const dirOf = () => DIRS.find(x => x.dir === st.dir);
 // the entry shown: the display version of the direction, or one of its other versions
@@ -874,6 +878,7 @@ function buttons(el, items, onclick) {
   el.innerHTML = '';
   for (const [k, t, title] of items) { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.dataset.k = k; if (title) b.title = title; b.onclick = () => onclick(k); el.append(b); }
 }
+let SETDIR = null;
 function buildControls() {
   const l = tx();
   buttons($('langs'), [['fr', 'FR'], ['en', 'EN']], k => { st.lang = k; buildControls(); texts(); tiles(); drawAll(); });
@@ -889,6 +894,8 @@ function buildControls() {
   const setDir = k => { st.dir = +k; st.ver = null; st.hot = null; st.chg = null; drawAll(); };
   buttons($('dirs'), dirItems, setDir);
   buttons($('mxdirs'), dirItems, setDir);
+  $('dirs').closest('.grp').hidden = !DIR_CONTROL; $('mxdirs').hidden = !DIR_CONTROL;
+  SETDIR = setDir;
   buttons($('bands'), Object.keys(BANDDEF).map(k => [k, l.bandl[k], `${BANDDEF[k][0]}–${BANDDEF[k][1]} h`]), k => { stop(); st.band = st.band === k ? null : k; render(); });
   $('g_mode').hidden = !CMP;
   if (CMP) buttons($('modes'), [['one', l.modes.one], ['cmp', l.modes.cmp]], k => { st.mode = k; st.ver = null; st.hot = null; st.chg = null; buildControls(); texts(); tiles(); drawAll(); });
@@ -1213,6 +1220,15 @@ document.addEventListener('fullscreenchange', () => { if (!document.fullscreenEl
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && mxCard.classList.contains('full')) setFull(false); });
 
 buildControls(); texts(); tiles(); initMap(); drawAll();
+document.querySelector('section.method').hidden = !METHOD;
+// embedded: tell the host the directions, follow its direction control
+if (window.parent !== window) {
+  try { parent.postMessage({ms: 'dirs', dir: st.dir, dirs: DIRS.map(d => ({dir: d.dir, from: d.from, to: d.to}))}, '*'); } catch (x) {}
+  window.addEventListener('message', e => {
+    const m = e.data || {};
+    if (m.ms === 'dir' && SETDIR && DIRS.some(d => d.dir === +m.dir) && +m.dir !== st.dir) SETDIR(m.dir);
+  });
+}
 </script>
 </body>
 </html>
