@@ -69,8 +69,9 @@ def test_export_html(an_hs, tmp_path):
     assert "</script" not in m.group(1)
     # contract dict input, English, fragment
     c = to_contract(an, hotspots=hs)
-    s2 = render(c, lang="en", scales={"oph": 3})
-    assert '<html lang="en">' in s2 and '"scales":{"oph":3}' in s2
+    with pytest.warns(DeprecationWarning):
+        s2 = render(c, lang="en", scales={"oph": 3})
+    assert '<html lang="en">' in s2 and '"scales"' not in s2
     frag = export(c, tmp_path / "f.html", standalone=False).read_text()
     assert "<body>" not in frag and "ms-data" in frag
 
@@ -81,7 +82,7 @@ def test_plots(an_hs, tmp_path):
     matplotlib.use("Agg")
     from microsegments import plot
     an, hs = an_hs
-    figs = [plot.matrix(an, 0, hotspots=hs), plot.matrix(an, 0, "ex", days=[0, 1], stops=False, vmax=2),
+    figs = [plot.matrix(an, 0, hotspots=hs), plot.matrix(an, 0, "ex", days=[0, 1], stops=False),
             plot.profile(an, 0, 8, metric="opp"), plot.profile(an, 0, band="pm", metric="obs_per_h_10m"),
             plot.map(an, 0, "am", hotspots=hs)]
     for i, f in enumerate(figs):
@@ -114,3 +115,61 @@ def test_lazy_plot_import():
     import sys
     code = "import sys, microsegments as ms; assert 'matplotlib' not in sys.modules; ms.run; ms.export; ms.simulate"
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def _page_scale(html: str) -> dict:
+    """The page's colour-scale constants (``const SC = {...}``) as a dict."""
+    m = re.search(r"const SC = (\{.*?\});", html)
+    assert m, "no SC constant in the page"
+    return json.loads(re.sub(r"(\w+):", r'"\1":', m.group(1)))
+
+
+def test_scale_fixed_whatever_the_data(an_hs):
+    """The colour scale and legend constants do not depend on the data: two different analyses give the
+    same page scale, equal to microsegments.scale; nothing in the page computes a scale from values."""
+    from microsegments import scale
+    an, hs = an_hs
+    ll, hots = hotspot_line(4)
+    sim = simulate(link_len=ll, hots=hots, n_days=7, seed=11)
+    segs = sim.segment_fn(30)
+    an2 = metrics.analyse(aggregate.count(sim.placed, segs), sim.coverage, sim.passages, segs, sim.pattern_days)
+    p1, p2 = render(to_contract(an, hotspots=hs)), render(to_contract(an2), lang="en")
+    assert _page_scale(p1) == _page_scale(p2) == scale.CONSTANTS
+    script = p1[p1.index('<script>\n"use strict"'):]
+    for pat in ("xs.length * .98", "quantile", "D.scales", "SCALES"):
+        assert pat not in script
+    assert "scales" not in json.loads(re.search(r'<script id="ms-data" type="application/json">(.*?)</script>', p1, re.S).group(1))
+    # the page ramp is the same as the Python one
+    ramp = re.search(r"const RAMP = (\[.*?\]);", p1).group(1)
+    assert [tuple(x) for x in json.loads(ramp.replace("'", '"'))] == [(float(a), b) for a, b in scale.RAMP]
+
+
+def test_scale_functions():
+    import numpy as np
+
+    from microsegments import scale
+    # observations per passage: 1 obs (20 s) in a 30 m segment = 20 s; 15 m segment = 40 s per 30 m
+    assert scale.to_seconds("obs_per_passage", [1.0, 1.0], [30.0, 15.0]).tolist() == [20.0, 40.0]
+    # both excesses share one scale; negative excess = fluid
+    assert scale.to_seconds("excess_per_passage", 0.5, 30.0) == scale.to_seconds("excess_line_per_passage", 0.5, 30.0) == 13.0
+    assert scale.to_seconds("excess_per_passage", -2.0, 30.0) == scale.BASE_S
+    # the 10 m unit does not change the colour: same T for the same observations
+    assert np.isclose(scale.to_seconds("obs_per_h", 6.0, 30.0), scale.to_seconds("obs_per_h_10m", 2.0, 30.0))
+    # legend labels at the fixed ticks (per 30 m; obs_per_h_10m per 10 m)
+    t = scale.T_TICKS
+    assert scale.from_seconds("obs_per_passage", t).tolist() == [3, 6, 9, 12, 15, 24]
+    assert scale.from_seconds("excess_per_passage", t).tolist() == [0, 3, 6, 9, 12, 21]
+    assert scale.from_seconds("obs_per_h", t).tolist() == [1.5, 3, 4.5, 6, 7.5, 12]
+    assert scale.from_seconds("obs_per_h_10m", t).tolist() == [0.5, 1, 1.5, 2, 2.5, 4]
+    assert scale.position(scale.T_MIN) == 0 and scale.position(1e9) == 1
+    assert np.isclose(scale.kmh(4.0), 27.0)
+
+
+def test_plot_scale_fixed(an_hs):
+    pytest.importorskip("matplotlib")
+    from microsegments import plot, scale
+    an, _ = an_hs
+    n = plot.norm()
+    assert (n.vmin, n.vmax) == (scale.T_MIN, scale.T_MAX)
+    assert plot.auto_vmax(an, "opp") == plot.auto_vmax(None, "opp") == scale.T_MAX
+    assert plot.auto_vmax(an, "ex") == scale.T_MAX - scale.BASE_S

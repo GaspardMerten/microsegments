@@ -3,8 +3,10 @@ map, segment-length tuning curves and sensitivity summary.
 
 Every function accepts an :class:`~microsegments.metrics.Analysis` or a pipeline ``RunResult`` (which
 also brings stop names and hotspots), returns a ``Figure`` and draws into ``ax`` when given.
-Colours follow the HTML page: green (few observations) -> yellow -> dark red (many), on a square-root
-scale whose top is fixed per metric (p98 of the 6-21 h values unless ``vmax`` is given).
+Colours follow the HTML page: one fixed scale for every figure (``microsegments.scale``), never computed
+from the data. Each value is brought to seconds per passage per 30 m of track and read on the STIB speed
+ramp, green (fluid) -> red (slow). Profiles plot the value per 30 m (``obs_per_h_10m``: per 10 m) with a
+fixed height, the top of the scale.
 """
 from __future__ import annotations
 
@@ -13,7 +15,10 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from .metrics import BAND_HOUR, DAY_HOURS, Analysis
+import warnings
+
+from . import scale as S
+from .metrics import BAND_HOUR, Analysis
 
 METRICS = {
     "obs_per_h": "observations per hour",
@@ -25,9 +30,7 @@ METRICS = {
 }
 _ALIASES = {"oph": "obs_per_h", "oph10": "obs_per_h_10m", "opp": "obs_per_passage", "ex": "excess_per_passage",
             "excess": "excess_per_passage"}
-# the page's ramp (km/h stops of the speed pages), read through seqColor: t in [0, 1] -> 22 - 17.5 t
-_RAMP = [(4.5, "#7a1020"), (7.5, "#e5484d"), (10.5, "#f0a13a"), (13.5, "#b8e27f"), (16.5, "#3fb950"),
-         (21, "#1f8f45"), (27, "#11683e")]
+_RAMP = list(S.RAMP)   # the STIB speed ramp (km/h stops), as on the page
 NULL_COLOR = "#3a4560"
 MASK_COLOR = "#26324d"
 BG = "#0b1224"
@@ -69,17 +72,40 @@ def _ramp(v: np.ndarray) -> np.ndarray:
 
 
 def cmap(n: int = 256):
-    """The page's sequential colormap (green -> red); use with ``PowerNorm(0.5, 0, vmax)``."""
+    """The page's colormap over T = seconds per passage per 30 m (green -> red); use with :func:`norm`."""
     matplotlib, _ = _plt()
     from matplotlib.colors import ListedColormap
-    t = np.linspace(0, 1, n)
-    cm = ListedColormap(_ramp(22 - 17.5 * t), name="microsegments")
+    T = S.T_MIN * (S.T_MAX / S.T_MIN) ** np.linspace(0, 1, n)
+    cm = ListedColormap(_ramp(S.kmh(T)), name="microsegments")
     return cm.with_extremes(bad=NULL_COLOR) if hasattr(cm, "with_extremes") else cm
 
 
-def _norm(vmax: float):
-    from matplotlib.colors import PowerNorm
-    return PowerNorm(0.5, vmin=0.0, vmax=float(vmax), clip=True)
+def norm():
+    """The fixed norm of :func:`cmap`: log axis over T from ``scale.T_MIN`` to ``scale.T_MAX``."""
+    from matplotlib.colors import LogNorm
+    return LogNorm(vmin=S.T_MIN, vmax=S.T_MAX, clip=True)
+
+
+def _no_vmax(vmax):
+    if vmax is not None:
+        warnings.warn("vmax is ignored: the colour scale is fixed (microsegments.scale)", DeprecationWarning, stacklevel=3)
+
+
+def _seconds(an: Analysis, m: str, v, len_m) -> np.ndarray:
+    """T (seconds per passage per 30 m) of values ``v`` of metric ``m`` (NaN stays NaN)."""
+    return S.to_seconds(m, np.asarray(v, dtype=float), np.asarray(len_m, dtype=float), an.params.tick_s)
+
+
+def _colorbar(fig, ax, m: str, fraction: float):
+    _, plt = _plt()
+    sm = plt.cm.ScalarMappable(norm=norm(), cmap=cmap())
+    cb = fig.colorbar(sm, ax=ax, fraction=fraction, pad=0.01, extend="both")
+    lab = S.from_seconds(m, np.array(S.T_TICKS, dtype=float))
+    cb.set_ticks(list(S.T_TICKS))
+    cb.set_ticklabels([("≥ " if i == len(lab) - 1 else "") + f"{x:g}" for i, x in enumerate(np.round(lab, 1))])
+    cb.minorticks_off()
+    cb.set_label(METRICS[m] + (" (per 10 m)" if m == "obs_per_h_10m" else " (per 30 m)"), fontsize=8)
+    return cb
 
 
 # ------------------------------------------------------------------------------------ data access
@@ -137,30 +163,11 @@ def _frame(an: Analysis, direction_id: int, metric: str, pattern_uid: str | None
     return r.with_columns(v.cast(pl.Float64).alias("value"))
 
 
-def auto_vmax(analysis, metric: str = "obs_per_h", stops: bool = True, q: float = 0.98) -> float:
-    """Fixed colour-scale top: the ``q`` quantile of the metric over 6-21 h, all directions (positive
-    values only for excess metrics), rounded up to a nice number. ``stops=False`` ignores stop zones."""
-    an, _, _ = _unpack(analysis)
-    m = _metric(metric)
-    vals = []
-    for d in an.dirs:
-        f = _frame(an, d, m).filter(pl.col("hour").is_between(DAY_HOURS[0], DAY_HOURS[1] - 1))
-        if not stops:
-            f = f.filter(pl.col("zone") != "stop")
-        v = f["value"].drop_nulls().drop_nans().to_numpy()
-        if m.startswith("excess") or m == "log2_ratio":
-            v = v[v > 0]
-        vals.append(v)
-    v = np.concatenate(vals) if vals else np.zeros(0)
-    return _nice(float(np.quantile(v, q)) if v.size else 1.0)
-
-
-def _nice(v: float) -> float:
-    if not v > 0:
-        return 1.0
-    e = 10 ** np.floor(np.log10(v))
-    f = v / e
-    return float(next(x for x in (1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10) if x >= f - 1e-9) * e)
+def auto_vmax(analysis=None, metric: str = "obs_per_h", stops: bool = True, q: float = 0.98) -> float:
+    """Top of the fixed colour scale in the units of ``metric`` per 30 m (per 10 m for ``obs_per_h_10m``).
+    It does not depend on the analysis (kept for compatibility; the arguments other than ``metric`` are
+    ignored)."""
+    return float(S.from_seconds(_metric(metric), S.T_MAX))
 
 
 def _stops(an: Analysis, direction_id: int, links: pl.DataFrame | None, pattern_uid: str | None = None):
@@ -202,16 +209,15 @@ def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_h", days=None
            colorbar: bool = True, figsize=(14, 6)):
     """Hour x micro-segment heatmap (columns as wide as the segments, stop names on x).
 
-    ``days``: weekdays (0 = Monday) or dates to keep. ``vmax``: fixed scale top (default
-    :func:`auto_vmax` on the full analysis, so the scale does not move with ``days``). ``stops=False``
+    ``days``: weekdays (0 = Monday) or dates to keep. Colours: the fixed scale of ``microsegments.scale``
+    (``vmax`` is deprecated and ignored). ``stops=False``
     masks stop-zone segments. Hotspots (RunResult or ``hotspots=``) are outlined."""
     _, plt = _plt()
     an0, links0, hs0 = _unpack(analysis)
     links = links if links is not None else links0
     hotspots = hotspots if hotspots is not None else hs0
     m = _metric(metric)
-    if vmax is None:
-        vmax = auto_vmax(an0, m, stops=stops)
+    _no_vmax(vmax)
     an = _subset(an0, days)
     f = _frame(an, direction_id, m, pattern_uid).filter(pl.col("hour") >= 0)
     hours = sorted(an.hours)
@@ -219,18 +225,17 @@ def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_h", days=None
     si = {s: i for i, s in enumerate(segs["seg_idx"].to_list())}
     Z = np.full((len(hours), segs.height), np.nan)
     hi = {h: i for i, h in enumerate(hours)}
-    for h, s, v in f.select("hour", "seg_idx", "value").iter_rows():
-        if h in hi and v is not None:
+    f = f.with_columns(pl.Series("T", _seconds(an, m, f["value"].fill_null(np.nan).to_numpy(), f["len_m"].to_numpy())))
+    for h, s, v in f.select("hour", "seg_idx", "T").iter_rows():
+        if h in hi and v is not None and np.isfinite(v):
             Z[hi[h], si[s]] = v
-    if m.startswith("excess") or m == "log2_ratio":
-        Z = np.where(np.isnan(Z), np.nan, np.clip(Z, 0, None))
     zone = np.array(segs["zone"].to_list())
     x_edges = np.concatenate([segs["x0_m"].to_numpy(), [segs["x0_m"][-1] + segs["len_m"][-1]]]) if segs.height else np.array([0, 1])
     y_edges = np.arange(len(hours) + 1) - 0.5 + hours[0] if hours else np.array([0, 1])
     fig, ax = (ax.figure, ax) if ax is not None else plt.subplots(figsize=figsize, layout="constrained")
     ax.set_facecolor(BG)
     cm = cmap()
-    mesh = ax.pcolormesh(x_edges, y_edges, np.ma.masked_invalid(Z), cmap=cm, norm=_norm(vmax), shading="flat")
+    ax.pcolormesh(x_edges, y_edges, np.ma.masked_invalid(Z), cmap=cm, norm=norm(), shading="flat")
     if not stops and segs.height:
         M = np.where(np.broadcast_to(zone == "stop", Z.shape), 1.0, np.nan)
         from matplotlib.colors import ListedColormap
@@ -250,7 +255,7 @@ def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_h", days=None
                     runs.append([h, h])
             for a, b in runs:
                 ax.add_patch(Rectangle((r["x0_m"], a - 0.5), r["x1_m"] - r["x0_m"], b - a + 1, fill=False,
-                                       ec="#ffe600", lw=1.4))
+                                       ec="#ffe600", lw=1.2))
             ax.text(r["x1_m"], (hs_h[0] if hs_h else hours[0]) - 0.6, str(r["rank"]), color="#ffe600", fontsize=8,
                     ha="left", va="bottom")
     ax.set_xlim(x_edges[0], x_edges[-1])
@@ -260,8 +265,7 @@ def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_h", days=None
     _stop_ticks(ax, xs, names)
     ax.set_title(title or f"{_dir_label(an, direction_id, links, pattern_uid)} · {METRICS[m]}", fontsize=11, loc="left")
     if colorbar:
-        cb = fig.colorbar(mesh, ax=ax, fraction=0.025, pad=0.01, extend="max")
-        cb.set_label(METRICS[m], fontsize=8)
+        _colorbar(fig, ax, m, 0.025)
     return fig
 
 
@@ -275,34 +279,34 @@ def profile(analysis, direction_id: int = 0, hour: int | str | None = None, *, b
     an0, links0, _ = _unpack(analysis)
     links = links if links is not None else links0
     m = _metric(metric)
-    if vmax is None:
-        vmax = auto_vmax(an0, m, stops=stops)
+    _no_vmax(vmax)
     an = _subset(an0, days)
     code = _hour_code(hour, band)
     f = _frame(an, direction_id, m, pattern_uid).sort("seg_idx")
+    top = auto_vmax(None, m)
+    shown = lambda d: S.from_seconds(m, _seconds(an, m, d["value"].fill_null(np.nan).to_numpy(), d["len_m"].to_numpy()))  # noqa: E731
     cur = f.filter(pl.col("hour") == code)
     if not stops:
         cur = cur.filter(pl.col("zone") != "stop")
-    v = cur["value"].to_numpy().astype(float)
-    if m.startswith("excess"):
-        v = np.clip(v, 0, None)
+    T = _seconds(an, m, cur["value"].fill_null(np.nan).to_numpy(), cur["len_m"].to_numpy())
+    v = S.from_seconds(m, T)
     fig, ax = (ax.figure, ax) if ax is not None else plt.subplots(figsize=figsize, layout="constrained")
-    colors = cmap()(_norm(vmax)(np.nan_to_num(v)))
-    colors[np.isnan(v)] = (0, 0, 0, 0)
+    colors = cmap()(norm()(np.nan_to_num(T, nan=S.T_MIN)))
+    colors[np.isnan(T)] = (0, 0, 0, 0)
     ax.bar(cur["x0_m"].to_numpy(), np.nan_to_num(v), width=cur["len_m"].to_numpy() * 0.96, align="edge", color=colors)
     if reference and code != BAND_HOUR["evening"] and not m.startswith("excess") and m != "log2_ratio":
         ev = f.filter(pl.col("hour") == BAND_HOUR["evening"])
         if not stops:
             ev = ev.filter(pl.col("zone") != "stop")
-        x0, ln, ve = ev["x0_m"].to_numpy(), ev["len_m"].to_numpy(), ev["value"].to_numpy().astype(float)
+        x0, ln, ve = ev["x0_m"].to_numpy(), ev["len_m"].to_numpy(), shown(ev)
         ax.hlines(ve, x0, x0 + ln, color="0.25", lw=1.3, label="evening")
     xs, names = _stops(an, direction_id, links, pattern_uid)
     for x in xs:
         ax.axvline(x, color="0.6", lw=0.6, alpha=0.6)
     _stop_ticks(ax, xs, names)
     ax.set_xlim(xs[0], xs[-1])
-    ax.set_ylim(0, vmax * 1.05)
-    ax.set_ylabel(METRICS[m], fontsize=9)
+    ax.set_ylim(0, top * 1.05)
+    ax.set_ylabel(METRICS[m] + (" (per 10 m)" if m == "obs_per_h_10m" else " (per 30 m)"), fontsize=9)
     when = next((k for k, c in BAND_HOUR.items() if c == code), None) or f"{code} h"
     ax.set_title(title or f"{_dir_label(an, direction_id, links, pattern_uid)} · {when}", fontsize=11, loc="left")
     return fig
@@ -319,8 +323,7 @@ def map(analysis, direction_id: int = 0, hour: int | str | None = None, *, band:
     links = links if links is not None else links0
     hotspots = hotspots if hotspots is not None else hs0
     m = _metric(metric)
-    if vmax is None:
-        vmax = auto_vmax(an0, m, stops=stops)
+    _no_vmax(vmax)
     an = _subset(an0, days)
     code = _hour_code(hour, band)
     uid = pattern_uid or an.dirs[direction_id].display_uid
@@ -329,11 +332,9 @@ def map(analysis, direction_id: int = 0, hour: int | str | None = None, *, band:
     lines = [np.asarray(c) if c else np.zeros((0, 2)) for c in g["geometry"].to_list()]
     if not any(len(c) for c in lines):
         raise ValueError("segments have no geometry (segment(..., geometry=True))")
-    v = g["value"].to_numpy().astype(float)
-    if m.startswith("excess") or m == "log2_ratio":
-        v = np.clip(v, 0, None)
-    colors = cmap()(_norm(vmax)(np.nan_to_num(v)))
-    colors[np.isnan(v)] = matplotlib_color(NULL_COLOR)
+    T = _seconds(an, m, g["value"].fill_null(np.nan).to_numpy(), g["len_m"].to_numpy())
+    colors = cmap()(norm()(np.nan_to_num(T, nan=S.T_MIN)))
+    colors[np.isnan(T)] = matplotlib_color(NULL_COLOR)
     if not stops:
         colors[np.array(g["zone"].to_list()) == "stop"] = matplotlib_color(MASK_COLOR)
     fig, ax = (ax.figure, ax) if ax is not None else plt.subplots(figsize=figsize, layout="constrained")
@@ -344,7 +345,7 @@ def map(analysis, direction_id: int = 0, hour: int | str | None = None, *, band:
             sel = np.flatnonzero((x1 > r["x0_m"] + 0.5) & (x0 < r["x1_m"] - 0.5))
             hl = [lines[i] for i in sel if len(lines[i])]
             if hl:
-                ax.add_collection(LineCollection(hl, colors="#ffe600", linewidths=linewidth * 2.6, capstyle="butt", zorder=1))
+                ax.add_collection(LineCollection(hl, colors="#ffe600", linewidths=linewidth * 1.8, capstyle="butt", zorder=1))
                 mid = hl[len(hl) // 2][len(hl[len(hl) // 2]) // 2]
                 ax.annotate(str(r["rank"]), mid, xytext=(8, 8), textcoords="offset points", fontsize=8,
                             bbox=dict(boxstyle="circle", fc="#ffe600", ec="none"), zorder=4)
@@ -356,7 +357,7 @@ def map(analysis, direction_id: int = 0, hour: int | str | None = None, *, band:
         pts = [gm[0] for gm in geos] + ([geos[-1][-1]] if geos else [])
         if pts:
             P = np.asarray(pts)
-            ax.scatter(P[:, 0], P[:, 1], s=14, c="white", edgecolors="k", linewidths=0.6, zorder=3)
+            ax.scatter(P[:, 0], P[:, 1], s=14, c="#9aa4b8", edgecolors="k", linewidths=0.6, zorder=3)
             for (x, y), n in zip(P, names):
                 ax.annotate(n, (x, y), xytext=(4, 4), textcoords="offset points", fontsize=7)
     allc = np.concatenate([c for c in lines if len(c)])
@@ -368,8 +369,7 @@ def map(analysis, direction_id: int = 0, hour: int | str | None = None, *, band:
     ax.set_yticks([])
     when = next((k for k, c in BAND_HOUR.items() if c == code), None) or f"{code} h"
     ax.set_title(title or f"{_dir_label(an, direction_id, links, uid)} · {when} · {METRICS[m]}", fontsize=10, loc="left")
-    sm = plt.cm.ScalarMappable(norm=_norm(vmax), cmap=cmap())
-    fig.colorbar(sm, ax=ax, fraction=0.03, pad=0.01, extend="max").set_label(METRICS[m], fontsize=8)
+    _colorbar(fig, ax, m, 0.03)
     return fig
 
 
@@ -473,4 +473,4 @@ def save_all(analysis, out_dir: str | Path, metric: str = "obs_per_h", stops: bo
     return out
 
 
-__all__ = ["METRICS", "auto_vmax", "cmap", "map", "matrix", "profile", "save", "save_all", "sensitivity", "tune_curves"]
+__all__ = ["METRICS", "auto_vmax", "cmap", "map", "norm", "matrix", "profile", "save", "save_all", "sensitivity", "tune_curves"]

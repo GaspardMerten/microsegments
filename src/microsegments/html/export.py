@@ -6,6 +6,7 @@ matrix, profile, hotspots and coverage calendar work offline. Leaflet's CSS is i
 from __future__ import annotations
 
 import html
+import warnings
 import json
 import re
 from importlib import resources
@@ -49,14 +50,15 @@ def _default_title(c: dict, lang: str) -> str:
 
 def render(analysis_or_contract, *, title: str | None = None, lang: str = "fr", tiles: bool = True,
            scales: dict | None = None, description: str | None = None, **contract_kw) -> str:
-    """The full HTML document as a string. ``scales``: fixed colour-scale tops, e.g.
-    ``{"oph": 20, "opp": 3, "ex": 1.5, "oph10": 8}`` (or ``{"oph": {"true": 20, "false": 6}}`` per
-    stop-zone toggle); default: p98 of the 6-21 h values. ``contract_kw`` go to ``to_contract`` when an
-    Analysis / RunResult is given."""
+    """The full HTML document as a string. ``contract_kw`` go to ``to_contract`` when an Analysis /
+    RunResult is given. The colour scale is fixed for every page (``microsegments.scale``); ``scales`` is
+    deprecated and ignored."""
     c = dict(_contract(analysis_or_contract, **contract_kw))
     c["tiles"] = bool(tiles)
     if scales:
-        c["scales"] = scales
+        warnings.warn("render(scales=...) is ignored: the colour scale is fixed (microsegments.scale)",
+                      DeprecationWarning, stacklevel=2)
+    c.pop("scales", None)
     if title:
         c["title"] = title
     page_title = c.get("title") or _default_title(c, lang)

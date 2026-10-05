@@ -112,8 +112,10 @@ is therefore about 20 s of presence.
 | `excess_obs_per_h`, `log2_ratio` | see `metrics.py` | |
 
 All values are ratios of sums over the selected days (optionally post-stratified by weekday). Stop zones
-(30 m before to 60 m after each stop) can be masked to bring out signals and junctions. Colour scales are
-fixed per metric (p98 over 6–21 h), so hours and weekdays compare directly.
+(30 m before to 60 m after each stop) can be masked to bring out signals and junctions. The colour scale is
+one fixed function of the value for every line, period, hour and option (`microsegments.scale`): values are
+brought to seconds per passage per 30 m of track and read on the STIB speed ramp (green 4 s ≈ 27 km/h, red
+14 s ≈ 7.5 km/h, dark red ≥ 24 s); both excesses share it as 3 s + excess.
 
 ## Missing data and GTFS versions
 

@@ -74,6 +74,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .legend .ramp .bar{height:8px;border-radius:4px}
 .legend .ramp .tk{position:relative;height:14px;font:10px var(--mono);color:var(--ink-3)}
 .legend .ramp .tk span{position:absolute;transform:translateX(-50%);top:2px;white-space:nowrap}
+.legend .ramp .tk span:first-child{transform:none}
 .legend .ramp .tk span:last-child{transform:translateX(-100%)}
 .legend .txt{flex:1 1 260px}
 .sw{display:inline-block;width:14px;height:8px;border-radius:2px;vertical-align:middle;margin-right:5px}
@@ -209,7 +210,7 @@ const T = {
     metrics: {oph: 'Observations par heure', opp: 'Observations par passage', ex: 'Écart avec le soir', exl: 'Écart avec la ligne'},
     view: 'Vue', modes: {one: 'Une période', cmp: 'Comparer deux périodes'},
     cmetrics: {d: 'Temps par passage', dx: 'Écart avec le soir'},
-    unitl: {seg: 'microsegment', m10: '10 m'},
+    unitl: {seg: '30 m', m10: '10 m'},
     stopsl: {true: 'Inclus', false: 'Exclus'},
     stopsTitle: (a, b) => `Zone d'arrêt : de ${a} m avant à ${b} m après chaque arrêt`,
     towards: t => `vers ${t}`,
@@ -231,10 +232,11 @@ const T = {
     zone: {stop: 'à l\'arrêt', running: 'entre les arrêts'},
     perveh: m1 => `obs. par ${m1}`, ci: (a, b) => `IC 95 % : ${a} à ${b}`, daysPct: p => `${p} % des jours`, secs: s => `≈ ${s} s`,
     legend: {
-      oph: (m, per10) => `Observations par heure de relevés${per10 ? ', pour 10 m de voie' : ' dans le microsegment'} : en moyenne, combien de fois un ${m} y est vu en une heure. 1 observation ≈ ${TICK} s de présence.`,
-      opp: (m1) => `Observations par passage : combien de relevés chaque ${m1} laisse dans le microsegment. × ${TICK} s ≈ temps passé par ${m1}.`,
-      ex: (m1) => `Observations en plus par ${m1} par rapport au soir (${REFH[0]}–${REFH[1]} h, circulation fluide). +1 ≈ ${TICK} s perdues.`,
-      exl: (m1) => `Observations en plus par ${m1} par rapport au niveau habituel de la ligne : la médiane, de 6 à 23 h, des microsegments entre arrêts, à longueur égale. +1 ≈ ${TICK} s perdues.`,
+      oph: (m, u) => `Observations par heure de relevés, pour ${u} de voie : combien de fois, en moyenne, un ${m} y est vu en une heure (1 observation ≈ ${TICK} s de présence).`,
+      opp: (m1, u) => `Temps passé par chaque ${m1}, en secondes pour ${u} de voie (observations par passage × ${TICK} s). Ce sont les couleurs de l'échelle de vitesse de la STIB : 30 m en 4 s ≈ 27 km/h, en 14 s ≈ 7,5 km/h.`,
+      ex: (m1, u) => `Secondes perdues par chaque ${m1}, pour ${u} de voie, par rapport au soir (${REFH[0]}–${REFH[1]} h, circulation fluide).`,
+      exl: (m1, u) => `Secondes perdues par chaque ${m1}, pour ${u} de voie, par rapport au niveau habituel de la ligne (la médiane, de 6 à 23 h, des microsegments entre arrêts).`,
+      same: 'Même échelle sur tout le site.',
       masked: 'zone d\'arrêt masquée', nodata: 'pas assez de données', hot: 'point chaud', evening: ' Choisissez une autre heure : le soir est la référence.',
     },
     tip: {
@@ -264,8 +266,8 @@ const T = {
       `<b>Observations par passage.</b> Le total divisé par le nombre de ${m} passés : multiplié par ${TICK} s, il donne à peu près le temps que chaque ${m1} passe dans le microsegment.`,
       `<b>Écart avec le soir.</b> Observations par passage à l'heure choisie, moins celles de ${REFH[0]} à ${REFH[1]} h, sur les mêmes jours.`,
       `<b>Écart avec la ligne.</b> Une seconde référence : le niveau habituel de la ligne dans ce sens, soit la médiane des observations par passage et par mètre des microsegments entre arrêts, de 6 à 23 h, multipliée par la longueur du microsegment. Elle fait ressortir ce qui ralentit à toute heure, soir compris.${agreeText('fr')}`,
-      `<b>Zones d'arrêt.</b> De ${(P.stop_zone || [30, 60])[0]} m avant à ${(P.stop_zone || [30, 60])[1]} m après chaque arrêt. Les masquer fait ressortir les feux et les carrefours ; l'échelle des couleurs est alors calculée sur le reste.`,
-      `<b>Échelle.</b> Fixe pour chaque mesure, quelles que soient l'heure et les jours choisis : le haut de l'échelle est le 98e centile des valeurs de ${DAYH[0]} à ${DAYH[1]} h.`,
+      `<b>Zones d'arrêt.</b> De ${(P.stop_zone || [30, 60])[0]} m avant à ${(P.stop_zone || [30, 60])[1]} m après chaque arrêt. Les masquer fait ressortir les feux et les carrefours ; les couleurs ne changent pas.`,
+      `<b>Échelle.</b> Fixe pour tout le site : les mêmes couleurs pour toutes les lignes, périodes, jours, heures et options. Chaque mesure est ramenée à 30 m de voie, puis lue sur l'échelle de vitesse de la STIB, du vert (fluide) au rouge (lent) : un passage de 30 m en 4 s fait 27 km/h (vert foncé), en 14 s, 7,5 km/h (rouge), en 24 s ou plus, 4,5 km/h ou moins (rouge foncé). Les écarts (avec le soir, avec la ligne) partagent la même échelle : un écart de +x s se lit comme un passage fluide de 3 s rallongé de x s, donc 0 s en vert, +10 s en rouge, +21 s ou plus en rouge foncé. Les observations par heure se lisent à raison de 2 s par observation (≈ 10 passages par heure) : 1,5 en vert foncé, 12 ou plus en rouge foncé. Afficher « 10 m » ne change que les nombres (divisés par 3), pas les couleurs. Ces repères viennent des données 2025 de plusieurs lignes de tram et de bus : entre les arrêts, un passage prend en médiane 3 à 4,5 s pour 30 m et, au 98e centile, 12 à 23 s.`,
       `<b>Jours.</b> Chaque valeur est un rapport de sommes sur les jours choisis. Moins il y a de jours, plus les valeurs sont bruitées.`,
       `<b>Changements de tracé.</b> Un microsegment n'est compté que les jours où il fait partie de l'itinéraire principal. La carte suit la version la plus fréquente ; les autres versions s'affichent avec le sélecteur.`,
       `<b>Points chauds.</b> Deux critères. Comparé au soir : à certaines heures (au moins deux de suite, ou toute une pointe), chaque ${m1} est observé plus souvent qu'entre ${REFH[0]} et ${REFH[1]} h. Comparé au reste de la ligne, entre les arrêts seulement : sur toute la journée, soirée comprise, plus d'observations par mètre que le niveau habituel de la ligne dans ce sens (la médiane des microsegments entre arrêts) ; c'est ce qui fait ressortir un feu ou un carrefour lent à toute heure, que la comparaison au soir efface. Dans les deux cas : au moins ${HTH} s de plus par ${m1} avec 95 % de confiance (en rééchantillonnant les jours), un écart positif au moins 60 % des jours, et une correction pour les tests multiples. Les microsegments voisins forment un tronçon ; les tronçons sont classés par observations en plus par jour. « Toute la journée » : le retard ne disparaît pas en soirée ; « aux heures de pointe » : il est surtout là aux pointes ; « mixte » : un peu des deux.`,
@@ -285,7 +287,7 @@ const T = {
     metrics: {oph: 'Observations per hour', opp: 'Observations per passage', ex: 'Excess over evening', exl: 'Excess over the line'},
     view: 'View', modes: {one: 'One period', cmp: 'Compare two periods'},
     cmetrics: {d: 'Time per passage', dx: 'Excess over evening'},
-    unitl: {seg: 'micro-segment', m10: '10 m'},
+    unitl: {seg: '30 m', m10: '10 m'},
     stopsl: {true: 'Shown', false: 'Hidden'},
     stopsTitle: (a, b) => `Stop zone: ${a} m before to ${b} m after each stop`,
     towards: t => `to ${t}`,
@@ -307,10 +309,11 @@ const T = {
     zone: {stop: 'at a stop', running: 'between stops'},
     perveh: m1 => `obs. per ${m1}`, ci: (a, b) => `95 % CI: ${a} to ${b}`, daysPct: p => `${p} % of days`, secs: s => `≈ ${s} s`,
     legend: {
-      oph: (m, per10) => `Observations per hour of polling${per10 ? ', per 10 m of track' : ' in the micro-segment'}: how many times a ${m} is seen there in an hour, on average. 1 observation ≈ ${TICK} s of presence.`,
-      opp: (m1) => `Observations per passage: how many fixes each ${m1} leaves in the micro-segment. × ${TICK} s ≈ time spent per ${m1}.`,
-      ex: (m1) => `Extra observations per ${m1} compared with the evening (${REFH[0]}–${REFH[1]} h, free-flowing traffic). +1 ≈ ${TICK} s lost.`,
-      exl: (m1) => `Extra observations per ${m1} compared with the line's usual level: the median, from 6 to 23 h, of the micro-segments between stops, for the same length. +1 ≈ ${TICK} s lost.`,
+      oph: (m, u) => `Observations per hour of polling, per ${u} of track: how many times, on average, a ${m} is seen there in an hour (1 observation ≈ ${TICK} s of presence).`,
+      opp: (m1, u) => `Time spent by each ${m1}, in seconds per ${u} of track (observations per passage × ${TICK} s). These are the colours of the STIB speed scale: 30 m in 4 s ≈ 27 km/h, in 14 s ≈ 7.5 km/h.`,
+      ex: (m1, u) => `Seconds lost by each ${m1}, per ${u} of track, compared with the evening (${REFH[0]}–${REFH[1]} h, free-flowing traffic).`,
+      exl: (m1, u) => `Seconds lost by each ${m1}, per ${u} of track, compared with the line's usual level (the median, from 6 to 23 h, of the micro-segments between stops).`,
+      same: 'Same scale across the whole site.',
       masked: 'stop zone hidden', nodata: 'not enough data', hot: 'hotspot', evening: ' Pick another hour: the evening is the reference.',
     },
     tip: {
@@ -340,8 +343,8 @@ const T = {
       `<b>Observations per passage.</b> Total divided by the number of ${m} that went through: times ${TICK} s, it is roughly the time each ${m1} spends in the micro-segment.`,
       `<b>Excess over evening.</b> Observations per passage at the chosen hour minus those from ${REFH[0]} to ${REFH[1]} h, on the same days.`,
       `<b>Excess over the line.</b> A second reference: the line's usual level in that direction, the median observations per passage and per metre of the micro-segments between stops, from 6 to 23 h, times the micro-segment's length. It brings out what is slow at every hour, evening included.${agreeText('en')}`,
-      `<b>Stop zones.</b> From ${(P.stop_zone || [30, 60])[0]} m before to ${(P.stop_zone || [30, 60])[1]} m after each stop. Hiding them brings out signals and junctions; the colour scale is then computed on the rest.`,
-      `<b>Scale.</b> Fixed for each measure whatever the hour and days: its top is the 98th percentile of the values from ${DAYH[0]} to ${DAYH[1]} h.`,
+      `<b>Stop zones.</b> From ${(P.stop_zone || [30, 60])[0]} m before to ${(P.stop_zone || [30, 60])[1]} m after each stop. Hiding them brings out signals and junctions; the colours do not change.`,
+      `<b>Scale.</b> Fixed across the whole site: the same colours for every line, period, day, hour and option. Each measure is brought to 30 m of track, then read on the STIB speed scale, from green (fluid) to red (slow): 30 m in 4 s is 27 km/h (dark green), in 14 s 7.5 km/h (red), in 24 s or more 4.5 km/h or less (dark red). Both excesses (vs the evening, vs the line) share that scale: an excess of +x s reads as a fluid 3 s passage made x s longer, so 0 s is green, +10 s red, +21 s or more dark red. Observations per hour are read at 2 s per observation (≈ 10 passages an hour): 1.5 is dark green, 12 or more dark red. Showing "10 m" only changes the numbers (divided by 3), not the colours. These marks come from 2025 data of several tram and bus lines: between stops a passage takes a median 3 to 4.5 s per 30 m and, at the 98th percentile, 12 to 23 s.`,
       `<b>Days.</b> Each value is a ratio of sums over the chosen days. Fewer days means noisier values.`,
       `<b>Route changes.</b> A micro-segment only counts on days when it is part of the main route. The map follows the most frequent version; the others can be picked with the selector.`,
       `<b>Hotspots.</b> Two criteria. Vs the evening: at some hours (at least two in a row, or a whole peak), each ${m1} is observed more often than from ${REFH[0]} to ${REFH[1]} h. Vs the rest of the line, between stops only: over the whole day, evening included, more observations per metre than the line's usual level in that direction (the median of the micro-segments between stops); this brings out a signal or a slow junction present at every hour, which the evening comparison cancels. Both need at least ${HTH} s more per ${m1} with 95 % confidence (resampling days), a positive excess on at least 60 % of days, and a multiple-testing correction. Neighbouring micro-segments form a stretch; stretches are ranked by extra observations per day. "All day": the delay does not go away in the evening; "at peak hours": it is mostly there at peaks; "mixed": a bit of both.`,
@@ -359,23 +362,23 @@ const CT = {
     title: m => `Qu'est-ce qui a changé pour les ${m} ?`,
     more: n => `Voir les ${n} changements`,
     stops: 'Dans ce sens, les changements nets sont aux arrêts : affichez les zones d\'arrêt pour les voir.',
-    lede: (a, b, m1, m) => `Deux périodes comparées microsegment par microsegment : ${a} (avant) et ${b} (après). On compare les observations par passage, c'est-à-dire le temps que chaque ${m1} passe dans le microsegment, quel que soit le nombre de ${m}. En bleu, ils passent plus vite qu'avant ; en rouge, ils s'attardent davantage.`,
+    lede: (a, b, m1, m) => `Deux périodes comparées microsegment par microsegment : ${a} (avant) et ${b} (après). On compare les observations par passage, c'est-à-dire le temps que chaque ${m1} passe dans le microsegment, quel que soit le nombre de ${m}. En vert, ils passent plus vite qu'avant ; en rouge, ils s'attardent davantage.`,
     tiles: {a: 'jours avant', b: 'jours après', slower: 'tronçons plus lents', faster: 'tronçons plus rapides'},
     title2: 'Ce qui a changé',
     note: (m1, m) => `Tronçons où chaque ${m1} gagne ou perd nettement du temps d'une période à l'autre : au moins ${HTH} s, avec 95 % de confiance, sur deux heures de suite ou toute une pointe. Classés par temps gagné ou perdu par jour, tous ${m} confondus. Cliquez pour le voir sur la carte.`,
     none: 'Aucun changement net dans ce sens.',
     few: 'Pas assez de jours dans une des périodes pour conclure (au moins 5).',
     sign: {'-1': 'plus rapide', '1': 'plus lent'},
-    perveh: m1 => `s par ${m1}`, perday: v => `${v} min par jour au total`,
+    perveh: m1 => `s par ${m1}`, per30: m1 => `s par ${m1}, pour 30 m`, perday: v => `${v} min par jour au total`,
     freq: (a, b, m) => `${a} → ${b} ${m}/h`, freqflag: 'fréquence modifiée : une partie de l\'écart peut venir de l\'horaire',
     ci: (a, b) => `IC 95 % : ${a} à ${b} s`,
-    legend: {d: m1 => `Différence de temps passé par ${m1} dans le microsegment, après moins avant (1 observation ≈ ${TICK} s).`,
-             dx: m1 => `Différence de l'écart avec le soir, après moins avant : neutralise un changement du niveau du soir.`,
+    legend: {d: m1 => `Différence de temps passé par ${m1}, en secondes pour 30 m de voie, après moins avant.`,
+             dx: m1 => `Différence de l'écart avec le soir, en secondes par ${m1} pour 30 m, après moins avant : neutralise un changement du niveau du soir.`,
              faster: 'plus rapide', slower: 'plus lent', pale: 'pâle : différence incertaine', absent: 'absent avant', chg: 'changement retenu'},
     tip: {a: (v, s) => `avant : ${v} obs. par passage (≈ ${s} s)`, b: (v, s) => `après : ${v} (≈ ${s} s)`,
           d: (v, m1) => `<b>${v} s par ${m1}</b>`, unsure: 'différence incertaine', absent: 'absent de la première période',
           freq: (a, b, m) => `${a} → ${b} ${m} par heure`},
-    mxsub: (f, t, a, b, m1, stops) => `De ${f} à ${t}. Chaque case : la différence de temps par ${m1} entre ${a} et ${b}, à cette heure. Bleu : plus rapide ; rouge : plus lent ; pâle : incertain${stops ? '' : ' ; zones d\'arrêt masquées'}. Contours blancs : changements retenus. Cliquez une heure pour l'afficher sur la carte.`,
+    mxsub: (f, t, a, b, m1, stops) => `De ${f} à ${t}. Chaque case : la différence de temps par ${m1} entre ${a} et ${b}, à cette heure. Vert : plus rapide ; rouge : plus lent ; pâle : incertain${stops ? '' : ' ; zones d\'arrêt masquées'}. Contours jaunes : changements retenus. Cliquez une heure pour l'afficher sur la carte.`,
     profsub: (f, t, w, m1, m) => `De ${f} à ${t}, ${w}. Au-dessus de zéro, chaque ${m1} met plus de temps qu'avant ; en dessous, moins. Pointillés jaunes : ${m} par heure après (échelle de droite).`,
     days: 'mêmes jours de semaine que chaque période',
     method: (m1, m, a, b) => `<b>Comparaison de deux périodes.</b> ${a} (avant) et ${b} (après), chacune sur ses propres jours et avec sa propre référence. Les microsegments sont appariés d'une période à l'autre ; ceux qui n'existent que dans une période sont écartés. La différence porte sur les observations par passage, donc le temps par ${m1}, ce qui la rend indépendante de la fréquence. L'incertitude vient d'un rééchantillonnage des jours de chaque période. Quand la fréquence change de plus de 20 %, le tronçon est signalé : un horaire différent (plus de ${m}, plus de files) peut expliquer une partie de l'écart.`,
@@ -384,23 +387,23 @@ const CT = {
     title: m => `What changed for the ${m}?`,
     more: n => `Show all ${n} changes`,
     stops: 'In this direction the clear changes are at stops: show the stop zones to see them.',
-    lede: (a, b, m1, m) => `Two periods compared micro-segment by micro-segment: ${a} (before) and ${b} (after). The comparison is on observations per passage, that is the time each ${m1} spends in the micro-segment, whatever the number of ${m}. Blue: they go through faster than before; red: they linger longer.`,
+    lede: (a, b, m1, m) => `Two periods compared micro-segment by micro-segment: ${a} (before) and ${b} (after). The comparison is on observations per passage, that is the time each ${m1} spends in the micro-segment, whatever the number of ${m}. Green: they go through faster than before; red: they linger longer.`,
     tiles: {a: 'days before', b: 'days after', slower: 'slower stretches', faster: 'faster stretches'},
     title2: 'What changed',
     note: (m1, m) => `Stretches where each ${m1} clearly gains or loses time from one period to the other: at least ${HTH} s, with 95 % confidence, over two hours in a row or a whole peak. Ranked by time gained or lost per day, all ${m} together. Click one to see it on the map.`,
     none: 'No clear change in this direction.',
     few: 'Too few days in one of the periods to conclude (at least 5).',
     sign: {'-1': 'faster', '1': 'slower'},
-    perveh: m1 => `s per ${m1}`, perday: v => `${v} min per day in total`,
+    perveh: m1 => `s per ${m1}`, per30: m1 => `s per ${m1}, per 30 m`, perday: v => `${v} min per day in total`,
     freq: (a, b, m) => `${a} → ${b} ${m}/h`, freqflag: 'frequency changed: part of the difference may come from the timetable',
     ci: (a, b) => `95 % CI: ${a} to ${b} s`,
-    legend: {d: m1 => `Difference in time spent per ${m1} in the micro-segment, after minus before (1 observation ≈ ${TICK} s).`,
-             dx: m1 => `Difference in the excess over the evening, after minus before: removes a change of the evening level.`,
+    legend: {d: m1 => `Difference in time spent per ${m1}, in seconds per 30 m of track, after minus before.`,
+             dx: m1 => `Difference in the excess over the evening, in seconds per ${m1} per 30 m, after minus before: removes a change of the evening level.`,
              faster: 'faster', slower: 'slower', pale: 'pale: uncertain difference', absent: 'absent before', chg: 'retained change'},
     tip: {a: (v, s) => `before: ${v} obs. per passage (≈ ${s} s)`, b: (v, s) => `after: ${v} (≈ ${s} s)`,
           d: (v, m1) => `<b>${v} s per ${m1}</b>`, unsure: 'uncertain difference', absent: 'absent from the first period',
           freq: (a, b, m) => `${a} → ${b} ${m} per hour`},
-    mxsub: (f, t, a, b, m1, stops) => `From ${f} to ${t}. Each cell: the difference in time per ${m1} between ${a} and ${b}, at that hour. Blue: faster; red: slower; pale: uncertain${stops ? '' : '; stop zones hidden'}. White outlines: retained changes. Click an hour to show it on the map.`,
+    mxsub: (f, t, a, b, m1, stops) => `From ${f} to ${t}. Each cell: the difference in time per ${m1} between ${a} and ${b}, at that hour. Green: faster; red: slower; pale: uncertain${stops ? '' : '; stop zones hidden'}. Yellow outlines: retained changes. Click an hour to show it on the map.`,
     profsub: (f, t, w, m1, m) => `From ${f} to ${t}, ${w}. Above zero, each ${m1} takes longer than before; below, less. Yellow dots: ${m} per hour after (right scale).`,
     days: 'same weekdays as each period',
     method: (m1, m, a, b) => `<b>Comparing two periods.</b> ${a} (before) and ${b} (after), each on its own days and with its own reference. Micro-segments are matched from one period to the other; those that exist in one period only are left out. The difference is in observations per passage, so in time per ${m1}, which makes it independent of the frequency. The uncertainty comes from resampling the days of each period. When the frequency changes by more than 20 %, the stretch is flagged: a different timetable (more ${m}, more queues) may explain part of the difference.`,
@@ -408,7 +411,7 @@ const CT = {
 };
 
 // ---------------------------------------------------------------- colours: the prototype's OKLab ramp
-// Continuous ramp interpolated in OKLab; seqColor reads it from green (little) to dark red (most).
+// The STIB speed ramp (km/h), interpolated in OKLab: dark red (slow) to dark green (fluid); see timeColor.
 const RAMP = [[4.5,'#7a1020'],[7.5,'#e5484d'],[10.5,'#f0a13a'],[13.5,'#b8e27f'],[16.5,'#3fb950'],[21,'#1f8f45'],[27,'#11683e']];
 const hex2 = h => [1,3,5].map(i => parseInt(h.slice(i,i+2),16)/255);
 const lin = c => c <= .04045 ? c/12.92 : ((c+.055)/1.055)**2.4, gam = c => c <= .0031308 ? 12.92*c : 1.055*c**(1/2.4)-.055;
@@ -431,17 +434,30 @@ function colorOf(v) {
   const t = (v - R[i][0]) / (R[i+1][0] - R[i][0]);
   return `rgb(${fromLab(R[i][1].map((c,k) => c + t*(R[i+1][1][k] - c))).join(',')})`;
 }
-function seqColor(v, max) {
-  if (v == null || !isFinite(v)) return 'var(--null)';
-  const t = Math.min(1, Math.sqrt(Math.max(0, v) / max));
-  return colorOf(22 - t * 17.5);
+// ---------------------------------------------------------------- one fixed colour scale for the whole site
+// Same constants as microsegments/scale.py (kept in sync by a test). Colour is a fixed function of the value,
+// never computed from the data (no percentile): every line, period, day, hour, band, stop-zone and unit toggle
+// shares it. Each measure is first brought to T = seconds per passage for 30 m of track:
+//   obs per passage: T = opp x tick x 30 / len; excesses (vs evening, vs line): T = BASE + excess (s per 30 m);
+//   obs per hour: T = OPH x obs per hour per 30 m. "Per 10 m" only divides the labels by 3.
+// T is read on the STIB speed ramp: 30 m in T s = 108 / T km/h (4 s = 27 km/h dark green, 14.4 s = 7.5 km/h red,
+// >= 24 s = 4.5 km/h dark red). Why these constants (tram and bus lines, weekdays 2025): between stops the median
+// is 3-4.4 s per 30 m, p90 6.5-10 s, p98 12-23 s; stop zones p98 33-46 s; positive excess over the evening:
+// median ~1 s, p98 5-17 s. So typical values stay green and hotspots (10 s and more per 30 m) turn red.
+const SC = {L: 30, T0: 3, T1: 24, TICKS: [3, 6, 9, 12, 15, 24], BASE: 3, OPH: 2, CMP: 10, CTICKS: [-10, -3, 0, 3, 10]};
+const NULLC = '#3a4560', MASKC = '#26324d';   // no data / masked stop zone: discreet dark greys (map, matrix, legend)
+function timeColor(T) {
+  if (T == null || !isFinite(T)) return NULLC;
+  return colorOf(108 / Math.max(T, 1e-9));
 }
-// Diverging ramp for the comparison: blue (faster, fewer observations) - grey - red (slower).
-const DIV = [[-1, '#2f6fde'], [-.45, '#7fb0f0'], [0, '#4a5470'], [.45, '#f2a07f'], [1, '#e5484d']];
+const tPos = T => Math.log(Math.min(SC.T1, Math.max(SC.T0, T)) / SC.T0) / Math.log(SC.T1 / SC.T0);
+// Diverging ramp for the comparison: green (faster) - grey - red (slower), fixed +-SC.CMP s per passage per 30 m.
+const DIV = [[-1, '#11683e'], [-.45, '#3fb950'], [0, '#4a5470'], [.45, '#f0a13a'], [1, '#e5484d']];
 const DIV_LAB = DIV.map(([v, h]) => [v, toLab(hex2(h))]);
-function divColor(v, max, pale) {
-  if (v == null || !isFinite(v)) return 'var(--null)';
-  let t = Math.sign(v) * Math.min(1, Math.sqrt(Math.abs(v) / max));
+const FASTC = '#3fb950', SLOWC = '#e5484d';
+function divColor(v, pale) {
+  if (v == null || !isFinite(v)) return NULLC;
+  let t = Math.sign(v) * Math.min(1, Math.sqrt(Math.abs(v) / SC.CMP));
   if (pale) t *= .35;
   let i = 0; while (i < DIV_LAB.length - 2 && t > DIV_LAB[i + 1][0]) i++;
   const [a, A] = DIV_LAB[i], [b, Bc] = DIV_LAB[i + 1], f = Math.min(1, Math.max(0, (t - a) / (b - a)));
@@ -517,38 +533,23 @@ function vals(E, k = key(), days = st.days) {
     const l = E.seg.link[i], len = E.seg.len[i];
     const oph = c && c[l] > 0 ? o[i] / c[l] : null;
     const opp = p && p[l] >= 0.5 * Math.max(1, A.nd[l]) * nh ? o[i] / p[l] : null;
-    const ref = A.ref[i], refl = A.refl[i], nn = A.n[k];
+    const ref = A.ref[i], refl = A.refl[i], nn = A.n[k], k30 = SC.L / len, ex = opp != null && ref != null ? opp - ref : null,
+          exl = opp != null && refl != null ? opp - refl : null;
+    // s30: the shown measures per 30 m of track (seconds per passage, or observations per hour for oph)
+    const s30 = {oph: oph == null ? null : oph * k30, opp: opp == null ? null : opp * TICK * k30,
+                 ex: ex == null ? null : ex * TICK * k30, exl: exl == null ? null : exl * TICK * k30};
     return {i, l, x0: E.seg.x0[i], len, stop: isStop(E, i), flags: E.seg.flags[i] || 0, obs: o ? o[i] : 0,
-            oph, oph10: oph == null ? null : oph * 10 / len, opp, ref, ex: opp != null && ref != null ? opp - ref : null,
-            exl: opp != null && refl != null ? opp - refl : null, pph: nn && nn[l] > 0 ? p[l] / nn[l] : null, nd: A.nd[l]};
+            oph, oph10: oph == null ? null : oph * 10 / len, opp, ref, ex, exl, s30, pph: nn && nn[l] > 0 ? p[l] / nn[l] : null, nd: A.nd[l]};
   });
 }
-const mkey = () => st.metric === 'oph' ? (st.per10 ? 'oph10' : 'oph') : st.metric;
-function metricVal(v, m = mkey()) { const x = v[m]; return x == null ? null : (m === 'ex' || m === 'exl') ? Math.max(0, x) : x; }
-
-// ---------------------------------------------------------------- fixed scales (p98 over day hours, all days)
-function nice(v) {
-  if (!(v > 0)) return 1;
-  const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e;
-  return [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => x >= f - 1e-9) * e;
-}
-const SCALES = {};
-(function scales() {
-  const dh = D.hours.filter(h => h >= DAYH[0] && h < DAYH[1]);
-  for (const m of ['oph', 'oph10', 'opp', 'ex', 'exl']) for (const stops of [true, false]) {
-    const fixed = D.scales && D.scales[m] != null ? (typeof D.scales[m] === 'object' ? D.scales[m][stops] : D.scales[m]) : null;
-    if (fixed != null) { SCALES[m + stops] = fixed; continue; }
-    const xs = [];
-    for (const E of DIRS) for (const h of dh) for (const v of vals(E, String(h), PRESENT)) {
-      if (!stops && v.stop) continue;
-      const x = metricVal(v, m); if (x != null && ((m !== 'ex' && m !== 'exl') || x > 0)) xs.push(x);
-    }
-    xs.sort((a, b) => a - b);
-    SCALES[m + stops] = nice(xs.length ? xs[Math.min(xs.length - 1, Math.floor(xs.length * .98))] : 1);
-  }
-})();
-const scaleMax = () => SCALES[mkey() + st.stops];
-const colorFor = (v, max) => !shown(v) ? 'var(--masked)' : seqColor(metricVal(v), max);
+// Value of a measure per 30 m (excesses: positive part), and its T (seconds per passage per 30 m) for the colour.
+const isEx = m => m === 'ex' || m === 'exl';
+function metricVal(v, m = st.metric) { const x = v.s30 ? v.s30[m] : null; return x == null ? null : isEx(m) ? Math.max(0, x) : x; }
+const toT = (x, m = st.metric) => x == null ? null : m === 'oph' ? x * SC.OPH : isEx(m) ? SC.BASE + x : x;
+// shown unit: per 30 m, or per 10 m (labels only: the colour is the same)
+const UDIV = () => st.per10 ? 3 : 1;
+const tickVal = (T, m = st.metric) => (m === 'oph' ? T / SC.OPH : isEx(m) ? T - SC.BASE : T) / UDIV();
+const colorFor = v => !shown(v) ? MASKC : timeColor(toT(metricVal(v)));
 
 // ---------------------------------------------------------------- helpers
 function stopBefore(E, x) { let s = E.stops[0]; for (const t of E.stops) if (t.x <= x + .5) s = t; return s; }
@@ -590,6 +591,11 @@ const hotAll = () => hotDir().filter(h => st.stops || h.zone !== 'stop');
 // the list (and the map markers) show the top hotspots unless "show all" is on
 const hotOfDir = () => { const a = hotAll(); return st.hotAll ? a : a.slice(0, HOT_TOP); };
 
+function nice(v) {
+  if (!(v > 0)) return 1;
+  const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e;
+  return [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => x >= f - 1e-9) * e;
+}
 // Passages per hour as a dotted step line on a right-hand axis (profile).
 function freqLine(f, v, x, H, m, W) {
   const fm = Math.max(0, ...f.filter(z => z != null));
@@ -632,21 +638,9 @@ function cvals(E, k = key()) {
             oa: g(C.oa), ob: g(C.ob), fa: g(C.fa), fb: g(C.fb)};
   });
 }
-const CSCALES = {};
-if (CMP) (function () {
-  const dh = D.hours.filter(h => h >= DAYH[0] && h < DAYH[1]);
-  for (const m of ['d', 'dx']) for (const stops of [true, false]) {
-    const xs = [];
-    for (const E of DIRS) for (const h of dh) for (const v of cvals(E, String(h))) {
-      if (!stops && v.stop) continue;
-      if (v[m] != null) xs.push(Math.abs(v[m]));
-    }
-    xs.sort((a, b) => a - b);
-    CSCALES[m + stops] = nice(xs.length ? xs[Math.min(xs.length - 1, Math.floor(xs.length * .98))] : 1);
-  }
-})();
-const cmax = () => CSCALES[st.cmetric + st.stops];
-const cColor = (v, max) => !shown(v) ? 'var(--masked)' : v.absent ? 'var(--null)' : divColor(v[st.cmetric], max, !v.sig);
+// comparison: the difference in seconds per passage per 30 m (fixed scale +-SC.CMP)
+const cSec = v => { const x = v[st.cmetric]; return x == null ? null : x * TICK * SC.L / v.len; };
+const cColor = v => !shown(v) ? MASKC : v.absent ? NULLC : divColor(cSec(v), !v.sig);
 function cTipHtml(E, v) {
   const t = ctx().tip, s = stopBefore(E, v.x0), lk = E.links[v.l], l = tx().tip;
   let h = `<b>${l.after(Math.round(v.x0 - s.x), Math.round(v.x0 - s.x + v.len), esc(s.name))}</b> (${l.towards(esc(lk ? lk.to : E.to))})<br>`;
@@ -663,17 +657,17 @@ function cTipHtml(E, v) {
 const chgAll = () => CMP ? (CMP.changes || []).filter(c => c.dir === st.dir && (!c.pattern_uid || c.pattern_uid === (dirOf() || {}).pattern_uid)).sort((a, b) => a.rank - b.rank) : [];
 const chgShown = () => chgAll().filter(c => st.stops || c.zone !== 'stop');
 const chgDir = () => st.hotAll ? chgShown() : chgShown().slice(0, HOT_TOP);
-const signCol = s => s < 0 ? '#2f6fde' : '#e5484d';
-function cmpLegend(max) {
-  const c = ctx().legend, mm = st.cmetric;
-  const bar = Array.from({length: 41}, (_, i) => { const t = (i - 20) / 20; return divColor(Math.sign(t) * max * t * t, max, false); }).join(',');
-  const tk = [-1, -.25, 0, .25, 1].map(f => { const v = f * max, left = (Math.sign(f) * Math.sqrt(Math.abs(f)) + 1) * 50;
-    return `<span style="left:${left}%">${f === 1 ? '≥ ' : f === -1 ? '≤ ' : ''}${f ? signed(v * TICK, 0) + ' s' : '0'}</span>`; }).join('');
+const signCol = s => s < 0 ? FASTC : SLOWC;
+function cmpLegend() {
+  const c = ctx().legend, mm = st.cmetric, M = SC.CMP;
+  const pos = v => (Math.sign(v) * Math.sqrt(Math.abs(v) / M) + 1) * 50;
+  const bar = Array.from({length: 41}, (_, i) => { const t = (i - 20) / 20; return divColor(Math.sign(t) * M * t * t, false); }).join(',');
+  const tk = SC.CTICKS.map(v => `<span style="left:${pos(v)}%">${v === M ? '≥ ' : v === -M ? '≤ ' : ''}${v ? signed(v, 0) + ' s' : '0'}</span>`).join('');
   const html = `<div class="ramp"><div class="bar" style="background:linear-gradient(90deg,${bar})"></div><div class="tk">${tk}</div></div>` +
-    `<span class="txt">${c[mm](noun(false))} <span style="color:#7fb0f0">${c.faster}</span> · <span style="color:#f2a07f">${c.slower}</span> · ${c.pale}.</span>` +
-    `<span><i class="sw" style="background:var(--null)"></i>${c.absent}</span>` +
-    (st.stops ? '' : `<span><i class="sw" style="background:var(--masked)"></i>${tx().legend.masked}</span>`) +
-    (chgDir().length ? `<span><i class="hk" style="border-color:#fff"></i>${c.chg}</span>` : '');
+    `<span class="txt">${c[mm](noun(false))} <span style="color:${FASTC}">${c.faster}</span> · <span style="color:${SLOWC}">${c.slower}</span> · ${c.pale}. ${tx().legend.same}</span>` +
+    `<span><i class="sw" style="background:${NULLC}"></i>${c.absent}</span>` +
+    (st.stops ? '' : `<span><i class="sw" style="background:${MASKC}"></i>${tx().legend.masked}</span>`) +
+    (chgDir().length ? `<span><i class="hk"></i>${c.chg}</span>` : '');
   $('legend').innerHTML = html; $('mxlegend').innerHTML = html;
 }
 function cmpList() {
@@ -687,7 +681,7 @@ function cmpList() {
     const meta = [c.sign[String(h.sign)], tx().zone[h.zone] || h.zone, runsLabel(h.hours || []), fr].filter(Boolean).join(' · ');
     const ci = h.ci_lo != null && h.ci_hi != null ? c.ci(signed(h.ci_lo * TICK, 0), signed(h.ci_hi * TICK, 0)) : '';
     const flag = h.frequency_changed ? `<div class="meta" style="color:var(--acc)">${esc(c.freqflag)}</div>` : '';
-    return `<button type="button" class="hs${st.chg === h.rank ? ' on' : ''}" data-r="${h.rank}"><span class="n" style="background:${signCol(h.sign)};color:#fff">${i + 1}</span>
+    return `<button type="button" class="hs${st.chg === h.rank ? ' on' : ''}" data-r="${h.rank}"><span class="n" style="background:${signCol(h.sign)};color:#111">${i + 1}</span>
       <div><div class="nm">${esc(h.from_stop_name)} <span class="ar">→</span> ${esc(h.to_stop_name)}</div>
       <div class="meta">${esc(meta)}</div><div class="meta">${esc(ci)}</div>${flag}</div>
       <div class="v">${h.delta_s == null ? '—' : signed(h.delta_s, 0)}<small>${c.perveh(noun(false))}</small><small>${h.veh_time_s_per_day == null ? '' : esc(c.perday(signed(h.veh_time_s_per_day / 60, 0)))}</small></div></button>`;
@@ -709,17 +703,17 @@ function cmpHotMap() {
   chgDir().forEach((h, n) => {
     const idx = hotSegIdx(E, h); if (!idx.length) return;
     const on = st.chg === h.rank;
-    idx.forEach(i => { const c = E.seg.c[i]; if (c.length > 1) Lf.polyline(c.map(([x, y]) => [y, x]), {renderer, color: on ? '#ffe600' : '#eef1f6', weight: on ? 20 : 17, lineCap: 'butt', interactive: false}).addTo(hotLayer); });
+    idx.forEach(i => { const c = E.seg.c[i]; if (c.length > 1) Lf.polyline(c.map(([x, y]) => [y, x]), {renderer, color: '#ffe600', weight: on ? 18 : 15, opacity: on ? 1 : .8, lineCap: 'butt', interactive: false}).addTo(hotLayer); });
     const mid = E.seg.c[idx[Math.floor(idx.length / 2)]]; if (!mid || !mid.length) return;
     const pt = mid[Math.floor(mid.length / 2)];
-    Lf.marker([pt[1], pt[0]], {icon: Lf.divIcon({className: '', html: `<div class="hsm" style="background:${signCol(h.sign)};color:#fff">${n + 1}</div>`, iconSize: [22, 22], iconAnchor: [30, 28]}), zIndexOffset: 1000})
+    Lf.marker([pt[1], pt[0]], {icon: Lf.divIcon({className: '', html: `<div class="hsm" style="background:${signCol(h.sign)};color:#111">${n + 1}</div>`, iconSize: [22, 22], iconAnchor: [30, 28]}), zIndexOffset: 1000})
       .on('click', () => selectChg(h.rank)).addTo(hotLayer);
   });
 }
 function cmpProfile() {
   const E = entry(), svg = $('prof'), c = ctx();
   const W = svg.clientWidth || 800, H = 300, m = {l: 48, r: 12, t: 18, b: 74};
-  const Ltot = E.stops.length ? E.stops[E.stops.length - 1].x : 1, v = cvals(E), YM = cmax() * TICK;
+  const Ltot = E.stops.length ? E.stops[E.stops.length - 1].x : 1, v = cvals(E), YM = SC.CMP;
   const x = u => m.l + u / Ltot * (W - m.l - m.r), y = u => m.t + (1 - (Math.min(Math.max(u, -YM), YM) + YM) / (2 * YM)) * (H - m.t - m.b);
   let s = '<g class="axis">';
   const e10 = Math.pow(10, Math.floor(Math.log10(YM / 3))), step = [1, 2, 2.5, 5, 10].map(f => f * e10).find(q => YM / q <= 3) || YM;
@@ -732,10 +726,10 @@ function cmpProfile() {
     s += `<line x1="${xx}" x2="${xx}" y1="${m.t}" y2="${H - m.b}" stroke="#eef1f6" stroke-opacity=".15"/>`;
     if (xx - last >= 13) { last = xx; s += `<text x="${xx}" y="${H - m.b + 14}" transform="rotate(-40 ${xx} ${H - m.b + 14})" text-anchor="end" fill="var(--ink-3)" font-size="10" font-family="var(--sans)">${esc(t.name)}</text>`; }
   }
-  v.forEach(b => { const u = b[st.cmetric]; if (u == null || !shown(b)) return; const ys = y(u * TICK), y0 = y(0);
-    s += `<rect x="${x(b.x0).toFixed(1)}" y="${Math.min(ys, y0).toFixed(1)}" width="${Math.max(1, x(b.x0 + b.len) - x(b.x0) - .5).toFixed(1)}" height="${Math.max(.5, Math.abs(y0 - ys)).toFixed(1)}" fill="${divColor(u, cmax(), !b.sig)}"/>`; });
+  v.forEach(b => { const u = cSec(b); if (u == null || !shown(b)) return; const ys = y(u), y0 = y(0);
+    s += `<rect x="${x(b.x0).toFixed(1)}" y="${Math.min(ys, y0).toFixed(1)}" width="${Math.max(1, x(b.x0 + b.len) - x(b.x0) - .5).toFixed(1)}" height="${Math.max(.5, Math.abs(y0 - ys)).toFixed(1)}" fill="${divColor(u, !b.sig)}"/>`; });
   s += freqLine(v.map(b => b.fb == null ? null : b.fb), v, x, H, m, W);
-  s += `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${esc(c.perveh(noun(false)))}</text>`;
+  s += `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${esc(c.per30(noun(false)))}</text>`;
   svg.innerHTML = s;
   svg.onmousemove = e => { const r = svg.getBoundingClientRect(), u = (e.clientX - r.left - m.l) / (W - m.l - m.r) * Ltot; if (u < 0 || u > Ltot) return hideTip();
     let i = v.findIndex(b => u >= b.x0 && u < b.x0 + b.len); if (i < 0) i = v.length - 1; showTip(e, cTipHtml(E, v[i])); };
@@ -887,53 +881,55 @@ function drawMap() {
     // label above where the line runs east-west, to the right otherwise
     const nb = E.stops[Math.min(k + 1, E.stops.length - 1)].ll || s.ll, pb = E.stops[Math.max(k - 1, 0)].ll || s.ll;
     const side = Math.abs(nb[0] - pb[0]) * Math.cos(s.ll[1] * Math.PI / 180) > Math.abs(nb[1] - pb[1]) ? 'u' : 'r';
-    Lf.circleMarker(ll, {renderer, radius: 4, color: '#0b1224', weight: 2, fillColor: '#eef1f6', fillOpacity: 1, interactive: false}).addTo(stopLayer);
+    Lf.circleMarker(ll, {renderer, radius: 4, color: '#0b1224', weight: 2, fillColor: '#9aa4b8', fillOpacity: 1, interactive: false}).addTo(stopLayer);
     const m = Lf.marker(ll, {icon: Lf.divIcon({className: '', html: `<div class="lab ${side}">${esc(s.name)}</div>`, iconSize: [0, 0]}), interactive: false}).addTo(stopLayer);
     m._lab = true;
   });
   drawHotMap();
   setTimeout(declutter, 0);
 }
+// Halos (hotspots, retained changes) are re-added on every render, and one SVG renderer draws in insertion order:
+// push them under the coloured segments, then the dark casing under them, so the colours stay visible.
+function haloUnder() { hotLayer.eachLayer(l => l.bringToBack && l.bringToBack()); baseLayer.eachLayer(l => l.bringToBack()); }
 function hotSegIdx(E, h) { const out = []; E.seg.x0.forEach((x, i) => { if (x + E.seg.len[i] > h.x0_m + .5 && x < h.x1_m - .5) out.push(i); }); return out; }
 function drawHotMap() {
   if (!map) return;
   const Lf = window.L, E = entry();
   hotLayer.clearLayers();
   if (!E || !isMain()) return;
-  if (isCmp()) return cmpHotMap();
+  if (isCmp()) { cmpHotMap(); return haloUnder(); }
   for (const h of hotOfDir()) {
     const idx = hotSegIdx(E, h); if (!idx.length) continue;
     const on = st.hot === h.rank;
-    idx.forEach(i => { const c = E.seg.c[i]; if (c.length > 1) Lf.polyline(c.map(([x, y]) => [y, x]), {renderer, color: on ? '#ffffff' : '#ffe600', weight: on ? 20 : 17, lineCap: 'butt', interactive: false}).addTo(hotLayer); });
+    idx.forEach(i => { const c = E.seg.c[i]; if (c.length > 1) Lf.polyline(c.map(([x, y]) => [y, x]), {renderer, color: '#ffe600', weight: on ? 18 : 15, opacity: on ? 1 : .8, lineCap: 'butt', interactive: false}).addTo(hotLayer); });
     const mid = E.seg.c[idx[Math.floor(idx.length / 2)]]; if (!mid || !mid.length) continue;
     const pt = mid[Math.floor(mid.length / 2)];
     Lf.marker([pt[1], pt[0]], {icon: Lf.divIcon({className: '', html: `<div class="hsm">${h.rank}</div>`, iconSize: [22, 22], iconAnchor: [30, 28]}), zIndexOffset: 1000})
       .on('click', () => selectHot(h.rank)).addTo(hotLayer);
   }
+  haloUnder();
 }
 function recolor() {
-  const cm = isCmp(), E = entry(), max = cm ? cmax() : scaleMax();
-  if (!E) return max;
+  const cm = isCmp(), E = entry();
+  if (!E) return;
   const v = cm ? cvals(E) : vals(E);
-  segs.forEach((p, i) => p.setStyle({color: cm ? cColor(v[i], max) : colorFor(v[i], max), weight: shown(v[i]) ? 10 : 4}));
-  return max;
+  segs.forEach((p, i) => p.setStyle({color: cm ? cColor(v[i]) : colorFor(v[i]), weight: shown(v[i]) ? 10 : 4}));
 }
 
 // ---------------------------------------------------------------- legend
-function niceTicks(max) {
-  const cand = [0, .1, .2, .5, 1, 2, 3, 5, 10, 20, 30, 50, 100, 200, 500, 1000].filter(v => v < max * .97);
-  const pick = [0]; for (const v of cand.slice(1)) if (Math.sqrt(v / max) - Math.sqrt(pick[pick.length - 1] / max) > .16) pick.push(v);
-  return pick.concat(max);
-}
-function legend(max) {
-  if (isCmp()) return cmpLegend(max);
-  const l = tx().legend, m = st.metric;
-  const bar = Array.from({length: 21}, (_, i) => seqColor(max * (i / 20) ** 2, max)).join(',');
-  const ticks = niceTicks(max).map(v => `<span style="left:${Math.sqrt(v / max) * 100}%">${v === max ? '≥ ' : ''}${(m === 'ex' || m === 'exl') && v ? '+' : ''}${v ? nf(v, v < 1 ? 1 : v < 10 && v % 1 ? 1 : 0) : '0'}</span>`).join('');
-  const txt = m === 'oph' ? l.oph(noun(false), st.per10) : m === 'opp' ? l.opp(noun(false)) : m === 'exl' ? l.exl(noun(false)) : l.ex(noun(false)) + (st.band === 'evening' || (!st.band && st.hour >= REFH[0] && st.hour < REFH[1]) ? l.evening : '');
+// The same bar and tick positions for every measure; only the labels say which measure and unit.
+function legend() {
+  if (isCmp()) return cmpLegend();
+  const l = tx().legend, m = st.metric, u = st.per10 ? '10 m' : '30 m', n = SC.TICKS.length;
+  const bar = Array.from({length: 25}, (_, i) => timeColor(SC.T0 * (SC.T1 / SC.T0) ** (i / 24))).join(',');
+  const lab = (T, i) => { const x = tickVal(T, m), d = Math.abs(x - Math.round(x)) < 1e-9 ? 0 : 1;
+    return (i === n - 1 ? '≥ ' : i === 0 && !isEx(m) ? '≤ ' : '') + (isEx(m) && x ? '+' : '') + nf(x, d) + (m === 'oph' ? '' : ' s'); };
+  const ticks = SC.TICKS.map((T, i) => `<span style="left:${tPos(T) * 100}%">${lab(T, i)}</span>`).join('');
+  const txt = (m === 'oph' ? l.oph(noun(false), u) : m === 'opp' ? l.opp(noun(false), u) : m === 'exl' ? l.exl(noun(false), u)
+    : l.ex(noun(false), u) + (st.band === 'evening' || (!st.band && st.hour >= REFH[0] && st.hour < REFH[1]) ? l.evening : '')) + ' ' + l.same;
   $('legend').innerHTML = `<div class="ramp"><div class="bar" style="background:linear-gradient(90deg,${bar})"></div><div class="tk">${ticks}</div></div>` +
-    `<span class="txt">${txt}</span><span><i class="sw" style="background:var(--null)"></i>${l.nodata}</span>` +
-    (st.stops ? '' : `<span><i class="sw" style="background:var(--masked)"></i>${l.masked}</span>`) +
+    `<span class="txt">${txt}</span><span><i class="sw" style="background:${NULLC}"></i>${l.nodata}</span>` +
+    (st.stops ? '' : `<span><i class="sw" style="background:${MASKC}"></i>${l.masked}</span>`) +
     (hotOfDir().length && isMain() ? `<span><i class="hk"></i>${l.hot}</span>` : '');
   $('mxlegend').innerHTML = $('legend').innerHTML;
 }
@@ -978,7 +974,7 @@ function drawMatrix() {
   const card = $('mxcard'), full = card.classList.contains('full');
   const RH = full ? Math.max(18, Math.floor((window.innerHeight - 220) / D.hours.length)) : 22;
   const cm = isCmp(), VALS = cm ? cvals : vals, COL = cm ? cColor : colorFor;
-  const H = m.t + D.hours.length * RH + m.b, Ltot = E.stops.length ? E.stops[E.stops.length - 1].x : 1, max = cm ? cmax() : scaleMax();
+  const H = m.t + D.hours.length * RH + m.b, Ltot = E.stops.length ? E.stops[E.stops.length - 1].x : 1;
   const x = u => m.l + u / Ltot * (W - m.l - m.r);
   svg.setAttribute('height', H);
   let s = '';
@@ -986,7 +982,7 @@ function drawMatrix() {
   D.hours.forEach((h, r) => {
     const v = VALS(E, String(h)), y = m.t + r * RH; rows.push(v);
     s += `<rect class="mxrow" data-h="${h}" x="${m.l}" y="${y}" width="${W - m.l - m.r}" height="${RH}" fill="#0b1224"/>`;
-    v.forEach(b => { s += `<rect x="${x(b.x0).toFixed(1)}" y="${y + .5}" width="${Math.max(.6, x(b.x0 + b.len) - x(b.x0) - .3).toFixed(1)}" height="${RH - 1}" fill="${COL(b, max)}" pointer-events="none"/>`; });
+    v.forEach(b => { s += `<rect x="${x(b.x0).toFixed(1)}" y="${y + .5}" width="${Math.max(.6, x(b.x0 + b.len) - x(b.x0) - .3).toFixed(1)}" height="${RH - 1}" fill="${COL(b)}" pointer-events="none"/>`; });
     s += `<text x="${m.l - 6}" y="${y + RH / 2 + 4}" text-anchor="end" fill="var(--ink-2)" font-size="12" font-family="var(--mono)">${h} h</text>`;
   });
   for (const t of E.stops) s += `<line x1="${x(t.x)}" x2="${x(t.x)}" y1="${m.t}" y2="${m.t + D.hours.length * RH}" stroke="#0b1224" stroke-width="1.5" pointer-events="none"/>`;
@@ -996,14 +992,14 @@ function drawMatrix() {
     s += `<text x="${xx}" y="${H - m.b + 14}" transform="rotate(-40 ${xx} ${H - m.b + 14})" text-anchor="end" fill="var(--ink-2)" font-size="12" font-family="var(--sans)">${esc(t.name)}</text>`; }
   if (isMain()) for (const h of (cm ? chgDir() : hotOfDir())) for (const [a, b] of hourRuns(h.hours || [])) {
     const r0 = D.hours.indexOf(a), r1 = D.hours.indexOf(b - 1); if (r0 < 0 || r1 < 0) continue;
-    const on = cm ? st.chg === h.rank : st.hot === h.rank, c0 = cm ? '#eef1f6' : '#ffe600', c1 = cm ? '#ffe600' : '#fff';
-    s += `<rect x="${x(h.x0_m) - 1}" y="${m.t + r0 * RH}" width="${Math.max(3, x(h.x1_m) - x(h.x0_m) + 2)}" height="${(r1 - r0 + 1) * RH}" fill="none" stroke="${on ? c1 : c0}" stroke-width="${on ? 2.5 : 1.5}" pointer-events="none"/>`;
+    const on = cm ? st.chg === h.rank : st.hot === h.rank;
+    s += `<rect x="${x(h.x0_m) - 1}" y="${m.t + r0 * RH}" width="${Math.max(3, x(h.x1_m) - x(h.x0_m) + 2)}" height="${(r1 - r0 + 1) * RH}" fill="none" stroke="#ffe600" stroke-opacity="${on ? 1 : .8}" stroke-width="${on ? 2.5 : 1.25}" pointer-events="none"/>`;
   }
-  if (!st.band && D.hours.includes(st.hour)) s += `<rect x="${m.l - 1}" y="${m.t + D.hours.indexOf(st.hour) * RH}" width="${W - m.l - m.r + 2}" height="${RH}" fill="none" stroke="#eef1f6" stroke-width="1.5" pointer-events="none"/>`;
-  else if (st.band) { const hs = D.hours.filter(h => h >= BANDDEF[st.band][0] && h < BANDDEF[st.band][1]); if (hs.length) s += `<rect x="${m.l - 1}" y="${m.t + D.hours.indexOf(hs[0]) * RH}" width="${W - m.l - m.r + 2}" height="${hs.length * RH}" fill="none" stroke="#eef1f6" stroke-width="1.5" stroke-dasharray="4 3" pointer-events="none"/>`; }
+  if (!st.band && D.hours.includes(st.hour)) s += `<rect x="${m.l - 1}" y="${m.t + D.hours.indexOf(st.hour) * RH}" width="${W - m.l - m.r + 2}" height="${RH}" fill="none" stroke="#b4bdd0" stroke-width="1.5" pointer-events="none"/>`;
+  else if (st.band) { const hs = D.hours.filter(h => h >= BANDDEF[st.band][0] && h < BANDDEF[st.band][1]); if (hs.length) s += `<rect x="${m.l - 1}" y="${m.t + D.hours.indexOf(hs[0]) * RH}" width="${W - m.l - m.r + 2}" height="${hs.length * RH}" fill="none" stroke="#b4bdd0" stroke-width="1.5" stroke-dasharray="4 3" pointer-events="none"/>`; }
   svg.innerHTML = s;
   MX = {E, rows, m, RH, W, Ltot, tip: cm ? cTipHtml : tipHtml};
-  const what = l.metrics[st.metric].toLowerCase() + (st.metric === 'oph' && st.per10 ? ' (10 m)' : '');
+  const what = l.metrics[st.metric].toLowerCase() + (st.per10 ? ' (10 m)' : ' (30 m)');
   $('mxsub').textContent = cm ? ctx().mxsub(E.from, E.to, perLabel(CMP.a), perLabel(CMP.b), noun(false), st.stops) : l.mxsub(E.from, E.to, daysLabel(), what, st.stops);
 }
 $('mx').addEventListener('mousemove', e => {
@@ -1023,14 +1019,15 @@ function drawProfile() {
   if (!E) { svg.innerHTML = ''; return; }
   if (isCmp()) return cmpProfile();
   const W = svg.clientWidth || 800, H = 300, m = {l: 48, r: 12, t: 18, b: 74};
-  const Ltot = E.stops.length ? E.stops[E.stops.length - 1].x : 1, v = vals(E), max = scaleMax();
+  const Ltot = E.stops.length ? E.stops[E.stops.length - 1].x : 1, v = vals(E);
   const evening = st.band !== 'evening' && st.metric !== 'ex' ? vals(E, 'evening') : null;
-  const YM = max;
+  // fixed height: the top of the colour scale in the shown unit, whatever the line, hour or days
+  const YM = tickVal(SC.T1), pv = b => { const u = metricVal(b); return u == null ? null : u / UDIV(); };
   const x = u => m.l + u / Ltot * (W - m.l - m.r), y = u => m.t + (1 - Math.min(Math.max(u, 0), YM) / YM) * (H - m.t - m.b);
   let s = '<g class="axis">';
   const e10 = Math.pow(10, Math.floor(Math.log10(YM / 5))), step = [1, 2, 2.5, 5, 10].map(f => f * e10).find(v => YM / v <= 6);
   for (let k = 0; k <= YM + 1e-9; k += step)
-    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(k)}" y2="${y(k)}" stroke-dasharray="${k ? '2 4' : ''}"/><text x="${m.l - 6}" y="${y(k) + 4}" text-anchor="end">${nf(k, k < 1 || k % 1 ? 1 : 0)}</text>`;
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(k)}" y2="${y(k)}" stroke-dasharray="${k ? '2 4' : ''}"/><text x="${m.l - 6}" y="${y(k) + 4}" text-anchor="end">${k ? nf(k, k < 1 || k % 1 ? 1 : 0) : '0'}</text>`;
   s += '</g>';
   let last = -1e9;
   for (const t of E.stops) {
@@ -1038,11 +1035,11 @@ function drawProfile() {
     s += `<line x1="${xx}" x2="${xx}" y1="${m.t}" y2="${H - m.b}" stroke="#eef1f6" stroke-opacity=".15"/>`;
     if (xx - last >= 13) { last = xx; s += `<text x="${xx}" y="${H - m.b + 14}" transform="rotate(-40 ${xx} ${H - m.b + 14})" text-anchor="end" fill="var(--ink-3)" font-size="10" font-family="var(--sans)">${esc(t.name)}</text>`; }
   }
-  v.forEach(b => { const u = metricVal(b); if (u != null && shown(b)) s += `<rect x="${x(b.x0).toFixed(1)}" y="${y(u).toFixed(1)}" width="${Math.max(1, x(b.x0 + b.len) - x(b.x0) - .5).toFixed(1)}" height="${(y(0) - y(u)).toFixed(1)}" fill="${seqColor(u, max)}"/>`; });
-  if (evening) { let pth = ''; evening.forEach(b => { const u = metricVal(b); if (u != null && shown(b)) pth += `M${x(b.x0).toFixed(1)},${y(u).toFixed(1)}H${x(b.x0 + b.len).toFixed(1)}`; });
+  v.forEach(b => { const u = pv(b); if (u != null && shown(b)) s += `<rect x="${x(b.x0).toFixed(1)}" y="${y(u).toFixed(1)}" width="${Math.max(1, x(b.x0 + b.len) - x(b.x0) - .5).toFixed(1)}" height="${(y(0) - y(u)).toFixed(1)}" fill="${colorFor(b)}"/>`; });
+  if (evening) { let pth = ''; evening.forEach(b => { const u = pv(b); if (u != null && shown(b)) pth += `M${x(b.x0).toFixed(1)},${y(u).toFixed(1)}H${x(b.x0 + b.len).toFixed(1)}`; });
     s += `<path d="${pth}" stroke="#eef1f6" stroke-width="1.5" fill="none" opacity=".7"/>`; }
   s += freqLine(v.map(b => b.pph), v, x, H, m, W);
-  s += `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${esc(l.metrics[st.metric].toLowerCase())}${st.metric === 'oph' && st.per10 ? ' (10 m)' : ''}</text>`;
+  s += `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${esc(l.metrics[st.metric].toLowerCase())} (${st.metric === 'oph' ? '' : 's, '}${st.per10 ? '10 m' : '30 m'})</text>`;
   svg.innerHTML = s;
   svg.onmousemove = e => { const r = svg.getBoundingClientRect(), u = (e.clientX - r.left - m.l) / (W - m.l - m.r) * Ltot; if (u < 0 || u > Ltot) return hideTip();
     let i = v.findIndex(b => u >= b.x0 && u < b.x0 + b.len); if (i < 0) i = v.length - 1; showTip(e, tipHtml(E, v[i])); };
@@ -1098,13 +1095,13 @@ function render() {
   if (CMP) pressed($('modes'), k => k === st.mode);
   $('g_days').hidden = isCmp();
   pressed($('unit'), k => (k === 'm10') === st.per10);
-  $('g_unit').hidden = isCmp() || st.metric !== 'oph';
+  $('g_unit').hidden = isCmp();
   pressed($('stopsT'), k => k === String(st.stops));
   const d = dirOf(); if (!$('g_ver').hidden && d) pressed($('vers'), k => k === (st.ver || d.pattern_uid));
   const dl = isCmp() ? ctx().days : daysLabel();
   $('clock').innerHTML = st.band ? `${BANDDEF[st.band][0]}–${BANDDEF[st.band][1]} h<small>${tx().mean}, ${esc(dl)}</small>` : `${String(st.hour).padStart(2, '0')}:00<small>${esc(dl)}</small>`;
   hourEl.value = st.hour;
-  legend(recolor()); drawHotMap(); drawHotList(); drawMatrix(); drawProfile(); drawCalendar();
+  recolor(); legend(); drawHotMap(); drawHotList(); drawMatrix(); drawProfile(); drawCalendar();
 }
 function drawAll() { buildVersions(); drawMap(); render(); }
 let timer = null;
