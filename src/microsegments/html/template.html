@@ -894,7 +894,7 @@ function buildControls() {
   const setDir = k => { st.dir = +k; st.ver = null; st.hot = null; st.chg = null; drawAll(); };
   buttons($('dirs'), dirItems, setDir);
   buttons($('mxdirs'), dirItems, setDir);
-  $('dirs').closest('.grp').hidden = !DIR_CONTROL; $('mxdirs').hidden = !DIR_CONTROL;
+  $('dirs').closest('.grp').style.display = DIR_CONTROL ? '' : 'none'; $('mxdirs').style.display = DIR_CONTROL ? '' : 'none';
   SETDIR = setDir;
   buttons($('bands'), Object.keys(BANDDEF).map(k => [k, l.bandl[k], `${BANDDEF[k][0]}–${BANDDEF[k][1]} h`]), k => { stop(); st.band = st.band === k ? null : k; render(); });
   $('g_mode').hidden = !CMP;
