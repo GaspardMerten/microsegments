@@ -1,0 +1,32 @@
+# LOCAL EXAMPLE (not shipped data): STIB tram 55, weekdays 17 Feb - 15 May 2025, on the author's machine.
+# Paths point at ~/Documents/Dev/CoDE/BrusselsTransitStuck/data2025 (MobilityTwin stib/vehicle-distance as
+# compact daily parquet, STIB punctuality, one GTFS feed); adapt them to your copy of the data.
+#   microsegments run examples/stib55_full.toml -o out/stib55_full
+#   microsegments tune examples/stib55_full.toml --sensitivity
+
+[input]
+paths = ["/home/gaspard/Documents/Dev/CoDE/BrusselsTransitStuck/data2025/stib/vd55/*.parquet"]
+kind = "stib"
+events = "/home/gaspard/Documents/Dev/CoDE/BrusselsTransitStuck/data2025/stib/punctuality/2025-0[2-5]-*.parquet"
+
+[input.linear]
+direction_kind = "terminus_stop"
+id_normaliser = "leading_digits"
+feed_length = "auto"
+
+[gtfs]
+# one feed (calendar 14 Apr - 11 May 2025); other dates take the patterns of the same weekday
+path = "/home/gaspard/Documents/Dev/CoDE/BrusselsTransitStuck/data2025/gtfs"
+
+[select]
+route = "55"
+dates = "2025-02-17..2025-05-15"
+weekdays = [0, 1, 2, 3, 4]
+exclude_dates = ["2025-04-21", "2025-05-01"]     # Easter Monday, Labour Day
+
+[params]
+segment_m = 30
+bootstrap = 200
+
+[report]
+names = "title"                                 # "GARE DU NORD" -> "Gare du Nord"

@@ -25,13 +25,16 @@ def _log(args):
     return (lambda s: print(s, file=sys.stderr)) if not getattr(args, "quiet", False) else None
 
 
-def _hotspot_table(hs: pl.DataFrame, tick_s: float) -> pl.DataFrame:
+def _hotspot_table(hs: pl.DataFrame, tick_s: float, names: dict[str, str] | None = None) -> pl.DataFrame:
     if hs is None or hs.height == 0:
         return pl.DataFrame()
+    nm = names or {}
+    fix = lambda c: pl.col(c).replace(nm) if nm else pl.col(c)  # noqa: E731
+    crit = pl.col("criterion") if "criterion" in hs.columns else pl.lit("peak")
     return hs.select(
         "direction_id", "rank",
-        pl.concat_str([pl.col("from_stop_name"), pl.lit(" -> "), pl.col("to_stop_name")]).alias("stretch"),
-        pl.col("x0_m").round(0), pl.col("x1_m").round(0), "zone", "kind",
+        pl.concat_str([fix("from_stop_name"), pl.lit(" -> "), fix("to_stop_name")]).alias("stretch"),
+        pl.col("x0_m").round(0), pl.col("x1_m").round(0), "zone", "kind", crit.alias("criterion"),
         pl.col("hours").cast(pl.List(pl.Utf8)).list.join(",").alias("hours"),
         pl.col("excess_per_passage").round(2).alias("excess_obs_per_veh"),
         (pl.col("excess_per_passage") * tick_s).round(0).alias("approx_s_per_veh"),
@@ -57,9 +60,10 @@ def cmd_hotspots(args) -> int:
     from .pipeline import run
     cfg = _cfg(args)
     res = run(cfg, log=_log(args))
-    t = _hotspot_table(res.hotspots, cfg.params.tick_s)
+    from .report import name_map
+    t = _hotspot_table(res.hotspots, cfg.params.tick_s, name_map(cfg.report.names, res.network))
     if t.height == 0:
-        print("no hotspot")
+        print(f"no hotspot ({res.hotspots_status})")
         return 0
     with pl.Config(tbl_rows=200, tbl_cols=20, fmt_str_lengths=60, tbl_width_chars=200):
         print(t)

@@ -6,9 +6,11 @@ upper bound closed, as in the prototype: a vehicle standing at stop B is at the 
 A row at ``pos_m <= 0`` of link i > 0 goes to the last segment of link i - 1, i.e. the end of the
 link arriving at that stop. Positions beyond the link end are clipped to its last segment.
 
-Per-vehicle feeds (GTFS-RT with irregular / dense fixes) are thinned to at most one observation
-per ``(track_id, floor(ts / tick_s))`` (the last fix of each tick), so counts stay comparable with
-a snapshot feed polled every ``tick_s``.
+Per-vehicle feeds (GTFS-RT with irregular / dense fixes) are put on a ``tick_s`` grid so counts stay
+comparable with a snapshot feed polled every ``tick_s``: by default ``locate.resample.resample`` (each
+track sampled at the grid instants between its fixes, nearer fix; unbiased at track ends and for
+sparse fixes), or ``method="thin"``: at most one observation per ``(track_id, floor(ts / tick_s))``
+(the last fix of each tick; under-counts when fixes are sparser than the tick).
 """
 from __future__ import annotations
 
@@ -74,15 +76,34 @@ def assign(placed: pl.DataFrame, segments: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def per_vehicle_grid(placed: pl.DataFrame, tick_s: float = 20.0, method: str = "resample") -> pl.DataFrame:
+    """Counted rows of a per-vehicle feed on the ``tick_s`` grid (``method`` "resample" or "thin")."""
+    if method == "thin":
+        return thin(placed.filter(pl.col("count").fill_null(True)), tick_s)
+    if method != "resample":
+        raise ValueError(f"unknown per-vehicle method {method!r}")
+    from .locate.resample import resample
+    df = placed
+    if "s_m" not in df.columns:
+        df = df.with_columns(pl.col("pos_m").alias("s_m"))
+    elif "pos_m" in df.columns and df["s_m"].null_count():
+        df = df.with_columns(pl.coalesce("s_m", pl.col("pos_m").cast(df.schema["s_m"])).alias("s_m"))
+    if "count" not in df.columns:
+        df = df.with_columns(pl.lit(True).alias("count"))
+    # resample first (non-counted fixes still bound the intervals), then keep counted instants
+    return resample(df, tick_s).filter(pl.col("count").fill_null(True))
+
+
 def count(placed: pl.DataFrame, segments: pl.DataFrame, tick_s: float = 20.0,
-          per_vehicle: bool = False) -> pl.DataFrame:
+          per_vehicle: bool = False, method: str = "resample") -> pl.DataFrame:
     """Placed -> Cube (service_date, hour, pattern_uid, seg_key, obs).
 
-    Σ obs equals the number of counted (and, for per-vehicle feeds, thinned) rows whose link has
-    segments."""
-    df = placed.filter(pl.col("count").fill_null(True))
+    Σ obs equals the number of counted (for per-vehicle feeds: resampled, or thinned with
+    ``method="thin"``) rows whose link has segments."""
     if per_vehicle:
-        df = thin(df, tick_s)
+        df = per_vehicle_grid(placed, tick_s, method)
+    else:
+        df = placed.filter(pl.col("count").fill_null(True))
     df = assign(df.select("ts", "service_date", "hour", "pattern_uid", "link_idx", "pos_m", "track_id"), segments)
     cube = (df.filter(pl.col("seg_key").is_not_null())
             .group_by("service_date", "hour", "pattern_uid", "seg_key")

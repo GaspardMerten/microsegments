@@ -4,8 +4,9 @@ A *pattern* is a distinct stop sequence of one direction (its geometry is the sh
 trips use, cut at the stops by :func:`geometry.shape_slices`). ``pattern_uid`` hashes the stop
 sequence and the rounded geometry, so it is stable across feeds that describe the same path.
 
-For every service date and direction, the pattern with the most trips that day is the *main*
-pattern. The others are classified against it:
+For every service date and direction, the *main* pattern is the one covering the most scheduled
+link traversals that day (its own trips x links plus those of its short workings, see
+:func:`choose_main`). The others are classified against it:
 
 * ``short``  : a contiguous sub-sequence of the main pattern (short working; ``parent_uid`` /
   ``parent_offset`` locate it on the main);
@@ -83,6 +84,33 @@ def classify(seq: list[str], main: list[str]) -> tuple[str, int | None]:
     if own and sum(lk in main_links for lk in own) >= 0.5 * len(own):
         return "detour", None
     return "other", None
+
+
+MAIN_MIN_TRIP_SHARE = 0.25   # a main candidate runs at least this share of the busiest pattern's trips
+
+
+def choose_main(keys: list, cnt: dict, seqs: dict, uids: dict | None = None) -> list:
+    """``keys`` reordered with the day's main pattern first (the rest by trips, length, uid).
+
+    The main pattern is the one covering the most scheduled stop-to-stop link traversals: its score
+    is the sum of n_trips x n_links over itself and every pattern that is a contiguous sub-sequence
+    of it (short workings count for their parent). Only patterns with at least
+    ``MAIN_MIN_TRIP_SHARE`` of the busiest pattern's trips are candidates, so a rare long run (one
+    depot trip covering the whole line plus an extension) never becomes main and the choice does not
+    flicker from day to day. "Most trips" alone fails on feeds that split trips (STIB 2025 line 7: a
+    2-stop Vanderkindere-Churchill stub has more trips than the full Churchill-Heysel run)."""
+    uids = uids or {k: str(k) for k in keys}
+    order = sorted(keys, key=lambda k: (-cnt[k], -len(seqs[k]), uids[k]))
+    if len(order) < 2:
+        return order
+    top = max(cnt[k] for k in keys)
+    cands = [k for k in keys if cnt[k] >= MAIN_MIN_TRIP_SHARE * top]
+
+    def score(k):
+        main = list(seqs[k])
+        return sum(cnt[j] * (len(seqs[j]) - 1) for j in keys if j == k or _sub_offset(list(seqs[j]), main) is not None)
+    best = max(cands, key=lambda k: (score(k), cnt[k], len(seqs[k]), [-ord(c) for c in uids[k]]))
+    return [best] + [k for k in order if k != best]
 
 
 @dataclass
@@ -270,7 +298,7 @@ def build_network(source: GtfsSource | str, route: str, dates: Iterable, *,
             cnt = dict(zip(counts["pkey"].to_list(), counts["n"].to_list()))
             for direction in sorted({fp.info[k]["direction_id"] for k in cnt}):
                 keys = [k for k in cnt if fp.info[k]["direction_id"] == direction]
-                keys.sort(key=lambda k: (-cnt[k], -len(fp.info[k]["seq"]), fp.info[k]["uid"]))
+                keys = choose_main(keys, cnt, {k: fp.info[k]["seq"] for k in keys}, {k: fp.info[k]["uid"] for k in keys})
                 main = fp.info[keys[0]]
                 for k in keys:
                     p = fp.info[k]

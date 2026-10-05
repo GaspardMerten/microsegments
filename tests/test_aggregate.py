@@ -67,11 +67,23 @@ def test_per_vehicle_thinning():
     tr = ["a", "a", "a", "a", "b", None]
     segs = make_segments(np.array([90.0]), ["A"], "P0", 30)
     df = _rows([5.0, 35.0, 65.0, 70.0, 10.0, 10.0], [0] * 6, tr, ts)
-    cube = aggregate.count(df, segs, tick_s=20, per_vehicle=True)
+    cube = aggregate.count(df, segs, tick_s=20, per_vehicle=True, method="thin")
     assert cube["obs"].sum() == 4           # a: ticks 0 and 1, b: 1, anonymous: 1
     kept = aggregate.thin(df, 20)
     assert 65.0 in kept.filter(pl.col("track_id") == "a")["pos_m"].to_list()   # last fix of tick 0
     assert aggregate.count(df, segs, per_vehicle=False)["obs"].sum() == 6
+
+
+def test_per_vehicle_resample_default():
+    """Default per-vehicle method: resampling onto the tick grid. A fix every 60 s over 10 min gives
+    one observation per 20 s tick (30), where thinning keeps only the 11 fixes."""
+    base = dt.datetime(2025, 3, 3, 8, tzinfo=dt.timezone.utc)
+    ts = [base + dt.timedelta(seconds=60 * i) for i in range(11)]
+    segs = make_segments(np.array([900.0]), ["A"], "P0", 30)
+    df = _rows([5.0 + 80 * i for i in range(11)], [0] * 11, ["a"] * 11, ts)
+    n_res = aggregate.count(df, segs, tick_s=20, per_vehicle=True)["obs"].sum()
+    n_thin = aggregate.count(df, segs, tick_s=20, per_vehicle=True, method="thin")["obs"].sum()
+    assert n_thin == 11 and 30 <= n_res <= 32, (n_res, n_thin)
 
 
 def test_performance_3m_rows():

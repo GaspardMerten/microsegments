@@ -145,21 +145,60 @@ def _dir_entry(an: Analysis, dirid: int, uid: str, links: pl.DataFrame | None, s
     }
 
 
+NAME_PARTICLES = frozenset({"du", "de", "la", "des", "le", "van", "aux"})
+
+
+def title_name(name: str | None) -> str | None:
+    """Title-case an all-caps stop name, particles in lower case except first: "GARE DU NORD" ->
+    "Gare du Nord", "SAINTE-MARIE" -> "Sainte-Marie", "LEOPOLD III" -> "Leopold III". Names that
+    already mix cases are returned unchanged."""
+    if not name or name != name.upper():
+        return name
+    words = name.split(" ")
+    out = []
+    for i, w in enumerate(words):
+        lw = w.lower()
+        if i and lw in NAME_PARTICLES:
+            out.append(lw)
+        elif w and set(w) <= set("IVX") and len(w) <= 4 and i:
+            out.append(w)
+        else:
+            out.append("-".join("'".join(p[:1].upper() + p[1:] for p in part.split("'")) for part in lw.split("-")))
+    return " ".join(out)
+
+
+def name_map(names, net=None) -> dict[str, str]:
+    """{gtfs name: shown name} from ``names``: a dict (as is), "title" (``title_name`` on every stop
+    name of ``net``), or None."""
+    if not names:
+        return {}
+    if isinstance(names, dict):
+        return dict(names)
+    if names == "title":
+        pool: set[str] = set()
+        if net is not None:
+            pool |= {n for n in net.stops["stop_name"].to_list() if n}
+            pool |= {n for c in ("from_name", "to_name") for n in net.links[c].to_list() if n}
+        return {n: title_name(n) for n in pool if title_name(n) != n}
+    raise ValueError(f"unknown names option {names!r} (a dict or 'title')")
+
+
 def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = None,
                 hotspots: pl.DataFrame | None = None, *, line: str | None = None, route_id: str | None = None,
-                mode: str | None = None, names: dict[str, str] | None = None, ctx: list | None = None,
+                mode: str | None = None, names: dict[str, str] | str | None = None, ctx: list | None = None,
                 coverage: pl.DataFrame | None = None, title: str | None = None,
                 source: str | None = None) -> dict[str, Any]:
     """Build the JSON contract (``contract.py``) of an analysis.
 
     ``net``: the :class:`~microsegments.network.Network` (stop names and positions; without it stops are
     numbered). ``segments``: defaults to ``analysis.segments`` (must carry the geometry for the map).
-    ``hotspots``: ``hotspots.hotspots(analysis)`` output. ``names``: stop name fixes {gtfs name: shown name}.
+    ``hotspots``: ``hotspots.hotspots(analysis)`` output. ``names``: stop name fixes {gtfs name: shown name},
+    or "title" to title-case all-caps names (:func:`title_name`).
     ``coverage``: COVERAGE table for the coverage strip (else rebuilt from ``analysis.day_hours``)."""
     an = analysis
     if segments is not None:
         an = _with_segments(an, segments)
-    names = names or {}
+    names = name_map(names, net)
     links = net.links if net is not None else None
     stops = net.stops if net is not None else None
     if net is not None and line is None:
@@ -208,6 +247,8 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
                          "first": _jsonable(r["first"]), "last": _jsonable(r["last"]), "n_days": int(r["n_days"]),
                          "links_added": list(r["links_added"] or []), "links_removed": list(r["links_removed"] or []),
                          "display": bool(r["display"])})
+    from .hotspots import hotspot_status
+    hs_status = "computed" if hotspots is not None and hotspot_status(an)[0] else "not_computed"
     hs = []
     if hotspots is not None and hotspots.height:
         keep = [c for c in hotspots.columns if c != "seg_keys"]
@@ -235,7 +276,7 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
         "versions": versions,
         "dirs": dirs,
         "hotspots": hs,
-        "hotspots_status": "computed" if hotspots is not None else "not_computed",
+        "hotspots_status": hs_status,
         "ctx": ctx or [],
     }
 

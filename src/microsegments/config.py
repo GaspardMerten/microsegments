@@ -80,7 +80,8 @@ class Params:
     segment_m: float = 30.0
     phase_m: float = 0.0
     grid: Literal["equal", "fixed"] = "equal"  # equal: L' = len/round(len/L) per link; fixed: L with a short last bin
-    tick_s: float = 20.0                     # nominal poll interval; per-vehicle feeds are thinned to 1 obs / tick
+    tick_s: float = 20.0                     # nominal poll interval; per-vehicle feeds are put on this grid
+    per_vehicle: Literal["resample", "thin"] = "resample"   # resample: locate.resample (unbiased); thin: 1 fix / tick
     gap_cap_s: float = 40.0                  # a poll covers at most this long
     stop_zone: tuple[float, float] = (30.0, 60.0)   # metres before / after a stop masked as "stop" zone
     reference_hours: tuple[int, int] = (20, 23)     # [start, end) "normal" evening reference
@@ -102,12 +103,18 @@ class Quality:
 
 
 @dataclass
+class Report:
+    names: str | dict[str, str] | None = None   # "title": title-case all-caps stop names; or {gtfs: shown}
+
+
+@dataclass
 class Config:
     input: Input = field(default_factory=Input)
     gtfs: Gtfs = field(default_factory=Gtfs)
     select: Select = field(default_factory=Select)
     params: Params = field(default_factory=Params)
     quality: Quality = field(default_factory=Quality)
+    report: Report = field(default_factory=Report)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Config":

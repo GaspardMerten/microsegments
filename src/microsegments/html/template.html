@@ -183,6 +183,7 @@ const D = JSON.parse(document.getElementById('ms-data').textContent);
 const P = D.params || {};
 const TICK = P.tick_s || 20;
 const REFH = P.reference_hours || [20, 23];
+const HTH = P.hotspot_theta_s ?? 2;   // hotspot threshold, seconds per vehicle
 const DAYH = D.day_hours || [6, 21];
 const BANDDEF = D.bands || {am: [7, 10], pm: [16, 19], day: [6, 21], evening: [20, 23]};
 const LOC = {fr: 'fr-BE', en: 'en-GB'};
@@ -215,8 +216,10 @@ const T = {
       obs: 'positions comptées sur la période',
       hs: (n) => D.hotspots_status === 'not_computed' ? 'points chauds : pas assez de jours pour les repérer' : n ? 'points chauds : des retards répétés d\'un jour à l\'autre' : 'aucun point chaud net sur la période',
     },
-    hstitle: 'Points chauds', hsnote: (m1, tk) => `Tronçons où chaque ${m1} est observé nettement plus souvent qu'entre ${REFH[0]} et ${REFH[1]} h, sur la plupart des jours. La valeur : observations en plus par ${m1} sur tout le tronçon (≈ secondes perdues, à raison de ${tk} s par observation). Cliquez pour le voir sur la carte.`,
-    hsnone: 'Aucun point chaud ne ressort dans ce sens : les écarts avec le soir restent faibles ou varient trop d\'un jour à l\'autre.',
+    hstitle: 'Points chauds', hsnote: (m1, tk) => `Tronçons où chaque ${m1} s'attarde nettement, jour après jour : plus qu'en soirée (${REFH[0]}–${REFH[1]} h) aux mêmes endroits, ou plus que sur le reste de la ligne à toute heure (un feu, un carrefour). La valeur : observations en plus par ${m1} sur tout le tronçon (≈ secondes perdues, à raison de ${tk} s par observation). Cliquez pour le voir sur la carte.`,
+    hsnone: 'Aucun point chaud ne ressort dans ce sens : les écarts restent faibles ou varient trop d\'un jour à l\'autre.',
+    hsstops: 'Dans ce sens, les points chauds sont aux arrêts : affichez les zones d\'arrêt pour les voir.',
+    crit: {peak: 'comparé au soir', persistent: 'comparé au reste de la ligne', both: 'comparé au soir et au reste de la ligne'},
     hsalt: 'Les points chauds sont calculés sur la version principale du tracé.',
     hsnot: 'Points chauds non calculés : il faut au moins 5 jours pour juger si un retard se répète.',
     hsmore: n => `Voir les ${n} points chauds`, hsless: 'N\'afficher que les principaux',
@@ -257,6 +260,7 @@ const T = {
       `<b>Échelle.</b> Fixe pour chaque mesure, quelles que soient l'heure et les jours choisis : le haut de l'échelle est le 98e centile des valeurs de ${DAYH[0]} à ${DAYH[1]} h.`,
       `<b>Jours.</b> Chaque valeur est un rapport de sommes sur les jours choisis. Moins il y a de jours, plus les valeurs sont bruitées.`,
       `<b>Changements de tracé.</b> Un microsegment n'est compté que les jours où il fait partie de l'itinéraire principal. La carte suit la version la plus fréquente ; les autres versions s'affichent avec le sélecteur.`,
+      `<b>Points chauds.</b> Deux critères. Comparé au soir : à certaines heures (au moins deux de suite, ou toute une pointe), chaque ${m1} est observé plus souvent qu'entre ${REFH[0]} et ${REFH[1]} h. Comparé au reste de la ligne, entre les arrêts seulement : sur toute la journée, soirée comprise, plus d'observations par mètre que le niveau habituel de la ligne dans ce sens (la médiane des microsegments entre arrêts) ; c'est ce qui fait ressortir un feu ou un carrefour lent à toute heure, que la comparaison au soir efface. Dans les deux cas : au moins ${HTH} s de plus par ${m1} avec 95 % de confiance (en rééchantillonnant les jours), un écart positif au moins 60 % des jours, et une correction pour les tests multiples. Les microsegments voisins forment un tronçon ; les tronçons sont classés par observations en plus par jour. « Toute la journée » : le retard ne disparaît pas en soirée ; « aux heures de pointe » : il est surtout là aux pointes ; « mixte » : un peu des deux.`,
     ],
     footer: s => `${s ? 'Données : ' + s + '. ' : ''}Tracé et arrêts : GTFS. Calculs : microsegments.`,
     when: h => `${h} h – ${h + 1} h`, nodir: 'Aucune donnée pour cette ligne.',
@@ -282,8 +286,10 @@ const T = {
       obs: 'positions counted over the period',
       hs: (n) => D.hotspots_status === 'not_computed' ? 'hotspots: too few days to find them' : n ? 'hotspots: delays that recur day after day' : 'no clear hotspot over the period',
     },
-    hstitle: 'Hotspots', hsnote: (m1, tk) => `Stretches where each ${m1} is observed clearly more often than between ${REFH[0]} and ${REFH[1]} h, on most days. Value: extra observations per ${m1} over the whole stretch (≈ seconds lost, at ${tk} s per observation). Click one to see it on the map.`,
-    hsnone: 'No hotspot stands out in this direction: the excess over the evening stays small or varies too much from day to day.',
+    hstitle: 'Hotspots', hsnote: (m1, tk) => `Stretches where each ${m1} clearly lingers, day after day: longer than in the evening (${REFH[0]}–${REFH[1]} h) at the same place, or longer than on the rest of the line at any hour (a signal, a junction). Value: extra observations per ${m1} over the whole stretch (≈ seconds lost, at ${tk} s per observation). Click one to see it on the map.`,
+    hsnone: 'No hotspot stands out in this direction: the excess stays small or varies too much from day to day.',
+    hsstops: 'In this direction the hotspots are at stops: show the stop zones to see them.',
+    crit: {peak: 'vs the evening', persistent: 'vs the rest of the line', both: 'vs the evening and the rest of the line'},
     hsalt: 'Hotspots are computed on the main route version.',
     hsnot: 'Hotspots not computed: at least 5 days are needed to tell whether a delay recurs.',
     hsmore: n => `Show all ${n} hotspots`, hsless: 'Show the main ones only',
@@ -324,6 +330,7 @@ const T = {
       `<b>Scale.</b> Fixed for each measure whatever the hour and days: its top is the 98th percentile of the values from ${DAYH[0]} to ${DAYH[1]} h.`,
       `<b>Days.</b> Each value is a ratio of sums over the chosen days. Fewer days means noisier values.`,
       `<b>Route changes.</b> A micro-segment only counts on days when it is part of the main route. The map follows the most frequent version; the others can be picked with the selector.`,
+      `<b>Hotspots.</b> Two criteria. Vs the evening: at some hours (at least two in a row, or a whole peak), each ${m1} is observed more often than from ${REFH[0]} to ${REFH[1]} h. Vs the rest of the line, between stops only: over the whole day, evening included, more observations per metre than the line's usual level in that direction (the median of the micro-segments between stops); this brings out a signal or a slow junction present at every hour, which the evening comparison cancels. Both need at least ${HTH} s more per ${m1} with 95 % confidence (resampling days), a positive excess on at least 60 % of days, and a multiple-testing correction. Neighbouring micro-segments form a stretch; stretches are ranked by extra observations per day. "All day": the delay does not go away in the evening; "at peak hours": it is mostly there at peaks; "mixed": a bit of both.`,
     ],
     footer: s => `${s ? 'Data: ' + s + '. ' : ''}Route and stops: GTFS. Computed with microsegments.`,
     when: h => `${h} h – ${h + 1} h`, nodir: 'No data for this line.',
@@ -488,7 +495,9 @@ function showTip(e, html) { tipEl.innerHTML = html; tipEl.style.display = 'block
   tipEl.style.left = Math.min(window.innerWidth - w - 8, e.clientX + 14) + 'px'; tipEl.style.top = (e.clientY + 16 + hh > window.innerHeight ? e.clientY - hh - 10 : e.clientY + 16) + 'px'; }
 const hideTip = () => { tipEl.style.display = 'none'; };
 const HOT_TOP = 8;
-const hotAll = () => (D.hotspots || []).filter(h => (h.dir ?? h.direction_id) === st.dir && (!h.pattern_uid || h.pattern_uid === (dirOf() || {}).pattern_uid)).sort((a, b) => a.rank - b.rank);
+// stop-zone hotspots are listed only when stop zones are shown
+const hotDir = () => (D.hotspots || []).filter(h => (h.dir ?? h.direction_id) === st.dir && (!h.pattern_uid || h.pattern_uid === (dirOf() || {}).pattern_uid)).sort((a, b) => a.rank - b.rank);
+const hotAll = () => hotDir().filter(h => st.stops || h.zone !== 'stop');
 // the list (and the map markers) show the top hotspots unless "show all" is on
 const hotOfDir = () => { const a = hotAll(); return st.hotAll ? a : a.slice(0, HOT_TOP); };
 
@@ -676,13 +685,13 @@ function drawHotList() {
   const l = tx(), E = entry(), hs = hotOfDir();
   $('hsnote').textContent = l.hsnote(noun(false), nf(TICK, 0));
   if (!isMain()) { $('hslist').innerHTML = `<p class="empty">${l.hsalt}</p>`; return; }
-  if (!hs.length) { $('hslist').innerHTML = `<p class="empty">${D.hotspots_status === 'not_computed' ? l.hsnot : l.hsnone}</p>`; return; }
-  $('hslist').innerHTML = hs.map(h => {
+  if (!hs.length) { $('hslist').innerHTML = `<p class="empty">${D.hotspots_status === 'not_computed' ? l.hsnot : hotDir().length ? l.hsstops : l.hsnone}</p>`; return; }
+  $('hslist').innerHTML = hs.map((h, i) => {
     const v = h.excess_per_passage, lo = h.ci_lo, hi = h.ci_hi;
-    const meta = [l.zone[h.zone] || h.zone, l.kind[h.kind] || h.kind, runsLabel(h.hours || [])].filter(Boolean).join(' · ');
+    const meta = [l.zone[h.zone] || h.zone, l.kind[h.kind] || h.kind, h.criterion ? l.crit[h.criterion] : '', h.criterion === 'persistent' ? '' : runsLabel((h.criterion === 'both' ? h.peak_hours : h.hours) || h.hours || [])].filter(Boolean).join(' · ');
     const ci = lo != null && hi != null ? l.ci(signed(lo * TICK, 0) + ' s', signed(hi * TICK, 0) + ' s') : '';
     const per = h.persistence != null ? l.daysPct(nf(h.persistence * 100, 0)) : '';
-    return `<button type="button" class="hs${st.hot === h.rank ? ' on' : ''}" data-r="${h.rank}"><span class="n">${h.rank}</span>
+    return `<button type="button" class="hs${st.hot === h.rank ? ' on' : ''}" data-r="${h.rank}"><span class="n">${i + 1}</span>
       <div><div class="nm">${esc(h.from_stop_name)} <span class="ar">→</span> ${esc(h.to_stop_name)}</div>
       <div class="meta">${esc(meta)}</div><div class="meta">${[ci, per].filter(Boolean).join(' · ')}</div></div>
       <div class="v">${v == null ? '—' : signed(v, 1)}<small>${l.perveh(noun(false))}</small><small>${v == null ? '' : l.secs(signed(v * TICK, 0))}</small></div></button>`;

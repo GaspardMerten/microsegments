@@ -31,7 +31,7 @@ from .metrics import Analysis, analyse
 from .network import GtfsSource, build_network
 from .segments import segment
 
-MIN_HOTSPOT_DAYS = 5   # below this the day bootstrap / persistence of hotspots.py is meaningless
+from .hotspots import MIN_HOTSPOT_DAYS  # noqa: F401  (re-exported; floor under quality.min_days)
 
 
 def _locate():
@@ -78,6 +78,7 @@ class RunResult(Prepared):
     cube: pl.DataFrame | None = None
     analysis: Analysis | None = None
     hotspots: pl.DataFrame | None = None
+    hotspots_status: str = "not_computed"   # "computed" | "too_few_days: ..." | "not_computed"
 
     @property
     def result(self) -> pl.DataFrame:
@@ -87,6 +88,7 @@ class RunResult(Prepared):
         """The page / API JSON (``report.to_contract``)."""
         from .report import to_contract
         kw.setdefault("mode", self.mode)
+        kw.setdefault("names", getattr(getattr(self.cfg, "report", None), "names", None))
         return to_contract(self.analysis, self.network, self.segments, self.hotspots, **kw)
 
     def export(self, path, **kw) -> Path:
@@ -283,26 +285,29 @@ def run(cfg: Config | str | Path, *, prepared: Prepared | None = None, hotspots:
     tm = dict(pre.timings)
     t = time.perf_counter()
     segs = segment(pre.network, p.segment_m, p.phase_m, p.grid, p.stop_zone)
-    cube = count(pre.placed, segs, p.tick_s, per_vehicle=pre.per_vehicle)
+    cube = count(pre.placed, segs, p.tick_s, per_vehicle=pre.per_vehicle, method=p.per_vehicle)
     tm["count"] = time.perf_counter() - t
     t = time.perf_counter()
     an = analyse(cube, pre.coverage, pre.passages, segs, pre.network.pattern_days, cfg.select, p, cfg.quality)
     tm["analyse"] = time.perf_counter() - t
     say(f"analysis: {len(an.days)} days included, {an.excluded_days.height} excluded")
-    hs = None
-    if hotspots and len(an.days) < MIN_HOTSPOT_DAYS:
-        say(f"hotspots skipped: {len(an.days)} included days (< {MIN_HOTSPOT_DAYS}), day bootstrap meaningless")
-    elif hotspots:
+    hs, hs_status = None, "not_computed"
+    if hotspots:
+        from .hotspots import hotspot_status
         from .hotspots import hotspots as find
-        t = time.perf_counter()
-        kw = {"B": p.bootstrap, **(hotspot_kw or {})}
-        hs = find(an, links=pre.network.links, **kw)
-        tm["hotspots"] = time.perf_counter() - t
-        say(f"hotspots: {hs.height}")
+        ok, hs_status = hotspot_status(an)
+        if not ok:
+            say(f"hotspots skipped: {hs_status} (quality.min_days, floor {MIN_HOTSPOT_DAYS})")
+        else:
+            t = time.perf_counter()
+            kw = {"B": p.bootstrap, **(hotspot_kw or {})}
+            hs, hs_status = find(an, links=pre.network.links, return_status=True, **kw)
+            tm["hotspots"] = time.perf_counter() - t
+            say(f"hotspots: {hs.height}")
     base = {f.name: getattr(pre, f.name) for f in Prepared.__dataclass_fields__.values()}
     base["timings"] = tm
     base["cfg"] = cfg
-    return RunResult(**base, segments=segs, cube=cube, analysis=an, hotspots=hs)
+    return RunResult(**base, segments=segs, cube=cube, analysis=an, hotspots=hs, hotspots_status=hs_status)
 
 
 __all__ = ["Prepared", "RunResult", "prepare", "run"]

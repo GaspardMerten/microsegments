@@ -90,7 +90,7 @@ PATTERN_DAY = {
     "direction_id": pl.Int8,
     "pattern_uid": pl.Utf8,
     "n_trips": pl.UInt32,        # scheduled trips that day
-    "is_main": pl.Boolean,       # most trips that day for (route, direction)
+    "is_main": pl.Boolean,       # covers the most scheduled link traversals that day (network.patterns.choose_main)
 }
 
 LINK = {

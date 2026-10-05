@@ -237,13 +237,14 @@ def segment_length(placed: pl.DataFrame, segment_fn: SegmentFn,
                    select: Select | None = None, params: Params | None = None, quality: Quality | None = None,
                    per_vehicle: bool = False, fine_m: float = 5.0, n_splits: int = 20, B: int = 100,
                    n_jaccard: int = 3, seed: int = 0, min_reliability: float = 0.8, max_spread_m: float = 30.0,
+                   min_jaccard: float = 0.7,
                    hotspot_kw: dict | None = None) -> TuneResult:
     params = params or Params()
     hotspot_kw = hotspot_kw or {}
     rng = np.random.default_rng(seed)
-    if per_vehicle:  # thin once, then every L counts the same rows
-        from .aggregate import thin
-        placed = thin(placed.filter(pl.col("count").fill_null(True)), params.tick_s)
+    if per_vehicle:  # grid once, then every L counts the same rows
+        from .aggregate import per_vehicle_grid
+        placed = per_vehicle_grid(placed, params.tick_s, params.per_vehicle)
     rows, devs, base_tot = [], {}, None
     fine = cube_f = None
     for L in lengths:
@@ -306,17 +307,32 @@ def segment_length(placed: pl.DataFrame, segment_fn: SegmentFn,
     for r, s in zip(rows, se):
         r["cv_se"] = s
     table = pl.DataFrame(rows)
+    # With many days the CV deviance keeps falling as L shrinks (finer bins fit the profile better),
+    # so it cannot pick L alone: hotspots must also be reproducible between halves of the days
+    # (split-half Jaccard, the "stable" criterion of the sensitivity suite). Among the L passing
+    # reliability, localisation and Jaccard, take the smallest whose CV deviance is within 1 SE
+    # (paired per-day differences) of the best eligible one.
     ok = []
     for r in rows:
-        cv_ok = r["cv_deviance"] - cv[best] <= max(r["cv_se"], 1e-12)
         rel_ok = r["reliability"] >= min_reliability
         sp_ok = not np.isfinite(r["loc_spread_m"]) or r["loc_spread_m"] <= max_spread_m
-        ok.append(bool(cv_ok and rel_ok and sp_ok))
+        jac_ok = not np.isfinite(r["jaccard"]) or r["jaccard"] >= min_jaccard
+        ok.append(bool(rel_ok and sp_ok and jac_ok))
     table = table.with_columns(pl.Series("eligible", ok, dtype=pl.Boolean))
     if any(ok):
-        rec = Ls[ok.index(True)]
-        rule = (f"smallest L with reliability >= {min_reliability}, localisation spread <= {max_spread_m} m "
-                f"and CV deviance within 1 SE of the minimum (L={Ls[best]:g})")
+        e = min((k for k in range(len(rows)) if ok[k]), key=lambda k: cv[k])
+        de = devs[lengths[e]]
+        for k in range(len(rows)):
+            if not ok[k]:
+                continue
+            d = devs[lengths[k]] - de
+            se_k = float(np.std(d, ddof=1) / np.sqrt(len(d))) if len(d) > 1 else 0.0
+            if cv[k] - cv[e] <= max(se_k, 1e-12):
+                rec = Ls[k]
+                break
+        rule = (f"smallest L with reliability >= {min_reliability}, localisation spread <= {max_spread_m} m, "
+                f"split-half hotspot Jaccard >= {min_jaccard} and CV deviance within 1 SE of the best such L "
+                f"(L={Ls[e]:g})")
     else:
         rec = Ls[best]
         rule = "no L meets every criterion: CV deviance minimum"
@@ -409,6 +425,9 @@ def sensitivity(placed: pl.DataFrame, segment_fn: SegmentFn, length: float = 30.
     L. Gap-cap variants need ``coverage_fn(gap_cap_s) -> COVERAGE``; stop-zone variants need a
     ``segment_fn`` accepting a ``stop_zone`` keyword. Variants that cannot run are skipped."""
     params = params or Params()
+    if per_vehicle:  # grid once, then every variant counts the same rows
+        from .aggregate import per_vehicle_grid
+        placed = per_vehicle_grid(placed, params.tick_s, params.per_vehicle)
     hotspot_kw = {"seed": seed, **(hotspot_kw or {})}
     if B is not None:
         hotspot_kw["B"] = B
@@ -419,7 +438,7 @@ def sensitivity(placed: pl.DataFrame, segment_fn: SegmentFn, length: float = 30.
 
     def run(segs_key, segs, cov, prm, pcol):
         if segs_key not in cubes:
-            cubes[segs_key] = count(placed, segs, prm.tick_s, per_vehicle)
+            cubes[segs_key] = count(placed, segs, prm.tick_s, False)
         an = analyse(cubes[segs_key], cov, passages, segs, pattern_days, select, prm, quality, passage_col=pcol)
         return an
 
