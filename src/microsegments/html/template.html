@@ -216,7 +216,7 @@ const T = {
     towards: t => `vers ${t}`,
     play: '▶ Journée', pause: '❚❚ Pause', mean: 'moyenne',
     tiles: {
-      days: (n, x) => `jours analysés${x ? `, ${x} écartés faute de données fiables` : ''}`,
+      days: (n, x) => `jours analysés${x ? ` ; ${x}` : ''}`,
       segs: (n, L) => `microsegments d'environ ${L} m, dans les deux sens`,
       obs: 'positions comptées sur la période',
       hs: (n) => D.hotspots_status === 'not_computed' ? 'points chauds : pas assez de jours pour les repérer' : n ? 'points chauds : des retards répétés d\'un jour à l\'autre' : 'aucun point chaud net sur la période',
@@ -253,9 +253,13 @@ const T = {
     profsub: (f, t, w, ref, m) => `De ${f} à ${t}, ${w}. Hauteur : la mesure choisie dans chaque microsegment. Traits verticaux : arrêts.${ref ? ` Trait blanc : le soir (${REFH[0]}–${REFH[1]} h).` : ''} Pointillés jaunes : ${m} par heure (échelle de droite).`,
     perh: m => `${m}/h`,
     covtitle: 'Les jours retenus',
-    covsub: (n, x) => `Une case par jour. Un jour est écarté quand le flux de positions manque ou se fige sur plus d'un quart des heures de ${DAYH[0]} à ${DAYH[1]} h ; une heure est écartée sous 80 % de relevés. ${n} jours retenus, ${x} écartés. Survolez une case pour le détail.`,
+    covsub: (n, x) => `Une case par jour. Un jour est écarté quand le flux de positions manque ou se fige sur plus d'un quart des heures de ${DAYH[0]} à ${DAYH[1]} h ; une heure est écartée sous 80 % de relevés. ${n} jours retenus${x ? ` ; ${x}` : ''}. Survolez une case pour le détail.`,
     cal: {inc: 'retenu', exc: 'écarté', off: 'hors sélection', none: 'pas de données'},
-    reasons: {low_coverage: 'trop peu de relevés', frozen: 'flux figé', line_absent: 'ligne absente du flux', deviation: 'trajets hors itinéraire', vehicle_ratio: 'nombre de véhicules anormal', no_data: 'aucune donnée', excluded: 'écarté à la demande', not_selected: 'hors sélection'},
+    reasons: {low_coverage: 'trop peu de relevés', frozen: 'flux figé', line_absent: 'ligne absente du flux', deviation: 'trajets hors itinéraire', vehicle_ratio: 'nombre de véhicules anormal', no_data: 'aucune donnée', excluded: 'écarté à la demande', holiday: 'jour férié', not_selected: 'hors sélection'},
+    // excluded days per reason, short (tiles, calendar caption): [one, several]
+    xsum: (n, parts) => `${n} ${n > 1 ? 'jours écartés' : 'jour écarté'} : ${parts}`,
+    xr: {holiday: ['férié', 'fériés'], feed: ['flux incomplet', 'flux incomplets'], line_absent: ['sans la ligne dans le flux', 'sans la ligne dans le flux'],
+      deviation: ['hors itinéraire', 'hors itinéraire'], vehicle_ratio: ['nombre de véhicules anormal', 'nombre de véhicules anormal'], excluded: ['à la demande', 'à la demande']},
     covday: (c) => `relevés : ${c} % des heures ${DAYH[0]}–${DAYH[1]} h`,
     vers: (a, b, n) => `${a} – ${b} · ${n} j`, verMain: 'principale', verNote: (r, a) => `${r} tronçon(s) en moins, ${a} en plus que la version principale`,
     mtitle: 'Méthode',
@@ -293,7 +297,7 @@ const T = {
     towards: t => `to ${t}`,
     play: '▶ Day', pause: '❚❚ Pause', mean: 'average',
     tiles: {
-      days: (n, x) => `days analysed${x ? `, ${x} dropped for unreliable data` : ''}`,
+      days: (n, x) => `days analysed${x ? `; ${x}` : ''}`,
       segs: (n, L) => `micro-segments of about ${L} m, both directions`,
       obs: 'positions counted over the period',
       hs: (n) => D.hotspots_status === 'not_computed' ? 'hotspots: too few days to find them' : n ? 'hotspots: delays that recur day after day' : 'no clear hotspot over the period',
@@ -330,9 +334,12 @@ const T = {
     profsub: (f, t, w, ref, m) => `From ${f} to ${t}, ${w}. Height: the chosen measure in each micro-segment. Vertical lines: stops.${ref ? ` White line: the evening (${REFH[0]}–${REFH[1]} h).` : ''} Yellow dots: ${m} per hour (right scale).`,
     perh: m => `${m}/h`,
     covtitle: 'Days used',
-    covsub: (n, x) => `One square per day. A day is dropped when the position feed is missing or frozen for more than a quarter of the hours from ${DAYH[0]} to ${DAYH[1]} h; an hour is dropped below 80 % of polls. ${n} days used, ${x} dropped. Hover a square for details.`,
+    covsub: (n, x) => `One square per day. A day is dropped when the position feed is missing or frozen for more than a quarter of the hours from ${DAYH[0]} to ${DAYH[1]} h; an hour is dropped below 80 % of polls. ${n} days used${x ? `; ${x}` : ''}. Hover a square for details.`,
     cal: {inc: 'used', exc: 'dropped', off: 'not selected', none: 'no data'},
-    reasons: {low_coverage: 'too few polls', frozen: 'frozen feed', line_absent: 'line missing from the feed', deviation: 'off-route trips', vehicle_ratio: 'abnormal vehicle count', no_data: 'no data', excluded: 'excluded on request', not_selected: 'not selected'},
+    reasons: {low_coverage: 'too few polls', frozen: 'frozen feed', line_absent: 'line missing from the feed', deviation: 'off-route trips', vehicle_ratio: 'abnormal vehicle count', no_data: 'no data', excluded: 'excluded on request', holiday: 'public holiday', not_selected: 'not selected'},
+    xsum: (n, parts) => `${n} ${n > 1 ? 'days' : 'day'} dropped: ${parts}`,
+    xr: {holiday: ['public holiday', 'public holidays'], feed: ['incomplete feed', 'incomplete feed'], line_absent: ['line missing from the feed', 'line missing from the feed'],
+      deviation: ['off-route trips', 'off-route trips'], vehicle_ratio: ['abnormal vehicle count', 'abnormal vehicle count'], excluded: ['on request', 'on request']},
     covday: (c) => `polls: ${c} % of ${DAYH[0]}–${DAYH[1]} h`,
     vers: (a, b, n) => `${a} – ${b} · ${n} d`, verMain: 'main', verNote: (r, a) => `${r} stretch(es) fewer, ${a} more than the main version`,
     mtitle: 'Method',
@@ -767,8 +774,21 @@ function texts() {
   const hs = D.hours, tk = [hs[0], 8, 12, 17, hs[hs.length - 1]].filter((h, i, a) => hs.includes(h) && a.indexOf(h) === i);
   document.getElementById('hticks').innerHTML = tk.map(h => `<span>${h} h</span>`).join('');
 }
+// "4 jours écartés : 2 fériés, 2 flux incomplets" (missing, frozen and empty feed hours count as one reason)
+const FEED_REASONS = ['low_coverage', 'frozen', 'no_data'];
+function exclSummary(excluded) {
+  const l = tx(), ex = excluded || [];
+  if (!ex.length) return '';
+  const counts = new Map();
+  for (const e of ex) { const k = FEED_REASONS.includes(e.reason) ? 'feed' : e.reason; counts.set(k, (counts.get(k) || 0) + 1); }
+  const parts = [...counts].sort((a, b) => b[1] - a[1]).map(([k, n]) => {
+    const w = l.xr[k] || [l.reasons[k] || k, l.reasons[k] || k];
+    return `${nf(n, 0)} ${w[n > 1 ? 1 : 0]}`;
+  });
+  return l.xsum(ex.length, parts.join(', '));
+}
 function tiles() {
-  const l = tx(), nx = (D.period.excluded || []).length;
+  const l = tx();
   const nseg = DIRS.reduce((a, d) => a + d.seg.key.length, 0);
   let tot = 0;
   for (const d of DIRS) for (const w of PRESENT) for (const row of d.wk.obs[w]) for (const v of row) tot += v;
@@ -782,7 +802,7 @@ function tiles() {
   }
   const big = v => v >= 1e6 ? nf(v / 1e6, 1) + (st.lang === 'fr' ? ' M' : 'M') : v >= 1e4 ? nf(v / 1e3, 0) + (st.lang === 'fr' ? ' k' : 'k') : nf(v, 0);
   document.getElementById('tiles').innerHTML = [
-    [nf(D.period.days, 0), l.tiles.days(D.period.days, nx)],
+    [nf(D.period.days, 0), esc(l.tiles.days(D.period.days, exclSummary(D.period.excluded)))],
     [nf(nseg, 0), l.tiles.segs(nseg, nf(P.segment_m || 30, 0))],
     [big(tot), l.tiles.obs],
     [nf(nh, 0), l.tiles.hs(nh)],
@@ -1053,6 +1073,7 @@ function drawCalendar() {
   const dates = cv.dates || [];
   if (!dates.length) { svg.innerHTML = ''; $('covsub').textContent = ''; return; }
   const exc = Object.fromEntries((D.period.excluded || []).map(e => [e.date, e.reason]));
+  const xlab = Object.fromEntries((D.period.excluded || []).filter(e => e.label).map(e => [e.date, e.label]));
   const dayIdx = D.hours.map((h, j) => [h, j]).filter(([h]) => h >= DAYH[0] && h < DAYH[1]).map(([, j]) => j);
   const t0 = new Date(dates[0] + 'T12:00:00Z'), dow0 = (t0.getUTCDay() + 6) % 7;
   const C = 15, G = 3, top = 16, left = 26;
@@ -1071,15 +1092,14 @@ function drawCalendar() {
     let fill, status;
     if (inc === true) { fill = st.days.includes(w) ? colorOf(14 + 8 * (mc == null ? 1 : mc)) : '#24324f'; status = st.days.includes(w) ? l.cal.inc : l.cal.off; }
     else if (inc === 'not_selected') { fill = '#16223d'; status = l.cal.off; }
-    else { fill = inc === 'no_data' ? '#3a4560' : '#c2414b'; status = `${l.cal.exc} : ${l.reasons[inc] || inc}`; }
+    else { fill = inc === 'no_data' ? '#3a4560' : '#c2414b'; status = `${l.cal.exc} : ${l.reasons[inc] || inc}${xlab[d] ? ` (${xlab[d]})` : ''}`; }
     const tip = `<b>${esc(fmtDate(d, {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'}))}</b><br>${esc(status)}${mc != null ? '<br>' + esc(l.covday(nf(mc * 100, 0))) : ''}`;
     s += `<rect x="${left + col * (C + G)}" y="${top + w * (C + G)}" width="${C}" height="${C}" rx="3" fill="${fill}" data-tip="${esc(tip)}" opacity="${selected ? 1 : .55}"/>`;
   });
   svg.setAttribute('width', left + nW * (C + G)); svg.setAttribute('height', top + 7 * (C + G));
   svg.innerHTML = s;
   svg.querySelectorAll('rect').forEach(r => { r.onmousemove = e => showTip(e, r.dataset.tip); r.onmouseleave = hideTip; });
-  const nx = (D.period.excluded || []).length;
-  $('covsub').textContent = l.covsub(D.period.days, nx);
+  $('covsub').textContent = l.covsub(D.period.days, exclSummary(D.period.excluded));
   $('calleg').innerHTML = [[colorOf(22), l.cal.inc], ['#c2414b', l.cal.exc], ['#24324f', l.cal.off], ['#3a4560', l.cal.none]]
     .map(([c, t]) => `<span><i class="sw" style="background:${c};width:12px;height:12px"></i>${esc(t)}</span>`).join('');
 }
