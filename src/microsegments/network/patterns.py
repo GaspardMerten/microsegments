@@ -152,6 +152,9 @@ class Network:
     stops: pl.DataFrame                      # stop_id, stop_name, stop_lon, stop_lat
     registry: KeyRegistry
     missing_dates: list[dt.date] = field(default_factory=list)   # no feed or no trip that day
+    # trip_id -> pattern_uid (+ direction_id, service_id) of every trip running on some date; lets
+    # map matching use a fix's trip_id. Same trip_id in several feeds: one row per (trip, pattern).
+    trips: pl.DataFrame | None = None
 
     # ------------------------------------------------------------ lookups
     @property
@@ -246,6 +249,7 @@ def build_network(source: GtfsSource | str, route: str, dates: Iterable, *,
     day_rows: list[dict] = []
     link_rows: list[dict] = []
     stops_seen: dict[str, tuple] = {}
+    trip_rows: list[pl.DataFrame] = []
 
     for path in sorted(by_feed, key=lambda p: by_feed[p][0]):
         feed = source.load(path, route)
@@ -276,6 +280,11 @@ def build_network(source: GtfsSource | str, route: str, dates: Iterable, *,
                                      "kind": kind, "parent_uid": main["uid"] if kind in ("short", "detour") else None,
                                      "parent_offset": off})
                     used.add(k)
+        uid_of = pl.DataFrame({"pkey": list(used), "pattern_uid": [fp.info[k]["uid"] for k in used]},
+                              schema={"pkey": pl.Utf8, "pattern_uid": pl.Utf8})
+        trip_rows.append(fp.trips.join(uid_of, on="pkey", how="inner")
+                         .select(pl.col("trip_id").cast(pl.Utf8), pl.col("service_id").cast(pl.Utf8),
+                                 "direction_id", "pattern_uid"))
         # register links of the busiest patterns first (their geometry seeds new keys)
         tot = Counter()
         for r in day_rows:
@@ -313,4 +322,7 @@ def build_network(source: GtfsSource | str, route: str, dates: Iterable, *,
                          schema={"stop_id": pl.Utf8, "stop_name": pl.Utf8, "stop_lon": pl.Float64, "stop_lat": pl.Float64})
     return Network(route=route, patterns=patterns, pattern_days=days.sort("service_date", "direction_id", "n_trips",
                                                                           descending=[False, False, True]),
-                   links=links, stops=stops, registry=registry, missing_dates=sorted(set(missing)))
+                   links=links, stops=stops, registry=registry, missing_dates=sorted(set(missing)),
+                   trips=(pl.concat(trip_rows).unique(["trip_id", "pattern_uid"], keep="first") if trip_rows else
+                          pl.DataFrame(schema={"trip_id": pl.Utf8, "service_id": pl.Utf8, "direction_id": pl.Int8,
+                                               "pattern_uid": pl.Utf8})))

@@ -1,0 +1,35 @@
+# GTFS-RT VehiclePositions flattened to CSV (one row per vehicle fix), matched on the GTFS shapes.
+#   microsegments run examples/gtfsrt_csv.toml -o out/bus
+
+[input]
+paths = ["positions/*.csv"]          # or *.parquet; GTFS-RT .pb files also work (format = "gtfsrt_pb")
+kind = "latlon"
+format = "auto"
+timezone = "Europe/Brussels"
+service_day_start = "04:00"          # 01:30 belongs to the previous service day
+ts_unit = "s"                        # "s" | "ms" | "us" | "iso"
+
+# canonical name = column in your file (only those that differ; unmapped well-known names are detected)
+[input.columns]
+ts = "timestamp"                     # fix time (vehicle.timestamp), epoch seconds here
+route_id = "route_id"                # must match the GTFS route_short_name (or route_id, see gtfs.route_key)
+vehicle_id = "vehicle_id"            # per-vehicle feed: fixes are thinned to one per tick_s
+trip_id = "trip_id"                  # optional, helps map matching
+direction_id = "direction_id"        # optional
+lat = "latitude"
+lon = "longitude"
+bearing = "bearing"                  # optional, degrees
+
+[gtfs]
+path = "gtfs.zip"
+route_key = "route_short_name"
+
+[select]
+route = "71"
+dates = "2025-02-17..2025-05-16"
+weekdays = [0, 1, 2, 3, 4]
+
+[params]
+segment_m = 30
+tick_s = 20                          # nominal interval: counts stay comparable with a 20 s snapshot feed
+max_lateral_m = 40                   # fixes farther from the shape are dropped

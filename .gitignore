@@ -10,3 +10,5 @@ build/
 .claude/
 src/microsegments/_version.py
 tests/regression/golden/
+examples/data/
+out/

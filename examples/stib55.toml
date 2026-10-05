@@ -1,0 +1,29 @@
+# STIB tram 55, two days of vehicle-distance positions (the test fixture), linear referencing.
+#   microsegments run examples/stib55.toml -o out/stib55
+# Real use: point `paths` at the compact daily parquet files of a longer period (MobilityTwin
+# stib/vehicle-distance), and `gtfs.dated` at one GTFS snapshot per day.
+
+[input]
+paths = ["../tests/fixtures/stib55/vd55/*.parquet"]   # <YYYYMMDD>.parquet (ts, dir, point, dist) + .snaps.parquet
+kind = "stib"
+events = "../tests/fixtures/stib55/punctuality/route55.parquet"   # STIB punctuality: passages from stop events
+
+[input.linear]
+direction_kind = "terminus_stop"     # STIB directionId = destination stop code
+id_normaliser = "leading_digits"
+feed_length = "auto"                 # rescale feed metres to the GTFS link length (p99.5 per link)
+
+[gtfs]
+path = "../tests/fixtures/stib55/gtfs"    # gtfs-parquet directory
+# dated = "gtfs/{date}"                   # or one feed per day
+
+[select]
+route = "55"
+dates = "2025-03-18..2025-03-19"
+weekdays = [0, 1, 2, 3, 4]
+
+[params]
+segment_m = 30
+
+[quality]
+min_days = 2                         # only two days in the fixture

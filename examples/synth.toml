@@ -1,0 +1,27 @@
+# Synthetic tram line S1 (generate the data first: python examples/make_synth.py)
+#   microsegments run examples/synth.toml -o out/
+
+[input]
+paths = ["data/vd/*.parquet"]        # compact STIB-like files: <YYYYMMDD>.parquet + .snaps.parquet
+kind = "stib"                        # linear referencing: last stop passed + metres since
+timezone = "Europe/Brussels"
+events = "data/events.parquet"       # stop events (arrival / departure per trip and stop), optional
+
+[input.linear]
+id_normaliser = "leading_digits"     # "01003" -> "1003"
+
+[gtfs]
+path = "data/gtfs"                   # GTFS directory (.txt), zip or gtfs-parquet directory
+route_key = "route_short_name"
+
+[select]
+route = "S1"
+dates = "2025-03-03..2025-03-23"
+weekdays = [0, 1, 2, 3, 4]
+hours = [5, 24]
+
+[params]
+segment_m = 30
+stop_zone = [30, 60]                 # metres before / after a stop masked as "stop zone"
+reference_hours = [20, 23]
+bootstrap = 200
