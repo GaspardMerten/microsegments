@@ -101,6 +101,27 @@ def test_frozen_not_counted():
     assert c2.filter(pl.col("hour") == 10)["covered_s"][0] == row["covered_s"]
 
 
+def test_scattered_repeats_do_not_flag_frozen():
+    """One poll in four repeating the previous one (a feed refreshed more slowly than polled) is not a
+    stall: ~900 s of frozen snapshots in the hour, no run longer than 20 s."""
+    t = _day_polls()
+    frozen = (np.arange(t.size) % 4) == 3
+    c = coverage(_snaps(t, frozen), TZ, gap_cap_s=40, max_frozen_s=300)
+    row = c.filter(pl.col("hour") == 10).row(0, named=True)
+    assert row["frozen_s"] > 300
+    assert not row["flags"] & Flag.FROZEN and not row["flags"] & Flag.LOW_COVERAGE
+
+
+def test_stall_across_hours_flags_both():
+    t = _day_polls()
+    f1, f2 = local_epoch(DAY, 10 * 3600 + 3400, TZ), local_epoch(DAY, 11 * 3600 + 200, TZ)   # 400 s stall
+    c = coverage(_snaps(t, (t >= f1) & (t < f2)), TZ, gap_cap_s=40, max_frozen_s=300)
+    fl = dict(zip(c["hour"].to_list(), c["flags"].to_list()))
+    assert fl[10] & Flag.FROZEN and fl[11] & Flag.FROZEN and not fl[12] & Flag.FROZEN
+    c = coverage(_snaps(t, (t >= f1) & (t < f1 + 200)), TZ, gap_cap_s=40, max_frozen_s=300)   # 200 s: fine
+    assert not any(f & Flag.FROZEN for f in c["flags"].to_list())
+
+
 def test_silent_hours_are_zero_rows():
     t = _day_polls()
     t = t[(t < local_epoch(DAY, 12 * 3600, TZ)) | (t >= local_epoch(DAY, 14 * 3600, TZ))]

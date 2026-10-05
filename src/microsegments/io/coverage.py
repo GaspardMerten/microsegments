@@ -5,6 +5,12 @@ non-frozen poll (the last poll covers min(tick_s, gap_cap_s)). Each frozen snaps
 [t_i, t_i + min(t_next_any - t_i, gap_cap_s)) of ``frozen_s`` (t_next_any: next snapshot of any kind).
 Intervals are split exactly at local hour boundaries and credited to the hour they fall in.
 ``coverage = covered_s / 3600`` clipped to 1. Frozen snapshots never count as polls.
+
+FROZEN flag: an hour is flagged when it overlaps a *stall*, a run of consecutive frozen snapshots
+lasting more than ``max_frozen_s`` (each covering min(next snapshot - t, gap_cap_s)). Isolated
+repeats are normal for feeds that refresh more slowly than they are polled (STIB since 2026: about
+one poll in five repeats the previous one, 300-700 s per hour in total) and do not flag the hour;
+``frozen_s`` still reports their total.
 """
 from __future__ import annotations
 
@@ -79,9 +85,22 @@ def coverage(snapshots: pl.DataFrame | pl.LazyFrame, tz: str = "Europe/Brussels"
     tf, gf = t[fr], (nxt_any - t)[fr]
     fs, fl = _split_by_hour(tf, tf + np.minimum(gf, cap), tz)
 
+    # stalls: runs of consecutive frozen snapshots longer than max_frozen_s
+    ss, sl = np.zeros(0), np.zeros(0)
+    if fr.any():
+        span = np.minimum(nxt_any - t, cap)
+        edge = np.diff(np.concatenate([[0], fr.astype(np.int8), [0]]))
+        r0, r1 = np.flatnonzero(edge == 1), np.flatnonzero(edge == -1)     # [r0, r1) frozen runs
+        csum = np.concatenate([[0.0], np.cumsum(np.where(fr, span, 0.0))])
+        dur = csum[r1] - csum[r0]
+        long = dur > max_frozen_s
+        if long.any():
+            ss, sl = _split_by_hour(t[r0[long]], t[r0[long]] + dur[long], tz)
+
     sds = service_day_start
     cov = _hour_table(ps, pl_, "covered_s", tz, sds)
     frz = _hour_table(fs, fl, "frozen_s", tz, sds)
+    stall = _hour_table(ss, sl, "stall_s", tz, sds) if ss.size else None
     nsn = _hour_table(tp, np.ones_like(tp), "n_snapshots", tz, sds)
 
     if dates is None:
@@ -96,9 +115,13 @@ def coverage(snapshots: pl.DataFrame | pl.LazyFrame, tz: str = "Europe/Brussels"
            .join(frz, on=["service_date", "hour"], how="left")
            .join(nsn, on=["service_date", "hour"], how="left")
            .with_columns(pl.col("covered_s", "frozen_s", "n_snapshots").fill_null(0.0)))
+    if stall is not None:
+        out = out.join(stall, on=["service_date", "hour"], how="left").with_columns(pl.col("stall_s").fill_null(0.0))
+    else:
+        out = out.with_columns(pl.lit(0.0).alias("stall_s"))
     c = (pl.col("covered_s") / 3600.0).clip(0.0, 1.0)
     flags = (pl.when(c < min_coverage).then(Flag.LOW_COVERAGE).otherwise(0)
-             + pl.when(pl.col("frozen_s") > max_frozen_s).then(Flag.FROZEN).otherwise(0))
+             + pl.when(pl.col("stall_s") > 0).then(Flag.FROZEN).otherwise(0))
     out = out.with_columns(c.alias("coverage"), flags.alias("flags"))
     return out.select([pl.col(k).cast(v) for k, v in COVERAGE.items()]).sort("service_date", "hour")
 
