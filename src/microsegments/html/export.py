@@ -49,12 +49,16 @@ def _default_title(c: dict, lang: str) -> str:
 
 
 def render(analysis_or_contract, *, title: str | None = None, lang: str = "fr", tiles: bool = True,
-           scales: dict | None = None, description: str | None = None, **contract_kw) -> str:
+           scales: dict | None = None, description: str | None = None, show_hotspots: bool = True, **contract_kw) -> str:
     """The full HTML document as a string. ``contract_kw`` go to ``to_contract`` when an Analysis /
     RunResult is given. The colour scale is fixed for every page (``microsegments.scale``); ``scales`` is
-    deprecated and ignored."""
+    deprecated and ignored. ``show_hotspots=False`` hides every hotspot element of the one-period view
+    (list, map markers and outlines, tile, method paragraph); the page reads it from the contract key
+    ``show_hotspots``, so a page fed with its data later can set that key instead."""
     c = dict(_contract(analysis_or_contract, **contract_kw))
     c["tiles"] = bool(tiles)
+    if not show_hotspots:
+        c["show_hotspots"] = False
     if scales:
         warnings.warn("render(scales=...) is ignored: the colour scale is fixed (microsegments.scale)",
                       DeprecationWarning, stacklevel=2)
@@ -79,11 +83,13 @@ def render(analysis_or_contract, *, title: str | None = None, lang: str = "fr", 
 
 
 def export(analysis_or_contract, path: str | Path, *, title: str | None = None, lang: str = "fr",
-           standalone: bool = True, tiles: bool = True, scales: dict | None = None, **contract_kw) -> Path:
+           standalone: bool = True, tiles: bool = True, scales: dict | None = None, show_hotspots: bool = True,
+           **contract_kw) -> Path:
     """Write the report to ``path``. ``analysis_or_contract``: an ``Analysis``, a ``RunResult`` or a
     contract dict (``report.to_contract``). ``standalone`` (default): a complete HTML document; False:
     only what goes inside ``<body>`` (head elements included inline), to embed in another page."""
-    page = render(analysis_or_contract, title=title, lang=lang, tiles=tiles, scales=scales, **contract_kw)
+    page = render(analysis_or_contract, title=title, lang=lang, tiles=tiles, scales=scales, show_hotspots=show_hotspots,
+                  **contract_kw)
     if not standalone:
         head = re.search(r"<head>(.*)</head>", page, re.DOTALL).group(1)
         body = re.search(r"<body>(.*)</body>", page, re.DOTALL).group(1)

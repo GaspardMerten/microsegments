@@ -32,7 +32,8 @@ _ALIASES = {"oph": "obs_per_h", "oph10": "obs_per_h_10m", "opp": "obs_per_passag
             "excess": "excess_per_passage"}
 _RAMP = list(S.RAMP)   # the STIB speed ramp (km/h stops), as on the page
 NULL_COLOR = "#3a4560"
-MASK_COLOR = "#26324d"
+MASK_COLOR = "#18213a"     # masked stop zones: hatched (background + stripes), distinct from flat no-data grey
+MASK_HATCH = "#5d6a88"
 BG = "#0b1224"
 
 
@@ -163,6 +164,14 @@ def _frame(an: Analysis, direction_id: int, metric: str, pattern_uid: str | None
     return r.with_columns(v.cast(pl.Float64).alias("value"))
 
 
+def _hatch_spans(ax, segs: pl.DataFrame, y0: float, y1: float, alpha: float = 1.0) -> None:
+    """Masked stop zones: hatched rectangles over [x0, x0 + len] x [y0, y1]."""
+    from matplotlib.patches import Rectangle
+    for x0, ln in zip(segs["x0_m"].to_list(), segs["len_m"].to_list()):
+        ax.add_patch(Rectangle((x0, min(y0, y1)), ln, abs(y1 - y0), facecolor=MASK_COLOR, edgecolor=MASK_HATCH,
+                               hatch="////", lw=0, alpha=alpha, zorder=1.5))
+
+
 def auto_vmax(analysis=None, metric: str = "obs_per_h", stops: bool = True, q: float = 0.98) -> float:
     """Top of the fixed colour scale in the units of ``metric`` per 30 m (per 10 m for ``obs_per_h_10m``).
     It does not depend on the analysis (kept for compatibility; the arguments other than ``metric`` are
@@ -229,7 +238,6 @@ def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_h", days=None
     for h, s, v in f.select("hour", "seg_idx", "T").iter_rows():
         if h in hi and v is not None and np.isfinite(v):
             Z[hi[h], si[s]] = v
-    zone = np.array(segs["zone"].to_list())
     x_edges = np.concatenate([segs["x0_m"].to_numpy(), [segs["x0_m"][-1] + segs["len_m"][-1]]]) if segs.height else np.array([0, 1])
     y_edges = np.arange(len(hours) + 1) - 0.5 + hours[0] if hours else np.array([0, 1])
     fig, ax = (ax.figure, ax) if ax is not None else plt.subplots(figsize=figsize, layout="constrained")
@@ -237,9 +245,7 @@ def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_h", days=None
     cm = cmap()
     ax.pcolormesh(x_edges, y_edges, np.ma.masked_invalid(Z), cmap=cm, norm=norm(), shading="flat")
     if not stops and segs.height:
-        M = np.where(np.broadcast_to(zone == "stop", Z.shape), 1.0, np.nan)
-        from matplotlib.colors import ListedColormap
-        ax.pcolormesh(x_edges, y_edges, np.ma.masked_invalid(M), cmap=ListedColormap([MASK_COLOR]), shading="flat")
+        _hatch_spans(ax, segs.filter(pl.col("zone") == "stop"), y_edges[0], y_edges[-1])
     xs, names = _stops(an, direction_id, links, pattern_uid)
     for x in xs:
         ax.axvline(x, color=BG, lw=1.2)
@@ -294,6 +300,8 @@ def profile(analysis, direction_id: int = 0, hour: int | str | None = None, *, b
     colors = cmap()(norm()(np.nan_to_num(T, nan=S.T_MIN)))
     colors[np.isnan(T)] = (0, 0, 0, 0)
     ax.bar(cur["x0_m"].to_numpy(), np.nan_to_num(v), width=cur["len_m"].to_numpy() * 0.96, align="edge", color=colors)
+    if not stops:
+        _hatch_spans(ax, f.filter((pl.col("hour") == code) & (pl.col("zone") == "stop")), 0, top * 1.05, alpha=0.55)
     if reference and code != BAND_HOUR["evening"] and not m.startswith("excess") and m != "log2_ratio":
         ev = f.filter(pl.col("hour") == BAND_HOUR["evening"])
         if not stops:
@@ -335,8 +343,7 @@ def map(analysis, direction_id: int = 0, hour: int | str | None = None, *, band:
     T = _seconds(an, m, g["value"].fill_null(np.nan).to_numpy(), g["len_m"].to_numpy())
     colors = cmap()(norm()(np.nan_to_num(T, nan=S.T_MIN)))
     colors[np.isnan(T)] = matplotlib_color(NULL_COLOR)
-    if not stops:
-        colors[np.array(g["zone"].to_list()) == "stop"] = matplotlib_color(MASK_COLOR)
+    masked = np.array(g["zone"].to_list()) == "stop" if not stops else np.zeros(len(lines), bool)
     fig, ax = (ax.figure, ax) if ax is not None else plt.subplots(figsize=figsize, layout="constrained")
     if hotspots is not None and hotspots.height and uid == an.dirs[direction_id].display_uid:
         x0 = g["x0_m"].to_numpy()
@@ -349,7 +356,14 @@ def map(analysis, direction_id: int = 0, hour: int | str | None = None, *, band:
                 mid = hl[len(hl) // 2][len(hl[len(hl) // 2]) // 2]
                 ax.annotate(str(r["rank"]), mid, xytext=(8, 8), textcoords="offset points", fontsize=8,
                             bbox=dict(boxstyle="circle", fc="#ffe600", ec="none"), zorder=4)
-    ax.add_collection(LineCollection([c for c in lines], colors=colors, linewidths=linewidth, capstyle="butt", zorder=2))
+    keep = ~masked
+    ax.add_collection(LineCollection([c for c, k in zip(lines, keep) if k], colors=colors[keep], linewidths=linewidth,
+                                     capstyle="butt", zorder=2))
+    if masked.any():   # masked stop zones: striped (dashes over a dark casing), unlike the flat no-data grey
+        ml = [c for c, k in zip(lines, masked) if k]
+        ax.add_collection(LineCollection(ml, colors=MASK_COLOR, linewidths=linewidth, capstyle="butt", zorder=2))
+        ax.add_collection(LineCollection(ml, colors=MASK_HATCH, linewidths=linewidth, linestyles=(0, (1, 1.5)),
+                                         capstyle="butt", zorder=2))
     xs, names = _stops(an, direction_id, links, uid)
     if links is not None:
         lk = links.filter(pl.col("pattern_uid") == uid).sort("link_idx")
