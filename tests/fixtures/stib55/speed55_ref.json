@@ -1,0 +1,315 @@
+{
+"source": "BrusselsTransitStuck/out/speed55_2025.json (full period 20250217-20250516)",
+"dirs": [
+{
+"dir": 0,
+"links": [
+{
+"from": "Da Vinci",
+"to": "Bordet Station",
+"jour": {
+"s": 108.0,
+"p90": 163.2,
+"kmh": 8.4,
+"n": 4301
+}
+},
+{
+"from": "Bordet Station",
+"to": "Van Cutsem",
+"jour": {
+"s": 85.0,
+"p90": 105.8,
+"kmh": 15.4,
+"n": 8258
+}
+},
+{
+"from": "Van Cutsem",
+"to": "Fonson",
+"jour": {
+"s": 74.9,
+"p90": 101.0,
+"kmh": 14.6,
+"n": 8817
+}
+},
+{
+"from": "Fonson",
+"to": "Paix",
+"jour": {
+"s": 81.2,
+"p90": 103.6,
+"kmh": 14.0,
+"n": 8879
+}
+},
+{
+"from": "Paix",
+"to": "Tilleul",
+"jour": {
+"s": 112.8,
+"p90": 141.8,
+"kmh": 18.4,
+"n": 8811
+}
+},
+{
+"from": "Tilleul",
+"to": "Helmet",
+"jour": {
+"s": 113.7,
+"p90": 142.3,
+"kmh": 16.5,
+"n": 8798
+}
+},
+{
+"from": "Helmet",
+"to": "Foyer Schaerbeek.",
+"jour": {
+"s": 68.9,
+"p90": 101.2,
+"kmh": 14.0,
+"n": 8788
+}
+},
+{
+"from": "Foyer Schaerbeek.",
+"to": "Waelhem",
+"jour": {
+"s": 71.1,
+"p90": 100.4,
+"kmh": 11.9,
+"n": 8791
+}
+},
+{
+"from": "Waelhem",
+"to": "Verboekhoven",
+"jour": {
+"s": 156.3,
+"p90": 225.2,
+"kmh": 12.5,
+"n": 8811
+}
+},
+{
+"from": "Verboekhoven",
+"to": "Pavillon",
+"jour": {
+"s": 115.0,
+"p90": 161.9,
+"kmh": 12.6,
+"n": 8771
+}
+},
+{
+"from": "Pavillon",
+"to": "Gallait",
+"jour": {
+"s": 67.0,
+"p90": 99.6,
+"kmh": 17.9,
+"n": 8765
+}
+},
+{
+"from": "Gallait",
+"to": "Liedts",
+"jour": {
+"s": 115.2,
+"p90": 161.4,
+"kmh": 13.5,
+"n": 8778
+}
+},
+{
+"from": "Liedts",
+"to": "Thomas",
+"jour": {
+"s": 108.4,
+"p90": 142.0,
+"kmh": 9.4,
+"n": 8788
+}
+},
+{
+"from": "Thomas",
+"to": "Gare Du Nord",
+"jour": {
+"s": 152.1,
+"p90": 203.0,
+"kmh": 14.7,
+"n": 8721
+}
+},
+{
+"from": "Gare Du Nord",
+"to": "Rogier",
+"jour": {
+"s": 113.2,
+"p90": 272.7,
+"kmh": 14.2,
+"n": 2933
+}
+}
+]
+},
+{
+"dir": 1,
+"links": [
+{
+"from": "Rogier",
+"to": "Gare Du Nord",
+"jour": {
+"s": 108.4,
+"p90": 162.1,
+"kmh": 17.2,
+"n": 637
+}
+},
+{
+"from": "Gare Du Nord",
+"to": "Thomas",
+"jour": {
+"s": 166.3,
+"p90": 222.3,
+"kmh": 15.2,
+"n": 5353
+}
+},
+{
+"from": "Thomas",
+"to": "Liedts",
+"jour": {
+"s": 83.6,
+"p90": 121.4,
+"kmh": 7.9,
+"n": 8851
+}
+},
+{
+"from": "Liedts",
+"to": "Gallait",
+"jour": {
+"s": 85.7,
+"p90": 123.0,
+"kmh": 10.5,
+"n": 8612
+}
+},
+{
+"from": "Gallait",
+"to": "Pavillon",
+"jour": {
+"s": 99.0,
+"p90": 140.0,
+"kmh": 19.2,
+"n": 8659
+}
+},
+{
+"from": "Pavillon",
+"to": "Verboekhoven",
+"jour": {
+"s": 134.6,
+"p90": 195.0,
+"kmh": 10.8,
+"n": 8848
+}
+},
+{
+"from": "Verboekhoven",
+"to": "Waelhem",
+"jour": {
+"s": 91.6,
+"p90": 121.6,
+"kmh": 15.8,
+"n": 8518
+}
+},
+{
+"from": "Waelhem",
+"to": "Foyer Schaerbeek.",
+"jour": {
+"s": 84.0,
+"p90": 117.7,
+"kmh": 14.4,
+"n": 8668
+}
+},
+{
+"from": "Foyer Schaerbeek.",
+"to": "Helmet",
+"jour": {
+"s": 98.6,
+"p90": 161.6,
+"kmh": 11.5,
+"n": 8723
+}
+},
+{
+"from": "Helmet",
+"to": "Tilleul",
+"jour": {
+"s": 89.4,
+"p90": 121.4,
+"kmh": 15.5,
+"n": 8728
+}
+},
+{
+"from": "Tilleul",
+"to": "Paix",
+"jour": {
+"s": 121.3,
+"p90": 145.7,
+"kmh": 18.5,
+"n": 8723
+}
+},
+{
+"from": "Paix",
+"to": "Fonson",
+"jour": {
+"s": 78.9,
+"p90": 101.3,
+"kmh": 15.8,
+"n": 8680
+}
+},
+{
+"from": "Fonson",
+"to": "Van Cutsem",
+"jour": {
+"s": 64.2,
+"p90": 81.5,
+"kmh": 16.8,
+"n": 8662
+}
+},
+{
+"from": "Van Cutsem",
+"to": "Bordet Station",
+"jour": {
+"s": 127.8,
+"p90": 202.6,
+"kmh": 10.2,
+"n": 8059
+}
+},
+{
+"from": "Bordet Station",
+"to": "Da Vinci",
+"jour": {
+"s": 118.5,
+"p90": 192.3,
+"kmh": 8.8,
+"n": 7427
+}
+}
+]
+}
+]
+}

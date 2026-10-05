@@ -9,3 +9,4 @@ build/
 !tests/fixtures/**/*.parquet
 .claude/
 src/microsegments/_version.py
+tests/regression/golden/

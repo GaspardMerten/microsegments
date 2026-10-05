@@ -1,0 +1,229 @@
+{
+ "line": "55",
+ "days": [
+  "20250318",
+  "20250319"
+ ],
+ "n_days": 2,
+ "per_dow": [
+  0,
+  1,
+  1,
+  0,
+  0
+ ],
+ "params": {
+  "step": 30.0,
+  "cap": 40.0,
+  "stopzone": 15.0,
+  "layover_m": 10,
+  "at_stop_m": 10,
+  "ghost": 300,
+  "bands": {
+   "jour": [
+    6,
+    21
+   ],
+   "am": [
+    7,
+    10
+   ],
+   "pm": [
+    16,
+    19
+   ],
+   "soir": [
+    20,
+    23
+   ]
+  },
+  "hours_shown": [
+   5,
+   24
+  ]
+ },
+ "feed": {
+  "snapshots": 8128,
+  "identical": 0,
+  "capped": 18,
+  "gap_s_lost": 50.0
+ },
+ "rows": {
+  "off_pattern_or_past_own_terminus": 14460,
+  "layover_first_stop": 8379,
+  "layover_short_working_end": 449,
+  "total": 78799,
+  "layover_short_working_start": 6,
+  "kept": 55505
+ },
+ "dirs": {
+  "0": {
+   "from": "Da Vinci",
+   "to": "Rogier",
+   "n_buckets": 205,
+   "n_links": 15,
+   "length_m": 5890.492708119789,
+   "n_obs": 26980,
+   "n_obs_run": 18786,
+   "share_obs_stopzone": 0.30370644922164564,
+   "share_ts_stopzone": 0.30367895045131904,
+   "n_obs_hours_5_23": 26240,
+   "top5_pm_excess_per_passage_run": [
+    {
+     "bucket": 201,
+     "link": 14,
+     "from": "Gare Du Nord",
+     "to": "Rogier",
+     "lo_m": 330.0,
+     "len_m": 30.0,
+     "O_pm": 1.328,
+     "r_soir": 0.414,
+     "excess_obs_per_passage": 0.914
+    },
+    {
+     "bucket": 113,
+     "link": 8,
+     "from": "Waelhem",
+     "to": "Verboekhoven",
+     "lo_m": 420.0,
+     "len_m": 30.0,
+     "O_pm": 1.381,
+     "r_soir": 0.562,
+     "excess_obs_per_passage": 0.818
+    },
+    {
+     "bucket": 112,
+     "link": 8,
+     "from": "Waelhem",
+     "to": "Verboekhoven",
+     "lo_m": 390.0,
+     "len_m": 30.0,
+     "O_pm": 0.667,
+     "r_soir": 0.062,
+     "excess_obs_per_passage": 0.604
+    },
+    {
+     "bucket": 128,
+     "link": 9,
+     "from": "Verboekhoven",
+     "to": "Pavillon",
+     "lo_m": 300.0,
+     "len_m": 30.0,
+     "O_pm": 0.625,
+     "r_soir": 0.233,
+     "excess_obs_per_passage": 0.392
+    },
+    {
+     "bucket": 129,
+     "link": 9,
+     "from": "Verboekhoven",
+     "to": "Pavillon",
+     "lo_m": 330.0,
+     "len_m": 30.0,
+     "O_pm": 0.562,
+     "r_soir": 0.2,
+     "excess_obs_per_passage": 0.362
+    }
+   ]
+  },
+  "1": {
+   "from": "Rogier",
+   "to": "Da Vinci",
+   "n_buckets": 206,
+   "n_links": 15,
+   "length_m": 5940.890408387272,
+   "n_obs": 28525,
+   "n_obs_run": 20029,
+   "share_obs_stopzone": 0.29784399649430326,
+   "share_ts_stopzone": 0.2980048695293075,
+   "n_obs_hours_5_23": 27972,
+   "top5_pm_excess_per_passage_run": [
+    {
+     "bucket": 202,
+     "link": 14,
+     "from": "Bordet Station",
+     "to": "Da Vinci",
+     "lo_m": 180.0,
+     "len_m": 30.0,
+     "O_pm": 3.197,
+     "r_soir": 1.656,
+     "excess_obs_per_passage": 1.54
+    },
+    {
+     "bucket": 87,
+     "link": 5,
+     "from": "Pavillon",
+     "to": "Verboekhoven",
+     "lo_m": 330.0,
+     "len_m": 30.0,
+     "O_pm": 1.134,
+     "r_soir": 0.286,
+     "excess_obs_per_passage": 0.849
+    },
+    {
+     "bucket": 124,
+     "link": 8,
+     "from": "Foyer Schaerbeek.",
+     "to": "Helmet",
+     "lo_m": 240.0,
+     "len_m": 30.0,
+     "O_pm": 0.687,
+     "r_soir": 0.286,
+     "excess_obs_per_passage": 0.401
+    },
+    {
+     "bucket": 62,
+     "link": 4,
+     "from": "Gallait",
+     "to": "Pavillon",
+     "lo_m": 120.0,
+     "len_m": 30.0,
+     "O_pm": 0.485,
+     "r_soir": 0.111,
+     "excess_obs_per_passage": 0.374
+    },
+    {
+     "bucket": 66,
+     "link": 4,
+     "from": "Gallait",
+     "to": "Pavillon",
+     "lo_m": 240.0,
+     "len_m": 30.0,
+     "O_pm": 0.441,
+     "r_soir": 0.111,
+     "excess_obs_per_passage": 0.33
+    }
+   ]
+  }
+ },
+ "obs_hours": {
+  "0": 1041,
+  "1": 42,
+  "4": 210,
+  "5": 757,
+  "6": 1738,
+  "7": 3182,
+  "8": 3536,
+  "9": 3560,
+  "10": 3497,
+  "11": 3601,
+  "12": 3840,
+  "13": 3747,
+  "14": 3574,
+  "15": 3763,
+  "16": 3724,
+  "17": 3795,
+  "18": 3327,
+  "19": 2920,
+  "20": 1944,
+  "21": 1416,
+  "22": 1189,
+  "23": 1102
+ },
+ "self_check": "skipped (prototype json covers another period)",
+ "source": {
+  "proto": "/home/gaspard/Documents/Dev/CoDE/BrusselsTransitStuck",
+  "data": "/home/gaspard/Documents/Dev/CoDE/microsegments/tests/fixtures/stib55",
+  "runtime_s": 2.0
+ }
+}
