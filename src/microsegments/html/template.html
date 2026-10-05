@@ -33,6 +33,7 @@ h2{font:700 24px/1.2 var(--serif);margin:0 0 6px}
 p.lede{font-size:clamp(17px,1.6vw,19px);color:var(--ink-2);max-width:68ch;margin:0}
 .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:28px}
 .tiles.t3{grid-template-columns:repeat(3,1fr)}
+.tiles.t2{grid-template-columns:repeat(2,1fr)}
 .tile{background:var(--surface);padding:18px 18px 16px;min-width:0}
 .tile b{display:block;font:700 clamp(24px,3vw,32px)/1 var(--serif);font-variant-numeric:tabular-nums}
 .tile span{display:block;margin-top:8px;color:var(--ink-2);font-size:14px;line-height:1.4}
@@ -411,7 +412,7 @@ const CT = {
     tip: {a: (v, s) => `avant : ${v} obs. par passage (≈ ${s} s)`, b: (v, s) => `après : ${v} (≈ ${s} s)`,
           d: (v, m1) => `<b>${v} s par ${m1}</b>`, unsure: 'différence incertaine', absent: 'absent de la première période',
           freq: (a, b, m) => `${a} → ${b} ${m} par heure`},
-    mxsub: (f, t, a, b, m1, stops) => [`De ${f} à ${t}.`, `Chaque case : la différence de temps par ${m1} entre ${a} et ${b}, à cette heure. Vert : plus rapide ; rouge : plus lent ; pâle : incertain${stops ? '' : ' ; hachures : zones d\'arrêt masquées'}. Contours jaunes : changements retenus. Cliquez une heure pour l'afficher sur la carte.`],
+    mxsub: (f, t, a, b, m1, stops, hs) => [`De ${f} à ${t}.`, `Chaque case : la différence de temps par ${m1} entre ${a} et ${b}, à cette heure. Vert : plus rapide ; rouge : plus lent ; pâle : incertain${stops ? '' : ' ; hachures : zones d\'arrêt masquées'}.${hs ? ' Contours jaunes : changements retenus.' : ''} Cliquez une heure pour l'afficher sur la carte.`],
     profsub: (f, t, w, m1, m) => [`De ${f} à ${t}, ${w}.`, `Au-dessus de zéro, chaque ${m1} met plus de temps qu'avant ; en dessous, moins. Pointillés jaunes : ${m} par heure après (échelle de droite).`],
     days: 'mêmes jours de semaine que chaque période',
     method: (m1, m, a, b) => `<b>Comparaison de deux périodes.</b> ${a} (avant) et ${b} (après), chacune sur ses propres jours et avec sa propre référence. Les microsegments sont appariés d'une période à l'autre ; ceux qui n'existent que dans une période sont écartés. La différence porte sur les observations par passage, donc le temps par ${m1}, ce qui la rend indépendante de la fréquence. L'incertitude vient d'un rééchantillonnage des jours de chaque période. Quand la fréquence change de plus de 20 %, le tronçon est signalé : un horaire différent (plus de ${m}, plus de files) peut expliquer une partie de l'écart.`,
@@ -438,7 +439,7 @@ const CT = {
     tip: {a: (v, s) => `before: ${v} obs. per passage (≈ ${s} s)`, b: (v, s) => `after: ${v} (≈ ${s} s)`,
           d: (v, m1) => `<b>${v} s per ${m1}</b>`, unsure: 'uncertain difference', absent: 'absent from the first period',
           freq: (a, b, m) => `${a} → ${b} ${m} per hour`},
-    mxsub: (f, t, a, b, m1, stops) => [`From ${f} to ${t}.`, `Each cell: the difference in time per ${m1} between ${a} and ${b}, at that hour. Green: faster; red: slower; pale: uncertain${stops ? '' : '; hatching: stop zones hidden'}. Yellow outlines: retained changes. Click an hour to show it on the map.`],
+    mxsub: (f, t, a, b, m1, stops, hs) => [`From ${f} to ${t}.`, `Each cell: the difference in time per ${m1} between ${a} and ${b}, at that hour. Green: faster; red: slower; pale: uncertain${stops ? '' : '; hatching: stop zones hidden'}.${hs ? ' Yellow outlines: retained changes.' : ''} Click an hour to show it on the map.`],
     profsub: (f, t, w, m1, m) => [`From ${f} to ${t}, ${w}.`, `Above zero, each ${m1} takes longer than before; below, less. Yellow dots: ${m} per hour after (right scale).`],
     days: 'same weekdays as each period',
     method: (m1, m, a, b) => `<b>Comparing two periods.</b> ${a} (before) and ${b} (after), each on its own days and with its own reference. Micro-segments are matched from one period to the other; those that exist in one period only are left out. The difference is in observations per passage, so in time per ${m1}, which makes it independent of the frequency. The uncertainty comes from resampling the days of each period. When the frequency changes by more than 20 %, the stretch is flagged: a different timetable (more ${m}, more queues) may explain part of the difference.`,
@@ -652,7 +653,7 @@ document.addEventListener('mouseout', e => { const b = e.target.closest && e.tar
 document.addEventListener('focusin', e => { const b = e.target.closest && e.target.closest('.qm'); if (b && !popPinned && b.matches(':focus-visible')) openPop(b, false); });
 window.addEventListener('scroll', () => { if (popBtn) { if (popBtn.isConnected) openPop(popBtn, popPinned); else closePop(); } }, {passive: true});
 // stop-zone hotspots are listed only when stop zones are shown
-const hsOn = () => isCmp() || D.show_hotspots !== false;
+const hsOn = () => D.show_hotspots !== false;
 const hotDir = () => !hsOn() ? [] : (D.hotspots || []).filter(h => (h.dir ?? h.direction_id) === st.dir && (!h.pattern_uid || h.pattern_uid === (dirOf() || {}).pattern_uid)).sort((a, b) => a.rank - b.rank);
 const hotAll = () => hotDir().filter(h => st.stops || h.zone !== 'stop');
 // the list (and the map markers) show the top hotspots unless "show all" is on
@@ -721,7 +722,7 @@ function cTipHtml(E, v) {
   if (v.stop) h += `<br><i>${l.stop}</i>`;
   return h;
 }
-const chgAll = () => CMP ? (CMP.changes || []).filter(c => c.dir === st.dir && (!c.pattern_uid || c.pattern_uid === (dirOf() || {}).pattern_uid)).sort((a, b) => a.rank - b.rank) : [];
+const chgAll = () => CMP && hsOn() ? (CMP.changes || []).filter(c => c.dir === st.dir && (!c.pattern_uid || c.pattern_uid === (dirOf() || {}).pattern_uid)).sort((a, b) => a.rank - b.rank) : [];
 const chgShown = () => chgAll().filter(c => st.stops || c.zone !== 'stop');
 const chgDir = () => st.hotAll ? chgShown() : chgShown().slice(0, HOT_TOP);
 const signCol = s => s < 0 ? FASTC : SLOWC;
@@ -857,12 +858,14 @@ function tiles() {
   if (isCmp()) {
     const c = ctx().tiles, ch = CMP.changes || [];
     document.getElementById('tiles').classList.remove('t3');
+    document.getElementById('tiles').classList.toggle('t2', !hsOn());
     document.getElementById('tiles').innerHTML = [[nf(CMP.a.days, 0), `${c.a} (${perLabel(CMP.a)})`], [nf(CMP.b.days, 0), `${c.b} (${perLabel(CMP.b)})`],
-      [nf(ch.filter(x => x.sign > 0).length, 0), c.slower], [nf(ch.filter(x => x.sign < 0).length, 0), c.faster]]
+      ...(hsOn() ? [[nf(ch.filter(x => x.sign > 0).length, 0), c.slower], [nf(ch.filter(x => x.sign < 0).length, 0), c.faster]] : [])]
       .map(([b, s]) => `<div class="tile"><b>${b}</b><span>${esc(s)}</span></div>`).join('');
     return;
   }
   const big = v => v >= 1e6 ? nf(v / 1e6, 1) + (st.lang === 'fr' ? ' M' : 'M') : v >= 1e4 ? nf(v / 1e3, 0) + (st.lang === 'fr' ? ' k' : 'k') : nf(v, 0);
+  document.getElementById('tiles').classList.remove('t2');
   document.getElementById('tiles').classList.toggle('t3', !hsOn());
   document.getElementById('tiles').innerHTML = [
     [nf(D.period.days, 0), esc(l.tiles.days(D.period.days, exclSummary(D.period.excluded)))],
@@ -1086,7 +1089,7 @@ function drawMatrix() {
   svg.innerHTML = s;
   MX = {E, rows, m, RH, W, Ltot, tip: cm ? cTipHtml : tipHtml};
   const what = l.metrics[st.metric].toLowerCase() + (st.per10 ? ' (10 m)' : ' (30 m)');
-  setSub($('mxsub'), cm ? ctx().mxsub(E.from, E.to, perLabel(CMP.a), perLabel(CMP.b), noun(false), st.stops) : l.mxsub(E.from, E.to, daysLabel(), what, st.stops, hsOn() && hotOfDir().length > 0));
+  setSub($('mxsub'), cm ? ctx().mxsub(E.from, E.to, perLabel(CMP.a), perLabel(CMP.b), noun(false), st.stops, chgDir().length > 0) : l.mxsub(E.from, E.to, daysLabel(), what, st.stops, hsOn() && hotOfDir().length > 0));
 }
 $('mx').addEventListener('mousemove', e => {
   if (!MX) return;

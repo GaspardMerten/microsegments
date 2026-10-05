@@ -52,8 +52,8 @@ def render(analysis_or_contract, *, title: str | None = None, lang: str = "fr", 
            scales: dict | None = None, description: str | None = None, show_hotspots: bool = True, **contract_kw) -> str:
     """The full HTML document as a string. ``contract_kw`` go to ``to_contract`` when an Analysis /
     RunResult is given. The colour scale is fixed for every page (``microsegments.scale``); ``scales`` is
-    deprecated and ignored. ``show_hotspots=False`` hides every hotspot element of the one-period view
-    (list, map markers and outlines, tile, method paragraph); the page reads it from the contract key
+    deprecated and ignored. ``show_hotspots=False`` hides every hotspot element
+    (list, map markers and outlines, tile, method paragraph), and the retained changes of the two-period view; the page reads it from the contract key
     ``show_hotspots``, so a page fed with its data later can set that key instead."""
     c = dict(_contract(analysis_or_contract, **contract_kw))
     c["tiles"] = bool(tiles)
