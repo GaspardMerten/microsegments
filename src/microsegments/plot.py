@@ -175,7 +175,7 @@ def _hatch_spans(ax, segs: pl.DataFrame, y0: float, y1: float, alpha: float = 1.
                                hatch="////", lw=0, alpha=alpha, zorder=1.5))
 
 
-def auto_vmax(analysis=None, metric: str = "obs_per_h", stops: bool = True, q: float = 0.98) -> float:
+def auto_vmax(analysis=None, metric: str = "obs_per_passage", stops: bool = True, q: float = 0.98) -> float:
     """Top of the fixed colour scale in the units of ``metric`` per 30 m (per 10 m for ``obs_per_h_10m``).
     It does not depend on the analysis (kept for compatibility; the arguments other than ``metric`` are
     ignored)."""
@@ -215,7 +215,7 @@ def _dir_label(an, direction_id, links, pattern_uid=None):
 
 
 # ------------------------------------------------------------------------------------ figures
-def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_h", days=None, ax=None, *,
+def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_passage", days=None, ax=None, *,
            vmax: float | None = None, stops: bool = True, pattern_uid: str | None = None,
            hotspots: pl.DataFrame | None = None, links: pl.DataFrame | None = None, title: str | None = None,
            colorbar: bool = True, figsize=(14, 6)):
@@ -279,7 +279,7 @@ def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_h", days=None
 
 
 def profile(analysis, direction_id: int = 0, hour: int | str | None = None, *, band: str | None = None,
-            metric: str = "obs_per_h", days=None, ax=None, stops: bool = True, reference: bool = True,
+            metric: str = "obs_per_passage", days=None, ax=None, stops: bool = True, reference: bool = True,
             vmax: float | None = None, pattern_uid: str | None = None, links: pl.DataFrame | None = None,
             title: str | None = None, figsize=(14, 4)):
     """Bars along the line for one hour or band ("am", "pm", "day", "evening"), coloured like the matrix,
@@ -324,7 +324,7 @@ def profile(analysis, direction_id: int = 0, hour: int | str | None = None, *, b
 
 
 def map(analysis, direction_id: int = 0, hour: int | str | None = None, *, band: str | None = None,
-        metric: str = "obs_per_h", days=None, ax=None, stops: bool = True, vmax: float | None = None,
+        metric: str = "obs_per_passage", days=None, ax=None, stops: bool = True, vmax: float | None = None,
         hotspots: pl.DataFrame | None = None, pattern_uid: str | None = None, links: pl.DataFrame | None = None,
         title: str | None = None, figsize=(8, 8), linewidth: float = 4.0):
     """Segments coloured on lon / lat (no base map); hotspots outlined in yellow."""
@@ -479,7 +479,7 @@ def save(fig, path: str | Path, dpi: int = 150) -> Path:
     return path
 
 
-def save_all(analysis, out_dir: str | Path, metric: str = "obs_per_h", stops: bool = True, dpi: int = 130) -> list[Path]:
+def save_all(analysis, out_dir: str | Path, metric: str = "obs_per_passage", stops: bool = True, dpi: int = 130) -> list[Path]:
     """One matrix PNG per direction (``matrix_dir<d>.png``) into ``out_dir``."""
     an, _, _ = _unpack(analysis)
     out = []

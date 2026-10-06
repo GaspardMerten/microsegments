@@ -75,7 +75,7 @@ res = ms.run(ms.Config.from_toml("ms.toml"))   # obs -> coverage -> network -> p
 res.result            # polars: one row per segment x hour (bands as hour -1 am, -2 pm, -3 day, -4 evening)
 res.hotspots          # ranked stretches
 ms.export(res, "report.html", lang="fr")       # standalone page (fr / en)
-ms.plot.matrix(res, direction_id=0, metric="obs_per_h", days=[0, 1, 2, 3, 4], stops=False)
+ms.plot.matrix(res, direction_id=0, metric="obs_per_passage", days=[0, 1, 2, 3, 4], stops=False)
 ms.plot.map(res, 0, "pm", metric="excess_per_passage")
 contract = res.contract()                      # the page JSON (also the platform's /api/analysis)
 
@@ -106,8 +106,8 @@ is therefore about 20 s of presence.
 
 | Metric | Definition | Read as |
 |---|---|---|
-| `obs_per_h` (default) | Σ observations / Σ covered hours | vehicles seen in the segment per hour of polling; `/len × 10` for per 10 m |
-| `obs_per_passage` | Σ observations / Σ passages | × 20 s ≈ time each vehicle spends there |
+| `obs_per_passage` (default) | Σ observations / Σ passages | × 20 s ≈ time each vehicle spends there; independent of the frequency |
+| `obs_per_h` | Σ observations / Σ covered hours | vehicles seen in the segment per hour of polling; depends on slowness and frequency (`obs_per_h_10m`: per 10 m, Python API only) |
 | `excess_per_passage` | obs per passage − the same at 20–23 h, same days | extra observations (≈ seconds / 20) lost per vehicle vs free-flowing evening |
 | `excess_obs_per_h`, `log2_ratio` | see `metrics.py` | |
 
@@ -115,7 +115,8 @@ All values are ratios of sums over the selected days (optionally post-stratified
 (30 m before to 60 m after each stop) can be masked to bring out signals and junctions. The colour scale is
 one fixed function of the value for every line, period, hour and option (`microsegments.scale`): values are
 brought to seconds per passage per 30 m of track and read on the STIB speed ramp (green 4 s ≈ 27 km/h, red
-14 s ≈ 7.5 km/h, dark red ≥ 24 s); both excesses share it as 3 s + excess.
+14 s ≈ 7.5 km/h, dark red ≥ 24 s) on a linear legend axis from 3 to 24 s; both excesses share it as 3 s + excess. The page
+always shows values per 30 m and defaults to time spent per vehicle.
 
 ## Missing data and GTFS versions
 
