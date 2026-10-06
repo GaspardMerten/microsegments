@@ -254,3 +254,17 @@ def test_page_stop_zone_is_one_block(an_hs):
     assert r["cz"][1][0] == pytest.approx(.3) and r["cz"][1][1] is True and r["cz"][0][1] is False
     assert r["cz"][1][2] == pytest.approx(1.5)
 
+
+def test_page_first_of_month_in_french():
+    """French dates write the first of the month '1er juillet'; English stays '1 July'."""
+    p = render({"v": 1, "dirs": [], "hours": [8], "period": {}, "params": {}})
+    script = p[p.index('<script>\n"use strict"'):]
+    i = script.index("const fmtDate")
+    fmt = script[i:script.index("};", i) + 2]
+    js = ("const LOC = {fr: 'fr-BE', en: 'en-GB'}, st = {lang: 'fr'};" + fmt +
+          "const a = fmtDate('2026-07-01'), b = fmtDate('2026-07-02'), c = fmtDate('2026-07-01', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'}),"
+          " s = fmtDate('2026-07-01', {day: '2-digit', month: '2-digit', year: '2-digit'}); st.lang = 'en'; const e = fmtDate('2026-07-01');"
+          "console.log(JSON.stringify([a, b, c, s, e]));")
+    a, b, c, s, e = _run_js(js)
+    assert a == "1er juillet 2026" and b == "2 juillet 2026" and c == "mercredi 1er juillet 2026"
+    assert s == "01/07/26" and e == "1 July 2026"
