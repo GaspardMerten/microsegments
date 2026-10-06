@@ -219,7 +219,7 @@ const REFL = () => `${REFH[0]}–${REFH[1]} h`;
 const T = {
   fr: {
     title: (m, l) => `Où les ${m} s'attardent-ils ?`,
-    lede: (L, tk, m1, m) => `Toutes les ${tk} secondes, chaque ${m1} signale sa position. La ligne est découpée en tronçons d'environ ${L} m§, et on compte combien de fois un ${m1} est signalé dans chaque tronçon : 1 signalement ≈ ${tk} secondes passées là. Le temps passé par ${m1} ne dépend pas du nombre de ${m} qui passent : il mesure la lenteur, pas la fréquence. Autour des arrêts, il comprend la montée et la descente des voyageurs ; « Exclus » masque ces zones. Vert = ça roule, rouge = ça bloque : 30 m en 3 s, c'est 36 km/h ; en 24 s, 4,5 km/h.`,
+    lede: (L, tk, m1, m) => `Toutes les ${tk} secondes, chaque ${m1} signale sa position. La ligne est découpée en tronçons d'environ ${L} m§ : 1 signalement dans un tronçon ≈ ${tk} secondes passées là. Le temps passé par ${m1} ne dépend pas du nombre de ${m} qui passent. Vert = ça roule, rouge = ça bloque.`,
     days: 'Jours', dir: 'Sens', ver: 'Version du tracé', bands: 'Moyennes', metric: 'Mesure', stops: 'Arrêts',
     dow: ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'], dowl: ['lundis', 'mardis', 'mercredis', 'jeudis', 'vendredis', 'samedis', 'dimanches'],
     dowd: ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'],
@@ -318,7 +318,7 @@ const T = {
   },
   en: {
     title: (m, l) => `Where do ${m} linger?`,
-    lede: (L, tk, m1, m) => `Every ${tk} seconds, each ${m1} reports its position. The line is cut into stretches of about ${L} m§, and we count how many times a ${m1} is reported in each stretch: 1 position report ≈ ${tk} seconds spent there. The time per ${m1} does not depend on how many ${m} pass: it measures slowness, not frequency. Around stops it includes passengers getting on and off; "Hidden" masks those zones. Green = moving, red = stuck: 30 m in 3 s is 36 km/h; in 24 s, 4.5 km/h.`,
+    lede: (L, tk, m1, m) => `Every ${tk} seconds, each ${m1} reports its position. The line is cut into stretches of about ${L} m§: 1 position report in a stretch ≈ ${tk} seconds spent there. The time per ${m1} does not depend on how many ${m} pass. Green = moving, red = stuck.`,
     days: 'Days', dir: 'Direction', ver: 'Route version', bands: 'Averages', metric: 'Measure', stops: 'Stops',
     dow: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'], dowl: ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'],
     dowd: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
