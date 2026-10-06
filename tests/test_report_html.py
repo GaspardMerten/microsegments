@@ -198,3 +198,59 @@ def test_page_linear_legend_and_fixed_30m(an_hs):
     assert "var(--th) / 2 +" in script
     # big numbers in words, no k / M abbreviation
     assert "' k'" not in script and "' M'" not in script and "millions" in script
+
+
+def _node():
+    import shutil
+    n = shutil.which("node")
+    if not n:
+        pytest.skip("node not installed")
+    return n
+
+
+def _run_js(code: str):
+    import subprocess
+    out = subprocess.run([_node(), "-e", code], capture_output=True, text=True, check=True)
+    return json.loads(out.stdout)
+
+
+def test_page_stop_zone_is_one_block(an_hs):
+    """A shown stop zone is one block: its micro-segments are summed (total time per vehicle, each on its own
+    link's passages) and coloured by that total brought to 30 m of the zone's nominal length; running
+    micro-segments stay one by one; the zone's tooltip gives the total seconds."""
+    an, hs = an_hs
+    p = render(to_contract(an, hotspots=hs))
+    script = p[p.index('<script>\n"use strict"'):]
+    block = script[script.index("// <zones>"):script.index("// </zones>")]
+    # stop zone, 30 m explanation, legend swatch, tooltips: FR and EN
+    for s in ("stopsHelp:", "why30: `Pourquoi 30 m ? À cette taille", "why30: `Why 30 m?", "zone: 'zone d\\'arrêt (un seul bloc)'",
+              "zone: 'stop zone (one block)'", "montée/descente comprise", "boarding and alighting included", 'id="mszone"', 'id="stopsQ"'):
+        assert s in p, s
+    E = {"seg": {"key": list("abcdefgh"), "zone": ["stop", "running", "running", "stop", "stop", "stop", "running", "stop"],
+                 "x0": [0, 30, 60, 90, 120, 150, 180, 210], "len": [30] * 8, "link": [0, 0, 0, 0, 1, 1, 1, 1]},
+         "stops": [{"x": 0, "name": "A"}, {"x": 120, "name": "B"}, {"x": 240, "name": "C"}]}
+    # time per vehicle per micro-segment, in observations per passage (tick 20 s)
+    opp = [0.5, 0.2, 0.2, 1.0, 0.1, 0.4, 0.2, 0.6]
+    js = ("const P = {stop_zone: [30, 60]}, TICK = 20, SC = {L: 30};"
+          "function stopBefore(E, x) { let s = E.stops[0]; for (const t of E.stops) if (t.x <= x + .5) s = t; return s; }"
+          + block +
+          f"const E = {json.dumps(E)}, opp = {json.dumps(opp)};"
+          "const v = opp.map((o, i) => ({i, l: E.seg.link[i], x0: E.seg.x0[i], len: 30, stop: E.seg.zone[i] === 'stop', flags: 0, nd: 10, obs: o,"
+          "  opp: o, ex: i === 7 ? null : o - .2, exl: o - .1, oph: o * 10, pph: 8}));"
+          "const zv = zvals(E, v), it = items(v, E, zv, true), raw = items(v, E, zv, false);"
+          "const c = opp.map((o, i) => ({absent: false, d: .1, dx: .1, lo: i === 3 ? .05 : -.01, hi: .3, oa: o, ob: o + .1, fa: 8, fb: 9}));"
+          "const cz = czvals(E, c);"
+          "console.log(JSON.stringify({Z: zonesOf(E).Z.map(z => [z.idx, z.name, z.len, z.nom]), zv: zv.map(z => [z.tot.opp, z.s30.opp, z.tot.ex, z.l]),"
+          "  items: it.map(b => b.z ? 'Z' + b.zone : b.i), raw: raw.length, cz: cz.map(z => [z.d, z.sig, z.oa])}));")
+    r = _run_js(js)
+    # three blocks: the terminus (one-sided, nominal 30 m), B (90 m), the end (30 m)
+    assert r["Z"] == [[[0], "A", 30, 30], [[3, 4, 5], "B", 90, 90], [[7], "C", 30, 30]]
+    tot, s30, ex, link = r["zv"][1]
+    assert tot == pytest.approx(30.0) and s30 == pytest.approx(10.0)      # 30 s per vehicle over 90 m = 10 s per 30 m
+    assert ex == pytest.approx(30.0 - 3 * 0.2 * 20) and link == 1        # tooltip direction: the outgoing link
+    assert r["zv"][2][2] is None                                          # one micro-segment without value: no zone value
+    assert r["items"] == ["Z0", 1, 2, "Z1", 6, "Z2"] and r["raw"] == 8
+    # comparison: summed differences; "sure" only when the summed bounds exclude zero
+    assert r["cz"][1][0] == pytest.approx(.3) and r["cz"][1][1] is True and r["cz"][0][1] is False
+    assert r["cz"][1][2] == pytest.approx(1.5)
+
