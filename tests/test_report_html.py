@@ -224,7 +224,7 @@ def test_page_stop_zone_is_one_block(an_hs):
     block = script[script.index("// <zones>"):script.index("// </zones>")]
     # stop zone, 30 m explanation, legend swatch, tooltips: FR and EN
     for s in ("stopsHelp:", "why30: `Pourquoi 30 m ? À cette taille", "why30: `Why 30 m?", "zone: 'zone d\\'arrêt (un seul bloc)'",
-              "zone: 'stop zone (one block)'", "montée/descente comprise", "boarding and alighting included", 'id="mszone"', 'id="stopsQ"'):
+              "zone: 'stop zone (one block)'", "montée et descente comprises", "boarding included", 'id="mszone"', 'id="stopsQ"'):
         assert s in p, s
     E = {"seg": {"key": list("abcdefgh"), "zone": ["stop", "running", "running", "stop", "stop", "stop", "running", "stop"],
                  "x0": [0, 30, 60, 90, 120, 150, 180, 210], "len": [30] * 8, "link": [0, 0, 0, 0, 1, 1, 1, 1]},
@@ -268,3 +268,20 @@ def test_page_first_of_month_in_french():
     a, b, c, s, e = _run_js(js)
     assert a == "1er juillet 2026" and b == "2 juillet 2026" and c == "mercredi 1er juillet 2026"
     assert s == "01/07/26" and e == "1 July 2026"
+
+
+def test_page_stop_zone_nominal_length_of_close_stops(an_hs):
+    """Two stops closer than a stop zone share one block; its nominal length is the union of their
+    [stop - 30, stop + 60] inside the run (150 m here), not a single 90 m."""
+    an, hs = an_hs
+    p = render(to_contract(an, hotspots=hs))
+    script = p[p.index('<script>\n"use strict"'):]
+    block = script[script.index("// <zones>"):script.index("// </zones>")]
+    E = {"seg": {"key": list("abcdefg"), "zone": ["running", "stop", "stop", "stop", "stop", "stop", "running"],
+                 "x0": [0, 30, 60, 90, 120, 150, 180], "len": [30] * 7, "link": [0] * 7},
+         "stops": [{"x": 60, "name": "A"}, {"x": 120, "name": "B"}]}
+    js = ("const P = {stop_zone: [30, 60]}, TICK = 20, SC = {L: 30};"
+          "function stopBefore(E, x) { let s = E.stops[0]; for (const t of E.stops) if (t.x <= x + .5) s = t; return s; }"
+          + block + f"const E = {json.dumps(E)};"
+          "console.log(JSON.stringify(zonesOf(E).Z.map(z => [z.idx, z.name, z.len, z.nom])));")
+    assert _run_js(js) == [[[1, 2, 3, 4, 5], "A / B", 150, 150]]
