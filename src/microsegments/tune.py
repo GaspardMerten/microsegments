@@ -7,16 +7,27 @@
   day's counts on a fine grid (``fine_m``, default 5 m) -- so every L is scored on the same data.
   ``cv_se`` is the standard error of the paired per-day difference to the best L.
 * ``ss_cost``: Shimazaki-Shinomoto histogram cost (2 k̄ - v) / (n Δ)^2 on day-band counts.
-* ``reliability``: split-half (weekday-stratified, ``n_splits`` random splits) Pearson correlation of
-  the hour (6-20) x segment matrix of obs per covered hour per metre, Spearman-Brown corrected.
+* ``reliability_excess``: split-half reliability of the **time lost per vehicle** (``excess_per_passage``
+  per metre, day band 6-21 h, i.e. the day profile along the line): the days are split at random into two
+  halves stratified by weekday (``n_splits`` splits), Pearson correlation of the two halves' profiles,
+  Spearman-Brown corrected (2r / (1 + r)), averaged over splits and directions (directions with >= 4 days).
+  It is the quantity the map shows, and it grows with L up to an elbow (30 m on the 2025-2026 STIB tram
+  and bus lines), so it is the criterion that selects.
+* ``reliability``: the same split-half reliability on the hour (6-20) x segment matrix of obs per covered
+  hour per metre. Diagnostic only: the stop / between-stop structure dominates that matrix, so it is
+  saturated (0.95-1.00 at every L) and separates nothing.
 * ``snr``: signal variance / noise variance of that matrix (noise from the half difference).
 * ``loc_spread_m``: median over the top-10 hotspots of the bootstrap SD of the peak position.
-* ``jaccard``: split-half overlap of hotspot footprints (±1 segment tolerance).
+* ``jaccard``: split-half overlap of hotspot footprints (±1 segment tolerance). Diagnostic: too noisy and
+  too dependent on the detection thresholds to gate.
+* ``cv_within_1se``: CV deviance within one standard error of the minimum. Diagnostic: the deviance keeps
+  falling as L shrinks, so the 1-SE rule always picks the smallest L.
 * ``link_total_dev``: max relative deviation of per-link observation totals vs the first L (0 when the
   segmentation partitions every link).
 
-Rule: the smallest L with reliability ≥ 0.8, localisation spread ≤ 30 m (or no hotspot) and CV
-deviance within one standard error of the minimum. Fallback: the CV minimum.
+Rule: the smallest L with ``reliability_excess`` >= ``min_reliability`` (0.8) and localisation spread
+<= ``max_spread_m`` (30 m, or no hotspot). When no length passes, the default ``params.segment_m``
+(30 m) is kept, not the CV minimum (which would pick the finest grid exactly when nothing is stable).
 
 ``sensitivity`` re-runs the analysis over phase offsets, gap caps (needs ``coverage_fn``), stop zones
 (incl. one estimated from the stop-aligned occupancy profile), references and passage sources, and
@@ -155,27 +166,47 @@ def _loo_deviance(an: Analysis, dirid: int, Y: np.ndarray, ov) -> np.ndarray:
     return 2 * np.where(Mf, t, 0.0).sum((1, 2))
 
 
-def _split_half(an: Analysis, dirid: int, n_splits: int, rng) -> tuple[float, float]:
+def _sb(a: np.ndarray, b: np.ndarray) -> float:
+    """Spearman-Brown corrected Pearson correlation of two half estimates (NaN pairs dropped)."""
+    ok = np.isfinite(a) & np.isfinite(b)
+    if ok.sum() < 3:
+        return np.nan
+    r = np.corrcoef(a[ok], b[ok])[0, 1]
+    return float(2 * r / (1 + r)) if np.isfinite(r) else np.nan
+
+
+def _split_half(an: Analysis, dirid: int, n_splits: int, rng) -> tuple[float, float, float]:
+    """(reliability of obs/h/m on the hour x segment matrix, its SNR, reliability of the time lost per
+    vehicle per metre on the day profile), over ``n_splits`` weekday-stratified half splits. The time
+    lost needs >= 4 days (two per half), else NaN."""
     dd = an.dirs[dirid]
     ks = dd.pattern_segs[dd.display_uid]
+    ln = dd.seg_len[ks]
     hc = dd.hour_cols
     hrs = dd.cols[hc]
     ci = hc[(hrs >= 6) & (hrs <= 20)]
-    rel, snr = [], []
+    dcol = int(np.flatnonzero(dd.cols == BAND_HOUR["day"])[0])
+    rel, snr, rex = [], [], []
     for _ in range(n_splits):
         W = _split_weights(dd.dow, rng)
-        e = an.estimate(dirid, W)["obs_per_h"][:, ci][:, :, ks] / dd.seg_len[ks][None, None, :]
+        est = an.estimate(dirid, W)
+        e = est["obs_per_h"][:, ci][:, :, ks] / ln[None, None, :]
         a, b = e[0].reshape(-1), e[1].reshape(-1)
-        ok = np.isfinite(a) & np.isfinite(b)
-        if ok.sum() < 3:
-            continue
-        a, b = a[ok], b[ok]
-        r = np.corrcoef(a, b)[0, 1]
-        rel.append(2 * r / (1 + r))
-        noise = np.var(a - b) / 4
-        tot = np.var((a + b) / 2)
-        snr.append((tot - noise) / noise if noise > 0 else np.inf)
-    return (float(np.mean(rel)) if rel else np.nan, float(np.median(snr)) if snr else np.nan)
+        r = _sb(a, b)
+        if np.isfinite(r):
+            rel.append(r)
+            ok = np.isfinite(a) & np.isfinite(b)
+            a, b = a[ok], b[ok]
+            noise = np.var(a - b) / 4
+            tot = np.var((a + b) / 2)
+            snr.append((tot - noise) / noise if noise > 0 else np.inf)
+        if len(dd.days) >= 4:
+            x = est["excess_per_passage"][:, dcol, ks] / ln[None, :]
+            r = _sb(x[0], x[1])
+            if np.isfinite(r):
+                rex.append(r)
+    return (float(np.mean(rel)) if rel else np.nan, float(np.median(snr)) if snr else np.nan,
+            float(np.mean(rex)) if rex else np.nan)
 
 
 def _ss_cost(an: Analysis, dirid: int) -> float:
@@ -244,6 +275,11 @@ def segment_length(placed: pl.DataFrame, segment_fn: SegmentFn,
                    n_jaccard: int = 3, seed: int = 0, min_reliability: float = 0.8, max_spread_m: float = 30.0,
                    min_jaccard: float = 0.7,
                    hotspot_kw: dict | None = None) -> TuneResult:
+    """Criteria for every candidate length (see the module docstring) and the recommended one: the
+    smallest L whose split-half reliability of the time lost per vehicle (``reliability_excess``) is at
+    least ``min_reliability`` and whose localisation spread is at most ``max_spread_m``; the default
+    ``params.segment_m`` when none passes. ``min_jaccard`` only sets the reported ``jaccard_ok`` column
+    (the hotspot Jaccard and the CV 1-SE rule are diagnostics, not gates)."""
     params = params or Params()
     hotspot_kw = hotspot_kw or {}
     rng = np.random.default_rng(seed)
@@ -260,15 +296,15 @@ def segment_length(placed: pl.DataFrame, segment_fn: SegmentFn,
             fine = _fine_segments(segs, fine_m)
             cube_f = count(placed, fine, params.tick_s, per_vehicle=False)
         dev = 0.0
-        rel, snr, spread, jac, ss = [], [], [], [], []
+        rel, snr, rex, spread, jac, ss = [], [], [], [], [], []
         for dirid, dd in an.dirs.items():
             if len(dd.days) < 2:
                 continue
             ov = _overlap(an, dirid, fine)
             Y = _fine_counts(cube_f, dd, ov[0])
             dev = dev + _loo_deviance(an, dirid, Y, ov)
-            r, s = _split_half(an, dirid, n_splits, rng)
-            rel.append(r); snr.append(s); ss.append(_ss_cost(an, dirid))
+            r, s, x = _split_half(an, dirid, n_splits, rng)
+            rel.append(r); snr.append(s); rex.append(x); ss.append(_ss_cost(an, dirid))
             st = bin_stats(an, dirid, B=B, seed=seed, **hotspot_kw)
             strs = stretches(st)
             spread.append(_loc_spread(st, strs))
@@ -296,6 +332,7 @@ def segment_length(placed: pl.DataFrame, segment_fn: SegmentFn,
         n_seg = sum(len(dd.pattern_segs[dd.display_uid]) for dd in an.dirs.values())
         rows.append({"L": float(L), "n_segments": n_seg, "cv_deviance": float(np.mean(devs[L])),
                      "ss_cost": float(np.mean(ss)) if ss else np.nan,
+                     "reliability_excess": float(np.nanmean(rex)) if np.isfinite(rex).any() else np.nan,
                      "reliability": float(np.nanmean(rel)) if rel else np.nan,
                      "snr": float(np.nanmean(snr)) if snr else np.nan,
                      "loc_spread_m": float(np.nanmedian(spread)) if np.isfinite(spread).any() else np.nan,
@@ -311,36 +348,28 @@ def segment_length(placed: pl.DataFrame, segment_fn: SegmentFn,
         se.append(float(np.std(d, ddof=1) / np.sqrt(len(d))) if len(d) > 1 else 0.0)
     for r, s in zip(rows, se):
         r["cv_se"] = s
+    # diagnostics, not gates: CV deviance within 1 SE of the minimum (it keeps falling as L shrinks,
+    # so this always favours the finest grid), split-half hotspot Jaccard (noisy, threshold-bound)
+    for k, r in enumerate(rows):
+        r["cv_within_1se"] = bool(cv[k] - cv[best] <= max(se[k], 1e-12))
+        r["jaccard_ok"] = bool(not np.isfinite(r["jaccard"]) or r["jaccard"] >= min_jaccard)
     table = pl.DataFrame(rows)
-    # With many days the CV deviance keeps falling as L shrinks (finer bins fit the profile better),
-    # so it cannot pick L alone: hotspots must also be reproducible between halves of the days
-    # (split-half Jaccard, the "stable" criterion of the sensitivity suite). Among the L passing
-    # reliability, localisation and Jaccard, take the smallest whose CV deviance is within 1 SE
-    # (paired per-day differences) of the best eligible one.
+    # Gate: the time lost per vehicle (what the map shows) must replicate between two halves of the
+    # days, and the hotspots must stay in place; the smallest such L keeps the finest resolution.
     ok = []
     for r in rows:
-        rel_ok = r["reliability"] >= min_reliability
+        rel_ok = np.isfinite(r["reliability_excess"]) and r["reliability_excess"] >= min_reliability
         sp_ok = not np.isfinite(r["loc_spread_m"]) or r["loc_spread_m"] <= max_spread_m
-        jac_ok = not np.isfinite(r["jaccard"]) or r["jaccard"] >= min_jaccard
-        ok.append(bool(rel_ok and sp_ok and jac_ok))
+        ok.append(bool(rel_ok and sp_ok))
     table = table.with_columns(pl.Series("eligible", ok, dtype=pl.Boolean))
     if any(ok):
-        e = min((k for k in range(len(rows)) if ok[k]), key=lambda k: cv[k])
-        de = devs[lengths[e]]
-        for k in range(len(rows)):
-            if not ok[k]:
-                continue
-            d = devs[lengths[k]] - de
-            se_k = float(np.std(d, ddof=1) / np.sqrt(len(d))) if len(d) > 1 else 0.0
-            if cv[k] - cv[e] <= max(se_k, 1e-12):
-                rec = Ls[k]
-                break
-        rule = (f"smallest L with reliability >= {min_reliability}, localisation spread <= {max_spread_m} m, "
-                f"split-half hotspot Jaccard >= {min_jaccard} and CV deviance within 1 SE of the best such L "
-                f"(L={Ls[e]:g})")
+        rec = min(L for L, o in zip(Ls, ok) if o)
+        rule = (f"smallest L with split-half reliability of the time lost per vehicle >= {min_reliability} "
+                f"and localisation spread <= {max_spread_m:g} m")
     else:
-        rec = Ls[best]
-        rule = "no L meets every criterion: CV deviance minimum"
+        rec = float(params.segment_m)
+        rule = (f"no length passed (split-half reliability of the time lost per vehicle >= {min_reliability}, "
+                f"localisation spread <= {max_spread_m:g} m): default segment_m={rec:g} kept")
     return TuneResult(table=table, recommended=rec, rule=rule, per_day_deviance=devs)
 
 

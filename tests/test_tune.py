@@ -40,8 +40,26 @@ def test_segment_length_matches_truth(sharp):
     assert t["reliability"].is_not_null().all() and t["cv_deviance"].is_not_null().all()
     # coarser bins: more reliable
     assert t["reliability"][-1] > t["reliability"][0]
+    # the gate is the reliability of the time lost per vehicle; Jaccard and the CV 1-SE rule are diagnostics
+    assert t["reliability_excess"].is_not_null().all()
+    assert {"cv_within_1se", "jaccard_ok", "eligible"} <= set(t.columns)
+    ok = (t["reliability_excess"] >= 0.8) & (t["loc_spread_m"].is_null() | t["loc_spread_m"].is_nan()
+                                              | (t["loc_spread_m"] <= 30))
+    assert t["eligible"].to_list() == ok.to_list()
+    assert res.recommended == t.filter(pl.col("eligible"))["L"].min()
+    assert "time lost per vehicle" in res.rule
     oracle = _oracle(sharp)
     assert abs(LENGTHS.index(res.recommended) - LENGTHS.index(oracle)) <= 1, (res.recommended, oracle, t)
+
+
+def test_segment_length_fallback_keeps_default(sharp):
+    """No length passes the gates: the default params.segment_m is kept, not the CV minimum."""
+    res = tune.segment_length(sharp.placed, sharp.segment_fn, (10, 15, 50), coverage=sharp.coverage,
+                              passages=sharp.passages, pattern_days=sharp.pattern_days, n_splits=3, B=20,
+                              n_jaccard=1, min_reliability=1.01)
+    assert not res.table["eligible"].any()
+    assert res.recommended == 30.0
+    assert "no length passed" in res.rule and "default segment_m=30" in res.rule
 
 
 def test_sensitivity():

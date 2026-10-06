@@ -400,9 +400,10 @@ def tune_curves(tune_result, figsize=(12, 7)):
     _, plt = _plt()
     t = tune_result.table
     L = t["L"].to_numpy()
-    panels = [("cv_deviance", "CV Poisson deviance (lower is better)"), ("reliability", "split-half reliability"),
-              ("loc_spread_m", "hotspot localisation spread (m)"), ("jaccard", "split-half hotspot Jaccard"),
-              ("snr", "signal / noise"), ("link_total_dev", "link total deviation")]
+    panels = [("reliability_excess", "split-half reliability, time lost per vehicle (gate)"),
+              ("loc_spread_m", "hotspot localisation spread (m, gate)"),
+              ("cv_deviance", "CV Poisson deviance (diagnostic)"), ("reliability", "split-half reliability, obs/h"),
+              ("jaccard", "split-half hotspot Jaccard (diagnostic)"), ("link_total_dev", "link total deviation")]
     fig, axes = plt.subplots(2, 3, figsize=figsize, layout="constrained")
     for ax, (col, lab) in zip(axes.flat, panels):
         if col not in t.columns:
@@ -414,7 +415,7 @@ def tune_curves(tune_result, figsize=(12, 7)):
         else:
             ax.plot(L, y, marker="o", ms=4)
         ax.axvline(tune_result.recommended, color="#e5484d", lw=1, ls="--")
-        if col == "reliability":
+        if col in ("reliability_excess", "reliability"):
             ax.axhline(0.8, color="0.5", lw=0.8, ls=":")
         if col == "loc_spread_m":
             ax.axhline(30, color="0.5", lw=0.8, ls=":")

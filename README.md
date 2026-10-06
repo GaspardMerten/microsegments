@@ -132,10 +132,12 @@ always shows values per 30 m and defaults to time spent per vehicle.
 
 ## Choosing the segment length
 
-`microsegments tune` scores L ∈ {10, 15, 20, 30, 40, 50, 75, 100} m (leave-one-day-out Poisson deviance,
-split-half reliability, hotspot localisation spread and Jaccard) and picks the smallest L with reliability
-≥ 0.8, spread ≤ 30 m and deviance within one standard error of the minimum. 30 m is a good default for
-20 s polling at urban speeds; go shorter only with dense GTFS-RT fixes and many days. `--sensitivity`
+`microsegments tune` scores L ∈ {10, 15, 20, 30, 40, 50, 75, 100} m and picks the smallest L whose
+**time lost per vehicle** (day profile) is reproducible: split-half reliability ≥ 0.8 (days split at
+random into two halves stratified by weekday, Spearman-Brown corrected) and hotspot localisation spread
+≤ 30 m. When no length passes, the default 30 m is kept. The leave-one-day-out Poisson deviance (and its
+1-SE rule), the obs/h reliability and the hotspot Jaccard are reported as diagnostics only. 30 m is a good
+default for 20 s polling at urban speeds; go shorter only with dense GTFS-RT fixes and many days. `--sensitivity`
 re-runs phase offsets, gap caps (30, 40, 60, ∞ s), stop zones, references, passage sources and segment
 lengths 15 / 30 / 60 m around the baseline.
 
