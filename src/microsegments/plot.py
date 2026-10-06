@@ -21,12 +21,12 @@ from . import scale as S
 from .metrics import BAND_HOUR, Analysis
 
 METRICS = {
-    "obs_per_h": "observations per hour",
-    "obs_per_h_10m": "observations per hour per 10 m",
-    "obs_per_passage": "observations per passage",
-    "excess_per_passage": "excess observations per passage vs evening",
-    "excess_obs_per_h": "excess observations per hour vs evening",
-    "log2_ratio": "log2 ratio vs evening",
+    "obs_per_h": "position reports per hour",
+    "obs_per_h_10m": "position reports per hour per 10 m",
+    "obs_per_passage": "time spent per vehicle, s",
+    "excess_per_passage": "time lost vs the evening, s per vehicle",
+    "excess_obs_per_h": "extra position reports per hour vs the evening",
+    "log2_ratio": "log2 ratio vs the evening",
 }
 _ALIASES = {"oph": "obs_per_h", "oph10": "obs_per_h_10m", "opp": "obs_per_passage", "ex": "excess_per_passage",
             "excess": "excess_per_passage"}
@@ -76,15 +76,15 @@ def cmap(n: int = 256):
     """The page's colormap over T = seconds per passage per 30 m (green -> red); use with :func:`norm`."""
     matplotlib, _ = _plt()
     from matplotlib.colors import ListedColormap
-    T = S.T_MIN * (S.T_MAX / S.T_MIN) ** np.linspace(0, 1, n)
+    T = np.linspace(S.T_MIN, S.T_MAX, n)   # linear axis in T; colour = the km/h ramp at 108 / T
     cm = ListedColormap(_ramp(S.kmh(T)), name="microsegments")
     return cm.with_extremes(bad=NULL_COLOR) if hasattr(cm, "with_extremes") else cm
 
 
 def norm():
-    """The fixed norm of :func:`cmap`: log axis over T from ``scale.T_MIN`` to ``scale.T_MAX``."""
-    from matplotlib.colors import LogNorm
-    return LogNorm(vmin=S.T_MIN, vmax=S.T_MAX, clip=True)
+    """The fixed norm of :func:`cmap`: linear axis over T from ``scale.T_MIN`` to ``scale.T_MAX``."""
+    from matplotlib.colors import Normalize
+    return Normalize(vmin=S.T_MIN, vmax=S.T_MAX, clip=True)
 
 
 def _no_vmax(vmax):
@@ -103,7 +103,10 @@ def _colorbar(fig, ax, m: str, fraction: float):
     cb = fig.colorbar(sm, ax=ax, fraction=fraction, pad=0.01, extend="both")
     lab = S.from_seconds(m, np.array(S.T_TICKS, dtype=float))
     cb.set_ticks(list(S.T_TICKS))
-    cb.set_ticklabels([("≥ " if i == len(lab) - 1 else "") + f"{x:g}" for i, x in enumerate(np.round(lab, 1))])
+    kmh = S.kmh(np.array(S.T_TICKS, dtype=float))
+    cb.set_ticklabels([("≥ " if i == len(lab) - 1 else "") + f"{x:g}"
+                       + (f" s · {k:.2g} km/h" if m == "obs_per_passage" else "")   # time per vehicle: its speed
+                       for i, (x, k) in enumerate(zip(np.round(lab, 1), kmh))])
     cb.minorticks_off()
     cb.set_label(METRICS[m] + (" (per 10 m)" if m == "obs_per_h_10m" else " (per 30 m)"), fontsize=8)
     return cb

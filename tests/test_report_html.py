@@ -157,19 +157,44 @@ def test_scale_functions():
     assert np.isclose(scale.to_seconds("obs_per_h", 6.0, 30.0), scale.to_seconds("obs_per_h_10m", 2.0, 30.0))
     # legend labels at the fixed ticks (per 30 m; obs_per_h_10m per 10 m)
     t = scale.T_TICKS
-    assert scale.from_seconds("obs_per_passage", t).tolist() == [3, 6, 9, 12, 15, 24]
-    assert scale.from_seconds("excess_per_passage", t).tolist() == [0, 3, 6, 9, 12, 21]
-    assert scale.from_seconds("obs_per_h", t).tolist() == [1.5, 3, 4.5, 6, 7.5, 12]
-    assert scale.from_seconds("obs_per_h_10m", t).tolist() == [0.5, 1, 1.5, 2, 2.5, 4]
+    assert scale.from_seconds("obs_per_passage", t).tolist() == [3, 6, 9, 12, 15, 18, 21, 24]
+    assert scale.from_seconds("excess_per_passage", t).tolist() == [0, 3, 6, 9, 12, 15, 18, 21]
+    assert scale.from_seconds("obs_per_h", t).tolist() == [1.5, 3, 4.5, 6, 7.5, 9, 10.5, 12]
+    assert scale.from_seconds("obs_per_h_10m", t).tolist() == [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4]
     assert scale.position(scale.T_MIN) == 0 and scale.position(1e9) == 1
     assert np.isclose(scale.kmh(4.0), 27.0)
+    # the legend axis is linear in T: ticks every 3 s, evenly spaced; km/h under them
+    assert np.allclose(np.diff(scale.position(np.array(t, dtype=float))), 1 / 7)
+    assert np.isclose(scale.position(13.5), 0.5)
+    assert np.allclose(scale.kmh(np.array(t, dtype=float))[[0, -1]], [36.0, 4.5])
+    # the comparison legend is linear too: -10, -5, 0, 5, 10 s evenly spaced
+    assert scale.CMP_TICKS == (-10, -5, 0, 5, 10)
+    assert np.allclose(scale.cmp_position(np.array(scale.CMP_TICKS, dtype=float)), [0, .25, .5, .75, 1])
 
 
 def test_plot_scale_fixed(an_hs):
+    import numpy as np
     pytest.importorskip("matplotlib")
     from microsegments import plot, scale
     an, _ = an_hs
     n = plot.norm()
     assert (n.vmin, n.vmax) == (scale.T_MIN, scale.T_MAX)
+    # linear norm, as the page's legend bar
+    assert np.isclose(float(n(13.5)), 0.5)
     assert plot.auto_vmax(an, "opp") == plot.auto_vmax(None, "opp") == scale.T_MAX
     assert plot.auto_vmax(an, "ex") == scale.T_MAX - scale.BASE_S
+
+
+def test_page_linear_legend_and_fixed_30m(an_hs):
+    """The page's legend axis is linear in T (tPos), the per-10 m toggle is gone, the default measure is the
+    time per vehicle, and the hour ticks sit at their true place on the slider."""
+    an, hs = an_hs
+    p = render(to_contract(an, hotspots=hs))
+    script = p[p.index('<script>\n"use strict"'):]
+    assert "const tPos = T => (Math.min(SC.T1, Math.max(SC.T0, T)) - SC.T0) / (SC.T1 - SC.T0);" in script
+    assert "Math.log(" not in script.split("const tPos")[1].split("\n")[0]
+    assert 'id="unit"' not in p and "per10" not in script and "10 m" not in script
+    assert "metric: 'opp'" in script
+    assert "var(--th) / 2 +" in script
+    # big numbers in words, no k / M abbreviation
+    assert "' k'" not in script and "' M'" not in script and "millions" in script

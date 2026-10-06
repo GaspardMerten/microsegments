@@ -44,7 +44,9 @@ p.lede{font-size:clamp(17px,1.6vw,19px);color:var(--ink-2);max-width:68ch;margin
 #play:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .slider{flex:1 1 240px;display:flex;flex-direction:column;gap:2px;min-width:0}
 input[type=range]{width:100%;accent-color:var(--acc)}
-.ticks{display:flex;justify-content:space-between;font:11px var(--mono);color:var(--ink-3)}
+/* hour ticks at their true place on the slider (the thumb centre runs from --th/2 to 100% - --th/2) */
+.ticks{position:relative;height:16px;font:11px var(--mono);color:var(--ink-3);--th:16px}
+.ticks span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
 .grp{display:inline-flex;align-items:center;gap:10px;flex-wrap:nowrap}
 .grp[hidden]{display:none}
 @media (max-width:600px){.grp{flex-wrap:wrap;gap:6px}.grp>label{flex-basis:100%}}
@@ -72,12 +74,13 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .lab.hide{display:none}
 .hsm{width:22px;height:22px;border-radius:50%;background:var(--hot);color:#111;font:700 12px/22px var(--sans);text-align:center;box-shadow:0 0 0 2px var(--deep),0 1px 4px rgba(0,0,0,.6)}
 .legend{display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink-2);padding:10px 14px;border-top:1px solid var(--line)}
-.legend .ramp{flex:1 1 260px;min-width:200px;max-width:420px}
+.legend .ramp{flex:1 1 300px;min-width:220px;max-width:480px}
 .legend .ramp .bar{height:8px;border-radius:4px}
 .legend .ramp .tk{position:relative;height:14px;font:10px var(--mono);color:var(--ink-3)}
 .legend .ramp .tk span{position:absolute;transform:translateX(-50%);top:2px;white-space:nowrap}
 .legend .ramp .tk span:first-child{transform:none}
 .legend .ramp .tk span:last-child{transform:translateX(-100%)}
+.legend .ramp .tk.kmh{color:var(--ink-3);opacity:.85}
 .legend .txt{flex:1 1 260px}
 .sw{display:inline-block;width:14px;height:8px;border-radius:2px;vertical-align:middle;margin-right:5px}
 .sw.hatch{background:repeating-linear-gradient(45deg,#5d6a88 0 2px,#18213a 2px 5px)}
@@ -152,7 +155,6 @@ svg{display:block}
       <span class="grp" id="g_ver" hidden><label id="l_ver"></label><div class="seg" id="vers"></div></span>
       <span class="grp"><label id="l_bands"></label><div class="seg" id="bands"></div></span>
       <span class="grp"><label id="l_metric"></label><div class="seg" id="metric"></div></span>
-      <span class="grp" id="g_unit"><label id="l_unit"></label><div class="seg" id="unit"></div></span>
       <span class="grp"><label id="l_stops"></label><div class="seg" id="stopsT"></div></span>
     </div>
   </div>
@@ -211,19 +213,21 @@ const NOUN = {
 };
 const MODE = {fr: {tram: 'Tram', bus: 'Bus', trolleybus: 'Trolleybus', metro: 'Métro', rail: 'Train', ferry: 'Bateau', _: 'Ligne'},
               en: {tram: 'Tram', bus: 'Bus', trolleybus: 'Trolleybus', metro: 'Metro', rail: 'Train', ferry: 'Ferry', _: 'Line'}};
+const REFL = () => `${REFH[0]}–${REFH[1]} h`;
 const T = {
   fr: {
-    title: (m, l) => `Où les ${m} s'attardent-ils\u00a0?`,
-    lede: (L, tk, m1, m) => `Toutes les ${tk} secondes, on note la position de chaque ${m1}. La ligne est découpée en tronçons d'environ ${L} m et on compte combien de fois un ${m1} y est vu : 1 observation ≈ ${tk} s passées là. Vert = ça roule, rouge = ça bloque. « Écart avec le soir » : le temps en plus par rapport à ${REFH[0]}–${REFH[1]} h, quand la circulation est fluide.`,
-    days: 'Jours', dir: 'Sens', ver: 'Version du tracé', bands: 'Moyennes', metric: 'Mesure', unit: 'Par', stops: 'Arrêts',
+    title: (m, l) => `Où les ${m} s'attardent-ils ?`,
+    lede: (L, tk, m1, m) => `Toutes les ${tk} secondes, chaque ${m1} signale sa position. La ligne est découpée en tronçons d'environ ${L} m, et on compte combien de fois un ${m1} est signalé dans chaque tronçon : 1 signalement ≈ ${tk} secondes passées là. Le temps passé par ${m1} ne dépend pas du nombre de ${m} qui passent : il mesure la lenteur, pas la fréquence. Autour des arrêts, il comprend la montée et la descente des voyageurs ; « Exclus » masque ces zones. Vert = ça roule, rouge = ça bloque : 30 m en 3 s, c'est 36 km/h ; en 24 s, 4,5 km/h.`,
+    days: 'Jours', dir: 'Sens', ver: 'Version du tracé', bands: 'Moyennes', metric: 'Mesure', stops: 'Arrêts',
     dow: ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'], dowl: ['lundis', 'mardis', 'mercredis', 'jeudis', 'vendredis', 'samedis', 'dimanches'],
     dowd: ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'],
     alldays: 'tous les jours retenus', weekdays: 'jours ouvrables',
     bandl: {am: 'Pointe du matin', pm: 'Pointe du soir', day: 'Journée', evening: 'Soirée'},
-    metrics: {oph: 'Observations par heure', opp: 'Observations par passage', ex: 'Écart avec le soir', exl: 'Écart avec la ligne'},
+    // buttons (short) and full names of the measures; the order is the buttons' order
+    metrics: m1 => ({opp: `Temps passé par ${m1}`, ex: 'Temps perdu vs soirée', exl: 'Temps perdu vs rythme de la ligne', oph: 'Signalements par heure'}),
+    mname: m1 => ({opp: `Temps passé par ${m1}`, ex: `Temps perdu par rapport à la soirée (${REFL()})`, exl: 'Temps perdu par rapport au rythme habituel de la ligne', oph: 'Signalements par heure'}),
     view: 'Vue', modes: {one: 'Une période', cmp: 'Comparer deux périodes'},
-    cmetrics: {d: 'Temps par passage', dx: 'Écart avec le soir'},
-    unitl: {seg: '30 m', m10: '10 m'},
+    cmetrics: m1 => ({d: `Temps passé par ${m1}`, dx: 'Temps perdu vs soirée'}),
     stopsl: {true: 'Inclus', false: 'Exclus'},
     stopsTitle: (a, b) => `Zone d'arrêt : de ${a} m avant à ${b} m après chaque arrêt`,
     towards: t => `vers ${t}`,
@@ -231,45 +235,47 @@ const T = {
     tiles: {
       days: (n, x) => `jours analysés${x ? ` ; ${x}` : ''}`,
       segs: (n, L) => `microsegments d'environ ${L} m, dans les deux sens`,
-      obs: 'positions comptées sur la période',
+      obs: 'signalements de position comptés sur la période',
       hs: (n) => D.hotspots_status === 'not_computed' ? 'points chauds : pas assez de jours pour les repérer' : n ? 'points chauds : des retards répétés d\'un jour à l\'autre' : 'aucun point chaud net sur la période',
     },
-    hstitle: 'Points chauds', hsnote: (m1, tk) => `Tronçons où chaque ${m1} s'attarde nettement, jour après jour : plus qu'en soirée (${REFH[0]}–${REFH[1]} h) aux mêmes endroits, ou plus que sur le reste de la ligne à toute heure (un feu, un carrefour). La valeur : observations en plus par ${m1} sur tout le tronçon (≈ secondes perdues, à raison de ${tk} s par observation). Cliquez pour le voir sur la carte.`,
+    hstitle: 'Points chauds', hsnote: (m1, tk) => `Tronçons où chaque ${m1} perd nettement du temps, jour après jour : plus qu'en soirée (${REFL()}) aux mêmes endroits, ou plus que le rythme habituel de la ligne à toute heure (un feu, un carrefour). La valeur : signalements en plus par ${m1} sur tout le tronçon (≈ secondes perdues, à raison de ${tk} s par signalement). Cliquez pour le voir sur la carte.`,
     hsnone: 'Aucun point chaud ne ressort dans ce sens : les écarts restent faibles ou varient trop d\'un jour à l\'autre.',
     hsstops: 'Dans ce sens, les points chauds sont aux arrêts : affichez les zones d\'arrêt pour les voir.',
-    crit: {peak: 'comparé au soir', persistent: 'comparé au reste de la ligne', both: 'comparé au soir et au reste de la ligne'},
+    crit: {peak: 'comparé à la soirée', persistent: 'comparé au rythme de la ligne', both: 'comparé à la soirée et au rythme de la ligne'},
     hsalt: 'Les points chauds sont calculés sur la version principale du tracé.',
     hsnot: 'Points chauds non calculés : il faut au moins 5 jours pour juger si un retard se répète.',
     hsmore: n => `Voir les ${n} points chauds`, hsless: 'N\'afficher que les principaux',
     kind: {infrastructure: 'toute la journée', congestion: 'aux heures de pointe', mixed: 'mixte'},
     zone: {stop: 'à l\'arrêt', running: 'entre les arrêts'},
-    perveh: m1 => `obs. par ${m1}`, ci: (a, b) => `IC 95 % : ${a} à ${b}`, daysPct: p => `${p} % des jours`, secs: s => `≈ ${s} s`,
+    perveh: m1 => `signal. par ${m1}`, ci: (a, b) => `IC 95 % : ${a} à ${b}`, daysPct: p => `${p} % des jours`, secs: s => `≈ ${s} s`,
     legend: {
-      oph: (m, u) => `Observations par heure, pour ${u}`,
-      opp: (m1, u) => `Secondes par ${m1}, pour ${u}`,
-      ex: (m1, u) => `Écart avec le soir, s par ${m1} pour ${u}`,
-      exl: (m1, u) => `Écart avec la ligne, s par ${m1} pour ${u}`,
+      lab: {opp: m1 => `Temps passé par ${m1}, en secondes pour 30 m`,
+            ex: m1 => `Temps perdu par rapport à la soirée (${REFL()}), s par ${m1} pour 30 m`,
+            exl: m1 => `Temps perdu par rapport au rythme habituel de la ligne, s par ${m1} pour 30 m`,
+            oph: m1 => 'Signalements par heure, pour 30 m'},
+      freq: (v, m) => `≈ ${v} ${m} par heure à ce moment`, kmhRow: ' ; ligne du bas\u00a0: vitesse en km/h',
       help: {
-        oph: (m1, m) => `Toutes les ${TICK} s, on note où se trouve chaque ${m1}. Ici : combien de fois, en une heure, un ${m1} est vu sur ce bout de voie. Plus il y en a, plus les ${m} y passent de temps (1 observation ≈ ${TICK} s).`,
-        opp: (m1, m) => `Toutes les ${TICK} s, on note où se trouve chaque ${m1}. Plus un bout de voie collecte d'observations, plus les ${m} y restent : vert = ça roule, rouge = ça bloque. 1 observation ≈ ${TICK} s.`,
-        ex: (m1, m) => `Le temps que chaque ${m1} perd ici par rapport au soir (${REFH[0]}–${REFH[1]} h), quand la circulation est fluide. Vert : comme le soir ; rouge : nettement plus lent.`,
-        exl: (m1, m) => `Le temps que chaque ${m1} perd ici par rapport à son allure habituelle sur la ligne, entre deux arrêts. Fait ressortir un feu ou un carrefour lent à toute heure, même le soir.`,
+        opp: (m1, m) => `Le temps qu'un ${m1} passe en moyenne sur ces 30 m : chaque signalement compte pour ${TICK} s. Il ne dépend pas du nombre de ${m} qui passent. Vert = ça roule, rouge = ça bloque. C'est une vitesse : 30 m en 3 s = 36 km/h, en 12 s = 9 km/h, en 24 s = 4,5 km/h. Autour des arrêts, ce temps comprend la montée et la descente des voyageurs.`,
+        oph: (m1, m) => `Combien de fois, en une heure, un ${m1} est signalé sur ces 30 m. Ce nombre dépend à la fois de la lenteur des ${m} et du nombre de ${m} qui passent : deux fois plus de ${m} donnent deux fois plus de signalements, même s'ils roulent aussi vite. Pour comparer des endroits ou des heures, préférez « Temps passé par ${m1} ». Les couleurs supposent environ 10 ${m} par heure.`,
+        ex: (m1, m) => `Le temps passé ici par chaque ${m1} à l'heure choisie, moins le temps passé au même endroit en soirée (${REFL()}), quand la circulation est fluide. La comparaison se fait par ${m1} : qu'il passe moins de ${m} en soirée ne la fausse pas ; seuls restent des effets comme des ${m} moins souvent groupés. Vert : comme en soirée ; rouge : nettement plus lent.`,
+        exl: (m1, m) => `Le rythme habituel de la ligne : pour chaque tronçon entre deux arrêts (hors zones d'arrêt) de la ligne dans ce sens, le temps moyen d'un ${m1} pour 30 m de ${LINEH[0]} h à ${LINEH[1]} h (soirée comprise), sur les jours choisis ; on en prend la médiane. La valeur : le temps passé ici à l'heure choisie, moins ce rythme habituel. Fait ressortir un feu ou un carrefour lent à toute heure, même en soirée.`,
       },
-      masked: 'zone d\'arrêt masquée', nodata: 'pas assez de données', hot: 'point chaud', evening: ' (le soir est la référence)',
+      masked: 'zone d\'arrêt masquée', nodata: 'pas assez de données', hot: 'point chaud', evening: ' (la soirée est la référence)',
       what: 'Explication',
     },
     tip: {
       after: (a, b, s) => `${a} à ${b} m après ${s}`, towards: t => `vers ${t}`,
-      oph: v => `${v} observations par heure`, oph10: v => `${v} par heure pour 10 m`,
-      opp: (v, s) => `${v} observations par passage (≈ ${s} s)`, ex: (v, s) => `${v} par rapport au soir (≈ ${s} s)`,
-      same: 'comme le soir', stop: 'Zone d\'arrêt', nodata: 'pas assez de données', days: n => `${n} jours`, partial: 'tronçon absent certains jours',
-      exl: (v, s) => `${v} par rapport à la ligne (≈ ${s} s)`, freq: (v, m) => `${v} ${m} par heure`,
+      opp: (s, k, m1) => `Temps passé par ${m1} : ${s} s pour 30 m (${k} km/h)`,
+      ex: s => `Temps perdu vs soirée : ${s} s`, same: 'Temps perdu vs soirée : aucun',
+      exl: s => `Temps perdu vs rythme de la ligne : ${s} s`,
+      oph: v => `Signalements par heure : ${v}`, freq: (v, m) => `${v} ${m} par heure`,
+      stop: 'Zone d\'arrêt', nodata: 'pas assez de données', days: n => `${n} jours`, partial: 'tronçon absent certains jours',
     },
     mxtitle: 'Toute la journée d\'un coup d\'œil',
     mxsub: (f, t, d, what, stops, hs) => [`De ${f} à ${t}, ${d}.`, `En colonnes, la ligne découpée en microsegments (traits sombres : arrêts) ; en lignes, les heures. Couleur : ${what}, comme sur la carte${stops ? '' : ' ; hachures : zones d\'arrêt masquées'}.${hs ? ' Contours jaunes : points chauds.' : ''} Cliquez une heure pour l'afficher sur la carte.`],
     full: '⛶ Plein écran', unfull: '✕ Quitter le plein écran',
     proftitle: 'Le long de la ligne, microsegment par microsegment',
-    profsub: (f, t, w, ref, m) => [`De ${f} à ${t}, ${w}.`, `Hauteur : la mesure choisie dans chaque microsegment. Traits verticaux : arrêts.${ref ? ` Trait blanc : le soir (${REFH[0]}–${REFH[1]} h).` : ''} Pointillés jaunes : ${m} par heure (échelle de droite).`],
+    profsub: (f, t, w, ref, m) => [`De ${f} à ${t}, ${w}.`, `Hauteur : la mesure choisie dans chaque microsegment. Traits verticaux : arrêts.${ref ? ` Trait blanc : la soirée (${REFL()}).` : ''} Pointillés jaunes : ${m} par heure (échelle de droite).`],
     perh: m => `${m}/h`,
     covtitle: 'Les jours retenus',
     covsub: (n, x) => [`${n} jours retenus${x ? ` ; ${x}` : ''}.`, `Une case par jour. Un jour est écarté quand le flux de positions manque ou se fige sur plus d'un quart des heures de ${DAYH[0]} à ${DAYH[1]} h ; une heure est écartée sous 80 % de relevés. Survolez une case pour le détail.`],
@@ -283,17 +289,17 @@ const T = {
     vers: (a, b, n) => `${a} – ${b} · ${n} j`, verMain: 'principale', verNote: (r, a) => `${r} tronçon(s) en moins, ${a} en plus que la version principale`,
     mtitle: 'Méthode',
     method: (m, m1) => [
-      `<b>Observations.</b> Chaque relevé de position (environ toutes les ${TICK} s) d'un ${m1} sur la ligne compte pour une observation dans le microsegment où il se trouve. Les ${m} qui attendent au terminus ne comptent pas. Un flux plus dense (GTFS-RT) est ramené à une position par ${m1} toutes les ${TICK} s.`,
+      `<b>Signalements.</b> Chaque position publiée (environ toutes les ${TICK} s) d'un ${m1} sur la ligne compte pour un signalement dans le microsegment où il se trouve. Les ${m} qui attendent au terminus ne comptent pas. Un flux plus dense (GTFS-RT) est ramené à une position par ${m1} toutes les ${TICK} s.`,
       `<b>Microsegments.</b> Chaque tronçon entre deux arrêts est coupé en parts égales d'environ ${P.segment_m} m${P.phase_m ? ` (décalage ${P.phase_m} m)` : ''}.`,
-      `<b>Observations par heure.</b> Le total des observations divisé par le nombre d'heures où le flux était actif. Une heure à 50 % de relevés compte pour une demi-heure : les trous dans les données ne font pas baisser les valeurs.`,
-      `<b>Observations par passage.</b> Le total divisé par le nombre de ${m} passés : multiplié par ${TICK} s, il donne à peu près le temps que chaque ${m1} passe dans le microsegment.`,
-      `<b>Écart avec le soir.</b> Observations par passage à l'heure choisie, moins celles de ${REFH[0]} à ${REFH[1]} h, sur les mêmes jours.`,
-      `<b>Écart avec la ligne.</b> Une seconde référence : le niveau habituel de la ligne dans ce sens, soit la médiane des observations par passage et par mètre des microsegments entre arrêts, de 6 à 23 h, multipliée par la longueur du microsegment. Elle fait ressortir ce qui ralentit à toute heure, soir compris.${agreeText('fr')}`,
+      `<b>Temps passé par ${m1}.</b> Le nombre de signalements divisé par le nombre de ${m} passés, multiplié par ${TICK} s : à peu près le temps que chaque ${m1} passe dans le microsegment, ramené à 30 m. Il ne dépend pas de la fréquence.`,
+      `<b>Signalements par heure.</b> Le total des signalements divisé par le nombre d'heures où le flux était actif ; une heure à 50 % de relevés compte pour une demi-heure, donc les trous dans les données ne font pas baisser les valeurs. Ce nombre dépend à la fois de la lenteur et du nombre de ${m} qui passent.`,
+      `<b>Temps perdu par rapport à la soirée.</b> Le temps passé par ${m1} à l'heure choisie, moins celui de ${REFH[0]} à ${REFH[1]} h, sur les mêmes jours. La comparaison se fait par ${m1} : qu'il passe moins de ${m} en soirée ne la fausse pas ; seuls restent des effets comme des ${m} moins souvent groupés.`,
+      `<b>Temps perdu par rapport au rythme habituel de la ligne.</b> Le rythme habituel : la médiane, sur les microsegments entre deux arrêts (hors zones d'arrêt) de la ligne dans ce sens, du temps moyen par ${m1} et par mètre de ${LINEH[0]} à ${LINEH[1]} h (soirée comprise) sur les jours choisis, ramenée à la longueur du microsegment. La valeur : le temps passé ici moins ce rythme. Elle fait ressortir ce qui ralentit à toute heure, soirée comprise.${agreeText('fr')}`,
       `<b>Zones d'arrêt.</b> De ${(P.stop_zone || [30, 60])[0]} m avant à ${(P.stop_zone || [30, 60])[1]} m après chaque arrêt. Les masquer fait ressortir les feux et les carrefours ; les couleurs ne changent pas.`,
-      `<b>Échelle.</b> Les mêmes couleurs pour toutes les lignes, périodes, jours, heures et options. Chaque mesure est ramenée à 30 m de voie, puis lue sur l'échelle de vitesse de la STIB, du vert (fluide) au rouge (lent) : un passage de 30 m en 4 s fait 27 km/h (vert foncé), en 14 s, 7,5 km/h (rouge), en 24 s ou plus, 4,5 km/h ou moins (rouge foncé). Les écarts (avec le soir, avec la ligne) partagent la même échelle : un écart de +x s se lit comme un passage fluide de 3 s rallongé de x s, donc 0 s en vert, +10 s en rouge, +21 s ou plus en rouge foncé. Les observations par heure se lisent à raison de 2 s par observation (≈ 10 passages par heure) : 1,5 en vert foncé, 12 ou plus en rouge foncé. Afficher « 10 m » ne change que les nombres (divisés par 3), pas les couleurs. Ces repères viennent des données 2025 de plusieurs lignes de tram et de bus : entre les arrêts, un passage prend en médiane 3 à 4,5 s pour 30 m et, au 98e centile, 12 à 23 s.`,
+      `<b>Échelle.</b> Les mêmes couleurs pour toutes les lignes, périodes, jours, heures et options. Chaque mesure est ramenée à 30 m de voie et lue comme une vitesse sur l'échelle de la STIB, du vert (fluide) au rouge (lent) : 30 m en T secondes, c'est 108 / T km/h, soit 3 s = 36 km/h, 6 s = 18 km/h, 12 s = 9 km/h, 24 s ou plus = 4,5 km/h ou moins (rouge foncé). La légende va de 3 à 24 s sur un axe régulier. Les temps perdus (par rapport à la soirée, au rythme de la ligne) partagent la même échelle : +x s se lit comme un passage fluide de 3 s rallongé de x s, donc 0 s en vert, +10 s en rouge, +21 s ou plus en rouge foncé. Les signalements par heure se lisent à raison de 2 s par signalement (≈ 10 passages par heure) : 1,5 en vert foncé, 12 ou plus en rouge foncé. Ces repères viennent des données 2025 de plusieurs lignes de tram et de bus : entre les arrêts, un passage prend en médiane 3 à 4,5 s pour 30 m et, au 98e centile, 12 à 23 s.`,
       `<b>Jours.</b> Chaque valeur est un rapport de sommes sur les jours choisis. Moins il y a de jours, plus les valeurs sont bruitées.`,
       `<b>Changements de tracé.</b> Un microsegment n'est compté que les jours où il fait partie de l'itinéraire principal. La carte suit la version la plus fréquente ; les autres versions s'affichent avec le sélecteur.`,
-      `<b>Points chauds.</b> Deux critères. Comparé au soir : à certaines heures (au moins deux de suite, ou toute une pointe), chaque ${m1} est observé plus souvent qu'entre ${REFH[0]} et ${REFH[1]} h. Comparé au reste de la ligne, entre les arrêts seulement : sur toute la journée, soirée comprise, plus d'observations par mètre que le niveau habituel de la ligne dans ce sens (la médiane des microsegments entre arrêts) ; c'est ce qui fait ressortir un feu ou un carrefour lent à toute heure, que la comparaison au soir efface. Dans les deux cas : au moins ${HTH} s de plus par ${m1} avec 95 % de confiance (en rééchantillonnant les jours), un écart positif au moins 60 % des jours, et une correction pour les tests multiples. Les microsegments voisins forment un tronçon ; les tronçons sont classés par observations en plus par jour. « Toute la journée » : le retard ne disparaît pas en soirée ; « aux heures de pointe » : il est surtout là aux pointes ; « mixte » : un peu des deux.`,
+      `<b>Points chauds.</b> Deux critères. Comparé à la soirée : à certaines heures (au moins deux de suite, ou toute une pointe), chaque ${m1} est signalé plus souvent qu'entre ${REFH[0]} et ${REFH[1]} h. Comparé au rythme habituel de la ligne, entre les arrêts seulement : sur toute la journée, soirée comprise, plus de signalements par mètre que ce rythme dans ce sens (la médiane des microsegments entre arrêts) ; c'est ce qui fait ressortir un feu ou un carrefour lent à toute heure, que la comparaison à la soirée efface. Dans les deux cas : au moins ${HTH} s de plus par ${m1} avec 95 % de confiance (en rééchantillonnant les jours), un écart positif au moins 60 % des jours, et une correction pour les tests multiples. Les microsegments voisins forment un tronçon ; les tronçons sont classés par signalements en plus par jour. « Toute la journée » : le retard ne disparaît pas en soirée ; « aux heures de pointe » : il est surtout là aux pointes ; « mixte » : un peu des deux.`,
     ],
     footer: s => `${s ? 'Données : ' + s + '. ' : ''}Tracé et arrêts : GTFS. Calculs : microsegments.`,
     when: h => `${h} h – ${h + 1} h`, nodir: 'Aucune donnée pour cette ligne.',
@@ -301,16 +307,16 @@ const T = {
   },
   en: {
     title: (m, l) => `Where do ${m} linger?`,
-    lede: (L, tk, m1, m) => `Every ${tk} seconds, we note where each ${m1} is. The line is cut into stretches of about ${L} m and we count how often a ${m1} is seen there: 1 observation ≈ ${tk} s spent there. Green = moving, red = stuck. "Excess over the evening": the extra time compared with ${REFH[0]}–${REFH[1]} h, when traffic flows.`,
-    days: 'Days', dir: 'Direction', ver: 'Route version', bands: 'Averages', metric: 'Measure', unit: 'Per', stops: 'Stops',
+    lede: (L, tk, m1, m) => `Every ${tk} seconds, each ${m1} reports its position. The line is cut into stretches of about ${L} m, and we count how many times a ${m1} is reported in each stretch: 1 position report ≈ ${tk} seconds spent there. The time per ${m1} does not depend on how many ${m} pass: it measures slowness, not frequency. Around stops it includes passengers getting on and off; "Hidden" masks those zones. Green = moving, red = stuck: 30 m in 3 s is 36 km/h; in 24 s, 4.5 km/h.`,
+    days: 'Days', dir: 'Direction', ver: 'Route version', bands: 'Averages', metric: 'Measure', stops: 'Stops',
     dow: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'], dowl: ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'],
     dowd: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     alldays: 'all selected days', weekdays: 'weekdays',
     bandl: {am: 'Morning peak', pm: 'Evening peak', day: 'Daytime', evening: 'Evening'},
-    metrics: {oph: 'Observations per hour', opp: 'Observations per passage', ex: 'Excess over evening', exl: 'Excess over the line'},
+    metrics: m1 => ({opp: `Time spent per ${m1}`, ex: 'Time lost vs evening', exl: 'Time lost vs line rhythm', oph: 'Position reports per hour'}),
+    mname: m1 => ({opp: `Time spent per ${m1}`, ex: `Time lost compared with the evening (${REFL()})`, exl: 'Time lost compared with the line\'s usual rhythm', oph: 'Position reports per hour'}),
     view: 'View', modes: {one: 'One period', cmp: 'Compare two periods'},
-    cmetrics: {d: 'Time per passage', dx: 'Excess over evening'},
-    unitl: {seg: '30 m', m10: '10 m'},
+    cmetrics: m1 => ({d: `Time spent per ${m1}`, dx: 'Time lost vs evening'}),
     stopsl: {true: 'Shown', false: 'Hidden'},
     stopsTitle: (a, b) => `Stop zone: ${a} m before to ${b} m after each stop`,
     towards: t => `to ${t}`,
@@ -318,45 +324,47 @@ const T = {
     tiles: {
       days: (n, x) => `days analysed${x ? `; ${x}` : ''}`,
       segs: (n, L) => `micro-segments of about ${L} m, both directions`,
-      obs: 'positions counted over the period',
+      obs: 'position reports counted over the period',
       hs: (n) => D.hotspots_status === 'not_computed' ? 'hotspots: too few days to find them' : n ? 'hotspots: delays that recur day after day' : 'no clear hotspot over the period',
     },
-    hstitle: 'Hotspots', hsnote: (m1, tk) => `Stretches where each ${m1} clearly lingers, day after day: longer than in the evening (${REFH[0]}–${REFH[1]} h) at the same place, or longer than on the rest of the line at any hour (a signal, a junction). Value: extra observations per ${m1} over the whole stretch (≈ seconds lost, at ${tk} s per observation). Click one to see it on the map.`,
+    hstitle: 'Hotspots', hsnote: (m1, tk) => `Stretches where each ${m1} clearly loses time, day after day: more than in the evening (${REFL()}) at the same place, or more than the line's usual rhythm at any hour (a signal, a junction). Value: extra position reports per ${m1} over the whole stretch (≈ seconds lost, at ${tk} s per report). Click one to see it on the map.`,
     hsnone: 'No hotspot stands out in this direction: the excess stays small or varies too much from day to day.',
     hsstops: 'In this direction the hotspots are at stops: show the stop zones to see them.',
-    crit: {peak: 'vs the evening', persistent: 'vs the rest of the line', both: 'vs the evening and the rest of the line'},
+    crit: {peak: 'vs the evening', persistent: 'vs the line\'s rhythm', both: 'vs the evening and the line\'s rhythm'},
     hsalt: 'Hotspots are computed on the main route version.',
     hsnot: 'Hotspots not computed: at least 5 days are needed to tell whether a delay recurs.',
     hsmore: n => `Show all ${n} hotspots`, hsless: 'Show the main ones only',
     kind: {infrastructure: 'all day', congestion: 'at peak hours', mixed: 'mixed'},
     zone: {stop: 'at a stop', running: 'between stops'},
-    perveh: m1 => `obs. per ${m1}`, ci: (a, b) => `95 % CI: ${a} to ${b}`, daysPct: p => `${p} % of days`, secs: s => `≈ ${s} s`,
+    perveh: m1 => `reports per ${m1}`, ci: (a, b) => `95 % CI: ${a} to ${b}`, daysPct: p => `${p} % of days`, secs: s => `≈ ${s} s`,
     legend: {
-      oph: (m, u) => `Observations per hour, per ${u}`,
-      opp: (m1, u) => `Seconds per ${m1}, per ${u}`,
-      ex: (m1, u) => `Excess over the evening, s per ${m1} per ${u}`,
-      exl: (m1, u) => `Excess over the line, s per ${m1} per ${u}`,
+      lab: {opp: m1 => `Time spent per ${m1}, in seconds per 30 m`,
+            ex: m1 => `Time lost compared with the evening (${REFL()}), s per ${m1} per 30 m`,
+            exl: m1 => `Time lost compared with the line's usual rhythm, s per ${m1} per 30 m`,
+            oph: m1 => 'Position reports per hour, per 30 m'},
+      freq: (v, m) => `≈ ${v} ${m} per hour at this time`, kmhRow: '; below: the speed in km/h',
       help: {
-        oph: (m1, m) => `Every ${TICK} s, we note where each ${m1} is. Here: how many times in an hour a ${m1} is seen on this bit of track. The more, the longer the ${m} spend there (1 observation ≈ ${TICK} s).`,
-        opp: (m1, m) => `Every ${TICK} s, we note where each ${m1} is. The more observations a bit of track collects, the longer the ${m} stay there: green = moving, red = stuck. 1 observation ≈ ${TICK} s.`,
-        ex: (m1, m) => `The time each ${m1} loses here compared with the evening (${REFH[0]}–${REFH[1]} h), when traffic flows. Green: like the evening; red: clearly slower.`,
-        exl: (m1, m) => `The time each ${m1} loses here compared with its usual pace on the line, between stops. Brings out a signal or junction that is slow at every hour, evening included.`,
+        opp: (m1, m) => `The time a ${m1} spends on these 30 m on average: each position report counts for ${TICK} s. It does not depend on how many ${m} pass. Green = moving, red = stuck. It is a speed: 30 m in 3 s = 36 km/h, in 12 s = 9 km/h, in 24 s = 4.5 km/h. Around stops this time includes passengers getting on and off.`,
+        oph: (m1, m) => `How many times in an hour a ${m1} is reported on these 30 m. This number depends both on how slow the ${m} are and on how many ${m} pass: twice as many ${m} give twice as many reports, even at the same speed. To compare places or hours, use "Time spent per ${m1}". The colours assume about 10 ${m} an hour.`,
+        ex: (m1, m) => `The time each ${m1} spends here at the chosen hour, minus the time spent at the same place in the evening (${REFL()}), when traffic flows. The comparison is per ${m1}, so fewer ${m} in the evening do not bias it; only effects such as fewer bunched ${m} remain. Green: like the evening; red: clearly slower.`,
+        exl: (m1, m) => `The line's usual rhythm: for each stretch between two stops (outside stop zones) of the line in this direction, the average time a ${m1} takes for 30 m from ${LINEH[0]} to ${LINEH[1]} h (evening included), on the chosen days; we take the median of those times. Value: the time spent here at the chosen hour minus that usual rhythm. Brings out a signal or junction that is slow at every hour, evening included.`,
       },
       masked: 'stop zone hidden', nodata: 'not enough data', hot: 'hotspot', evening: ' (the evening is the reference)',
       what: 'Explanation',
     },
     tip: {
       after: (a, b, s) => `${a} to ${b} m after ${s}`, towards: t => `to ${t}`,
-      oph: v => `${v} observations per hour`, oph10: v => `${v} per hour per 10 m`,
-      opp: (v, s) => `${v} observations per passage (≈ ${s} s)`, ex: (v, s) => `${v} vs the evening (≈ ${s} s)`,
-      same: 'same as the evening', stop: 'Stop zone', nodata: 'not enough data', days: n => `${n} days`, partial: 'stretch missing on some days',
-      exl: (v, s) => `${v} vs the line (≈ ${s} s)`, freq: (v, m) => `${v} ${m} per hour`,
+      opp: (s, k, m1) => `Time spent per ${m1}: ${s} s per 30 m (${k} km/h)`,
+      ex: s => `Time lost vs evening: ${s} s`, same: 'Time lost vs evening: none',
+      exl: s => `Time lost vs line rhythm: ${s} s`,
+      oph: v => `Position reports per hour: ${v}`, freq: (v, m) => `${v} ${m} per hour`,
+      stop: 'Stop zone', nodata: 'not enough data', days: n => `${n} days`, partial: 'stretch missing on some days',
     },
     mxtitle: 'The whole day at a glance',
     mxsub: (f, t, d, what, stops, hs) => [`From ${f} to ${t}, ${d}.`, `Columns: the line cut into micro-segments (dark lines: stops); rows: hours. Colour: ${what}, as on the map${stops ? '' : '; hatching: stop zones hidden'}.${hs ? ' Yellow outlines: hotspots.' : ''} Click an hour to show it on the map.`],
     full: '⛶ Full screen', unfull: '✕ Exit full screen',
     proftitle: 'Along the line, micro-segment by micro-segment',
-    profsub: (f, t, w, ref, m) => [`From ${f} to ${t}, ${w}.`, `Height: the chosen measure in each micro-segment. Vertical lines: stops.${ref ? ` White line: the evening (${REFH[0]}–${REFH[1]} h).` : ''} Yellow dots: ${m} per hour (right scale).`],
+    profsub: (f, t, w, ref, m) => [`From ${f} to ${t}, ${w}.`, `Height: the chosen measure in each micro-segment. Vertical lines: stops.${ref ? ` White line: the evening (${REFL()}).` : ''} Yellow dots: ${m} per hour (right scale).`],
     perh: m => `${m}/h`,
     covtitle: 'Days used',
     covsub: (n, x) => [`${n} days used${x ? `; ${x}` : ''}.`, `One square per day. A day is dropped when the position feed is missing or frozen for more than a quarter of the hours from ${DAYH[0]} to ${DAYH[1]} h; an hour is dropped below 80 % of polls. Hover a square for details.`],
@@ -369,17 +377,17 @@ const T = {
     vers: (a, b, n) => `${a} – ${b} · ${n} d`, verMain: 'main', verNote: (r, a) => `${r} stretch(es) fewer, ${a} more than the main version`,
     mtitle: 'Method',
     method: (m, m1) => [
-      `<b>Observations.</b> Every position fix (about every ${TICK} s) of a ${m1} on the line counts as one observation in the micro-segment it falls in. ${m[0].toUpperCase() + m.slice(1)} waiting at the terminus are not counted. Denser feeds (GTFS-RT) are thinned to one position per ${m1} every ${TICK} s.`,
+      `<b>Position reports.</b> Every position fix (about every ${TICK} s) of a ${m1} on the line counts as one report in the micro-segment it falls in. ${m[0].toUpperCase() + m.slice(1)} waiting at the terminus are not counted. Denser feeds (GTFS-RT) are thinned to one position per ${m1} every ${TICK} s.`,
       `<b>Micro-segments.</b> Each stretch between two stops is split into equal parts of about ${P.segment_m} m${P.phase_m ? ` (offset ${P.phase_m} m)` : ''}.`,
-      `<b>Observations per hour.</b> Total observations divided by the hours during which the feed was alive. An hour with 50 % of polls counts as half an hour, so data gaps do not lower the values.`,
-      `<b>Observations per passage.</b> Total divided by the number of ${m} that went through: times ${TICK} s, it is roughly the time each ${m1} spends in the micro-segment.`,
-      `<b>Excess over evening.</b> Observations per passage at the chosen hour minus those from ${REFH[0]} to ${REFH[1]} h, on the same days.`,
-      `<b>Excess over the line.</b> A second reference: the line's usual level in that direction, the median observations per passage and per metre of the micro-segments between stops, from 6 to 23 h, times the micro-segment's length. It brings out what is slow at every hour, evening included.${agreeText('en')}`,
+      `<b>Time spent per ${m1}.</b> The number of position reports divided by the number of ${m} that went through, times ${TICK} s: roughly the time each ${m1} spends in the micro-segment, brought to 30 m. It does not depend on the frequency.`,
+      `<b>Position reports per hour.</b> Total reports divided by the hours during which the feed was alive; an hour with 50 % of polls counts as half an hour, so data gaps do not lower the values. This number depends both on how slow the ${m} are and on how many pass.`,
+      `<b>Time lost compared with the evening.</b> The time spent per ${m1} at the chosen hour minus that from ${REFH[0]} to ${REFH[1]} h, on the same days. The comparison is per ${m1}, so fewer ${m} in the evening do not bias it; only effects such as fewer bunched ${m} remain.`,
+      `<b>Time lost compared with the line's usual rhythm.</b> The usual rhythm: the median, over the micro-segments between two stops (outside stop zones) of the line in that direction, of the average time per ${m1} and per metre from ${LINEH[0]} to ${LINEH[1]} h (evening included) on the chosen days, times the micro-segment's length. Value: the time spent here minus that rhythm. It brings out what is slow at every hour, evening included.${agreeText('en')}`,
       `<b>Stop zones.</b> From ${(P.stop_zone || [30, 60])[0]} m before to ${(P.stop_zone || [30, 60])[1]} m after each stop. Hiding them brings out signals and junctions; the colours do not change.`,
-      `<b>Scale.</b> The same colours for every line, period, day, hour and option. Each measure is brought to 30 m of track, then read on the STIB speed scale, from green (fluid) to red (slow): 30 m in 4 s is 27 km/h (dark green), in 14 s 7.5 km/h (red), in 24 s or more 4.5 km/h or less (dark red). Both excesses (vs the evening, vs the line) share that scale: an excess of +x s reads as a fluid 3 s passage made x s longer, so 0 s is green, +10 s red, +21 s or more dark red. Observations per hour are read at 2 s per observation (≈ 10 passages an hour): 1.5 is dark green, 12 or more dark red. Showing "10 m" only changes the numbers (divided by 3), not the colours. These marks come from 2025 data of several tram and bus lines: between stops a passage takes a median 3 to 4.5 s per 30 m and, at the 98th percentile, 12 to 23 s.`,
+      `<b>Scale.</b> The same colours for every line, period, day, hour and option. Each measure is brought to 30 m of track and read as a speed on the STIB scale, from green (fluid) to red (slow): 30 m in T seconds is 108 / T km/h, so 3 s = 36 km/h, 6 s = 18 km/h, 12 s = 9 km/h, 24 s or more = 4.5 km/h or less (dark red). The legend runs from 3 to 24 s on an even axis. Both times lost (vs the evening, vs the line's rhythm) share that scale: +x s reads as a fluid 3 s passage made x s longer, so 0 s is green, +10 s red, +21 s or more dark red. Position reports per hour are read at 2 s per report (≈ 10 passages an hour): 1.5 is dark green, 12 or more dark red. These marks come from 2025 data of several tram and bus lines: between stops a passage takes a median 3 to 4.5 s per 30 m and, at the 98th percentile, 12 to 23 s.`,
       `<b>Days.</b> Each value is a ratio of sums over the chosen days. Fewer days means noisier values.`,
       `<b>Route changes.</b> A micro-segment only counts on days when it is part of the main route. The map follows the most frequent version; the others can be picked with the selector.`,
-      `<b>Hotspots.</b> Two criteria. Vs the evening: at some hours (at least two in a row, or a whole peak), each ${m1} is observed more often than from ${REFH[0]} to ${REFH[1]} h. Vs the rest of the line, between stops only: over the whole day, evening included, more observations per metre than the line's usual level in that direction (the median of the micro-segments between stops); this brings out a signal or a slow junction present at every hour, which the evening comparison cancels. Both need at least ${HTH} s more per ${m1} with 95 % confidence (resampling days), a positive excess on at least 60 % of days, and a multiple-testing correction. Neighbouring micro-segments form a stretch; stretches are ranked by extra observations per day. "All day": the delay does not go away in the evening; "at peak hours": it is mostly there at peaks; "mixed": a bit of both.`,
+      `<b>Hotspots.</b> Two criteria. Vs the evening: at some hours (at least two in a row, or a whole peak), each ${m1} is reported more often than from ${REFH[0]} to ${REFH[1]} h. Vs the line's usual rhythm, between stops only: over the whole day, evening included, more reports per metre than that rhythm in that direction (the median of the micro-segments between stops); this brings out a signal or a slow junction present at every hour, which the evening comparison cancels. Both need at least ${HTH} s more per ${m1} with 95 % confidence (resampling days), a positive excess on at least 60 % of days, and a multiple-testing correction. Neighbouring micro-segments form a stretch; stretches are ranked by extra reports per day. "All day": the delay does not go away in the evening; "at peak hours": it is mostly there at peaks; "mixed": a bit of both.`,
     ],
     footer: s => `${s ? 'Data: ' + s + '. ' : ''}Route and stops: GTFS. Computed with microsegments.`,
     when: h => `${h} h – ${h + 1} h`, nodir: 'No data for this line.',
@@ -387,14 +395,13 @@ const T = {
   },
 };
 
-
 // ---------------------------------------------------------------- two-period comparison: words
 const CT = {
   fr: {
-    title: m => `Qu'est-ce qui a changé pour les ${m} ?`,
+    title: m => `Qu'est-ce qui a changé pour les ${m} ?`,
     more: n => `Voir les ${n} changements`,
     stops: 'Dans ce sens, les changements nets sont aux arrêts : affichez les zones d\'arrêt pour les voir.',
-    lede: (a, b, m1, m) => `Deux périodes comparées microsegment par microsegment : ${a} (avant) et ${b} (après). On compare les observations par passage, c'est-à-dire le temps que chaque ${m1} passe dans le microsegment, quel que soit le nombre de ${m}. En vert, ils passent plus vite qu'avant ; en rouge, ils s'attardent davantage.`,
+    lede: (a, b, m1, m) => `Deux périodes comparées tronçon par tronçon : ${a} (avant) et ${b} (après). On compare le temps passé par ${m1} sur chaque tronçon d'environ 30 m : il ne dépend pas du nombre de ${m} qui passent. Vert : les ${m} passent plus vite qu'avant ; rouge : ils perdent plus de temps.`,
     tiles: {a: 'jours avant', b: 'jours après', slower: 'tronçons plus lents', faster: 'tronçons plus rapides'},
     title2: 'Ce qui a changé',
     note: (m1, m) => `Tronçons où chaque ${m1} gagne ou perd nettement du temps d'une période à l'autre : au moins ${HTH} s, avec 95 % de confiance, sur deux heures de suite ou toute une pointe. Classés par temps gagné ou perdu par jour, tous ${m} confondus. Cliquez pour le voir sur la carte.`,
@@ -404,24 +411,24 @@ const CT = {
     perveh: m1 => `s par ${m1}`, per30: m1 => `s par ${m1}, pour 30 m`, perday: v => `${v} min par jour au total`,
     freq: (a, b, m) => `${a} → ${b} ${m}/h`, freqflag: 'fréquence modifiée : une partie de l\'écart peut venir de l\'horaire',
     ci: (a, b) => `IC 95 % : ${a} à ${b} s`,
-    legend: {d: m1 => `Différence, s par ${m1} pour 30 m`,
-             dx: m1 => `Différence de l'écart au soir, s par ${m1} pour 30 m`,
-             help: {d: m1 => `Pour chaque bout de voie : le temps par ${m1} après, moins le temps avant. Vert : plus rapide qu'avant ; rouge : plus lent ; pâle : différence incertaine.`,
-                    dx: m1 => `Comme la différence, mais calculée sur l'écart avec le soir : si le soir lui-même a changé, ce changement n'est pas compté. Vert : plus rapide ; rouge : plus lent ; pâle : incertain.`},
+    legend: {d: m1 => `Différence de temps passé par ${m1}, s pour 30 m`,
+             dx: m1 => `Différence de temps perdu par rapport à la soirée (${REFL()}), s par ${m1} pour 30 m`,
+             help: {d: m1 => `Pour chaque tronçon : le temps passé par ${m1} après, moins le temps avant. Vert : plus rapide qu'avant ; rouge : plus lent ; pâle : différence incertaine.`,
+                    dx: m1 => `Comme la différence, mais calculée sur le temps perdu par rapport à la soirée (${REFL()}) : si la soirée elle-même a changé, ce changement n'est pas compté. Vert : plus rapide ; rouge : plus lent ; pâle : incertain.`},
              faster: 'plus rapide', slower: 'plus lent', pale: 'pâle : différence incertaine', absent: 'absent avant', chg: 'changement retenu'},
-    tip: {a: (v, s) => `avant : ${v} obs. par passage (≈ ${s} s)`, b: (v, s) => `après : ${v} (≈ ${s} s)`,
+    tip: {a: (s, m1) => `avant : ${s} s par ${m1} pour 30 m`, b: (s, m1) => `après : ${s} s par ${m1} pour 30 m`,
           d: (v, m1) => `<b>${v} s par ${m1}</b>`, unsure: 'différence incertaine', absent: 'absent de la première période',
           freq: (a, b, m) => `${a} → ${b} ${m} par heure`},
-    mxsub: (f, t, a, b, m1, stops, hs) => [`De ${f} à ${t}.`, `Chaque case : la différence de temps par ${m1} entre ${a} et ${b}, à cette heure. Vert : plus rapide ; rouge : plus lent ; pâle : incertain${stops ? '' : ' ; hachures : zones d\'arrêt masquées'}.${hs ? ' Contours jaunes : changements retenus.' : ''} Cliquez une heure pour l'afficher sur la carte.`],
+    mxsub: (f, t, a, b, m1, stops, hs) => [`De ${f} à ${t}.`, `Chaque case : la différence de temps passé par ${m1} entre ${a} et ${b}, à cette heure. Vert : plus rapide ; rouge : plus lent ; pâle : incertain${stops ? '' : ' ; hachures : zones d\'arrêt masquées'}.${hs ? ' Contours jaunes : changements retenus.' : ''} Cliquez une heure pour l'afficher sur la carte.`],
     profsub: (f, t, w, m1, m) => [`De ${f} à ${t}, ${w}.`, `Au-dessus de zéro, chaque ${m1} met plus de temps qu'avant ; en dessous, moins. Pointillés jaunes : ${m} par heure après (échelle de droite).`],
     days: 'mêmes jours de semaine que chaque période',
-    method: (m1, m, a, b) => `<b>Comparaison de deux périodes.</b> ${a} (avant) et ${b} (après), chacune sur ses propres jours et avec sa propre référence. Les microsegments sont appariés d'une période à l'autre ; ceux qui n'existent que dans une période sont écartés. La différence porte sur les observations par passage, donc le temps par ${m1}, ce qui la rend indépendante de la fréquence. L'incertitude vient d'un rééchantillonnage des jours de chaque période. Quand la fréquence change de plus de 20 %, le tronçon est signalé : un horaire différent (plus de ${m}, plus de files) peut expliquer une partie de l'écart.`,
+    method: (m1, m, a, b) => `<b>Comparaison de deux périodes.</b> ${a} (avant) et ${b} (après), chacune sur ses propres jours et avec sa propre référence. Les microsegments sont appariés d'une période à l'autre ; ceux qui n'existent que dans une période sont écartés. La différence porte sur le temps passé par ${m1} (signalements divisés par passages), ce qui la rend indépendante de la fréquence. L'incertitude vient d'un rééchantillonnage des jours de chaque période. Quand la fréquence change de plus de 20 %, le tronçon est signalé : un horaire différent (plus de ${m}, plus de files) peut expliquer une partie de l'écart.`,
   },
   en: {
     title: m => `What changed for the ${m}?`,
     more: n => `Show all ${n} changes`,
     stops: 'In this direction the clear changes are at stops: show the stop zones to see them.',
-    lede: (a, b, m1, m) => `Two periods compared micro-segment by micro-segment: ${a} (before) and ${b} (after). The comparison is on observations per passage, that is the time each ${m1} spends in the micro-segment, whatever the number of ${m}. Green: they go through faster than before; red: they linger longer.`,
+    lede: (a, b, m1, m) => `Two periods compared stretch by stretch: ${a} (before) and ${b} (after). We compare the time spent per ${m1} on each stretch of about 30 m: it does not depend on how many ${m} pass. Green: the ${m} go through faster than before; red: they lose more time.`,
     tiles: {a: 'days before', b: 'days after', slower: 'slower stretches', faster: 'faster stretches'},
     title2: 'What changed',
     note: (m1, m) => `Stretches where each ${m1} clearly gains or loses time from one period to the other: at least ${HTH} s, with 95 % confidence, over two hours in a row or a whole peak. Ranked by time gained or lost per day, all ${m} together. Click one to see it on the map.`,
@@ -431,18 +438,18 @@ const CT = {
     perveh: m1 => `s per ${m1}`, per30: m1 => `s per ${m1}, per 30 m`, perday: v => `${v} min per day in total`,
     freq: (a, b, m) => `${a} → ${b} ${m}/h`, freqflag: 'frequency changed: part of the difference may come from the timetable',
     ci: (a, b) => `95 % CI: ${a} to ${b} s`,
-    legend: {d: m1 => `Difference, s per ${m1} per 30 m`,
-             dx: m1 => `Difference of the excess over the evening, s per ${m1} per 30 m`,
-             help: {d: m1 => `For each bit of track: the time per ${m1} after, minus the time before. Green: faster than before; red: slower; pale: uncertain difference.`,
-                    dx: m1 => `Like the difference, but computed on the excess over the evening: if the evening itself changed, that change is left out. Green: faster; red: slower; pale: uncertain.`},
+    legend: {d: m1 => `Difference in time spent per ${m1}, s per 30 m`,
+             dx: m1 => `Difference in time lost compared with the evening (${REFL()}), s per ${m1} per 30 m`,
+             help: {d: m1 => `For each stretch: the time spent per ${m1} after, minus the time before. Green: faster than before; red: slower; pale: uncertain difference.`,
+                    dx: m1 => `Like the difference, but computed on the time lost compared with the evening (${REFL()}): if the evening itself changed, that change is left out. Green: faster; red: slower; pale: uncertain.`},
              faster: 'faster', slower: 'slower', pale: 'pale: uncertain difference', absent: 'absent before', chg: 'retained change'},
-    tip: {a: (v, s) => `before: ${v} obs. per passage (≈ ${s} s)`, b: (v, s) => `after: ${v} (≈ ${s} s)`,
+    tip: {a: (s, m1) => `before: ${s} s per ${m1} per 30 m`, b: (s, m1) => `after: ${s} s per ${m1} per 30 m`,
           d: (v, m1) => `<b>${v} s per ${m1}</b>`, unsure: 'uncertain difference', absent: 'absent from the first period',
           freq: (a, b, m) => `${a} → ${b} ${m} per hour`},
-    mxsub: (f, t, a, b, m1, stops, hs) => [`From ${f} to ${t}.`, `Each cell: the difference in time per ${m1} between ${a} and ${b}, at that hour. Green: faster; red: slower; pale: uncertain${stops ? '' : '; hatching: stop zones hidden'}.${hs ? ' Yellow outlines: retained changes.' : ''} Click an hour to show it on the map.`],
+    mxsub: (f, t, a, b, m1, stops, hs) => [`From ${f} to ${t}.`, `Each cell: the difference in time spent per ${m1} between ${a} and ${b}, at that hour. Green: faster; red: slower; pale: uncertain${stops ? '' : '; hatching: stop zones hidden'}.${hs ? ' Yellow outlines: retained changes.' : ''} Click an hour to show it on the map.`],
     profsub: (f, t, w, m1, m) => [`From ${f} to ${t}, ${w}.`, `Above zero, each ${m1} takes longer than before; below, less. Yellow dots: ${m} per hour after (right scale).`],
     days: 'same weekdays as each period',
-    method: (m1, m, a, b) => `<b>Comparing two periods.</b> ${a} (before) and ${b} (after), each on its own days and with its own reference. Micro-segments are matched from one period to the other; those that exist in one period only are left out. The difference is in observations per passage, so in time per ${m1}, which makes it independent of the frequency. The uncertainty comes from resampling the days of each period. When the frequency changes by more than 20 %, the stretch is flagged: a different timetable (more ${m}, more queues) may explain part of the difference.`,
+    method: (m1, m, a, b) => `<b>Comparing two periods.</b> ${a} (before) and ${b} (after), each on its own days and with its own reference. Micro-segments are matched from one period to the other; those that exist in one period only are left out. The difference is in time spent per ${m1} (position reports divided by passages), which makes it independent of the frequency. The uncertainty comes from resampling the days of each period. When the frequency changes by more than 20 %, the stretch is flagged: a different timetable (more ${m}, more queues) may explain part of the difference.`,
   },
 };
 
@@ -472,23 +479,26 @@ function colorOf(v) {
 }
 // ---------------------------------------------------------------- one fixed colour scale for the whole site
 // Same constants as microsegments/scale.py (kept in sync by a test). Colour is a fixed function of the value,
-// never computed from the data (no percentile): every line, period, day, hour, band, stop-zone and unit toggle
-// shares it. Each measure is first brought to T = seconds per passage for 30 m of track:
+// never computed from the data (no percentile): every line, period, day, hour, band and stop-zone toggle
+// shares it. Each measure is first brought to T = seconds per passage for 30 m of track (the page always shows 30 m):
 //   obs per passage: T = opp x tick x 30 / len; excesses (vs evening, vs line): T = BASE + excess (s per 30 m);
-//   obs per hour: T = OPH x obs per hour per 30 m. "Per 10 m" only divides the labels by 3.
-// T is read on the STIB speed ramp: 30 m in T s = 108 / T km/h (4 s = 27 km/h dark green, 14.4 s = 7.5 km/h red,
-// >= 24 s = 4.5 km/h dark red). Why these constants (tram and bus lines, weekdays 2025): between stops the median
+//   obs per hour: T = OPH x obs per hour per 30 m.
+// T is read on the STIB speed ramp: 30 m in T s = K / T km/h (4 s = 27 km/h dark green, 14.4 s = 7.5 km/h red,
+// >= 24 s = 4.5 km/h dark red). The legend bar is LINEAR in T (3 to 24 s, ticks every 3 s, km/h under them);
+// only its axis is linear, the colour is still the km/h ramp at K / T. Why these constants (tram and bus lines, weekdays 2025): between stops the median
 // is 3-4.4 s per 30 m, p90 6.5-10 s, p98 12-23 s; stop zones p98 33-46 s; positive excess over the evening:
 // median ~1 s, p98 5-17 s. So typical values stay green and hotspots (10 s and more per 30 m) turn red.
-const SC = {L: 30, T0: 3, T1: 24, TICKS: [3, 6, 9, 12, 15, 24], BASE: 3, OPH: 2, CMP: 10, CTICKS: [-10, -3, 0, 3, 10]};
+const SC = {L: 30, T0: 3, T1: 24, TICKS: [3, 6, 9, 12, 15, 18, 21, 24], BASE: 3, OPH: 2, CMP: 10, CTICKS: [-10, -5, 0, 5, 10], K: 108};
 // no data: flat discreet grey; masked stop zone: grey hatching (SVG pattern #mshatch, legend swatch .sw.hatch)
 const NULLC = '#3a4560', MASKC = 'url(#mshatch)';
 function timeColor(T) {
   if (T == null || !isFinite(T)) return NULLC;
-  return colorOf(108 / Math.max(T, 1e-9));
+  return colorOf(SC.K / Math.max(T, 1e-9));
 }
-const tPos = T => Math.log(Math.min(SC.T1, Math.max(SC.T0, T)) / SC.T0) / Math.log(SC.T1 / SC.T0);
+// position on the legend bar: linear in T
+const tPos = T => (Math.min(SC.T1, Math.max(SC.T0, T)) - SC.T0) / (SC.T1 - SC.T0);
 // Diverging ramp for the comparison: green (faster) - grey - red (slower), fixed +-SC.CMP s per passage per 30 m.
+// The colour eases in with the square root of the difference (a few seconds already show); the legend axis is linear.
 const DIV = [[-1, '#11683e'], [-.45, '#3fb950'], [0, '#4a5470'], [.45, '#f0a13a'], [1, '#e5484d']];
 const DIV_LAB = DIV.map(([v, h]) => [v, toLab(hex2(h))]);
 const FASTC = '#3fb950', SLOWC = '#e5484d';
@@ -504,12 +514,20 @@ function divColor(v, pale) {
 // ---------------------------------------------------------------- state
 const qs = new URLSearchParams(location.search);
 const st = {lang: T[qs.get('lang')] ? qs.get('lang') : (T[document.documentElement.lang] ? document.documentElement.lang : 'fr'),
-            dir: null, ver: null, band: null, hour: null, metric: 'oph', per10: false, stops: qs.get('stops') !== 'false', days: [], hot: null,
+            dir: null, ver: null, band: null, hour: null, metric: 'opp', stops: qs.get('stops') !== 'false', days: [], hot: null,
             mode: D.compare ? 'cmp' : 'one', cmetric: 'd', chg: null};
 const tx = () => T[st.lang];
 const noun = (pl) => { const n = NOUN[st.lang][D.mode] || NOUN[st.lang]._; return pl ? n[1] : n[0]; };
 const nf = (v, d = 1) => v.toLocaleString(LOC[st.lang], {minimumFractionDigits: d, maximumFractionDigits: d});
 const nfa = v => nf(v, Math.abs(v) >= 10 ? 0 : 1);
+// big counts in words: 845 000; 1,2 million / 12 millions (en: 1.2 million). Grouped by hand: some browsers
+// do not group 6-digit numbers in fr-BE. From 10 000, rounded to the thousand.
+const grp = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, st.lang === 'fr' ? '\u202f' : ',');
+const bigNum = v => {
+  if (v < 1e6) return grp(v >= 1e4 ? Math.round(v / 1e3) * 1e3 : Math.round(v));
+  const x = v / 1e6, d = x < 10 ? 1 : 0, r = +x.toFixed(d);
+  return nf(r, r % 1 ? d : 0) + (st.lang === 'fr' ? (r >= 2 ? ' millions' : ' million') : ' million');
+};
 const signed = (v, d = 1) => (v > 0 ? '+' : v < 0 ? '−' : '') + nf(Math.abs(v), d);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 const fmtDate = (s, o = {day: 'numeric', month: 'long', year: 'numeric'}) => new Date(s + 'T12:00:00').toLocaleDateString(LOC[st.lang], o);
@@ -580,16 +598,15 @@ function vals(E, k = key(), days = st.days) {
     const s30 = {oph: oph == null ? null : oph * k30, opp: opp == null ? null : opp * TICK * k30,
                  ex: ex == null ? null : ex * TICK * k30, exl: exl == null ? null : exl * TICK * k30};
     return {i, l, x0: E.seg.x0[i], len, stop: isStop(E, i), flags: E.seg.flags[i] || 0, obs: o ? o[i] : 0,
-            oph, oph10: oph == null ? null : oph * 10 / len, opp, ref, ex, exl, s30, pph: nn && nn[l] > 0 ? p[l] / nn[l] : null, nd: A.nd[l]};
+            oph, opp, ref, ex, exl, s30, pph: nn && nn[l] > 0 ? p[l] / nn[l] : null, nd: A.nd[l]};
   });
 }
 // Value of a measure per 30 m (excesses: positive part), and its T (seconds per passage per 30 m) for the colour.
 const isEx = m => m === 'ex' || m === 'exl';
 function metricVal(v, m = st.metric) { const x = v.s30 ? v.s30[m] : null; return x == null ? null : isEx(m) ? Math.max(0, x) : x; }
 const toT = (x, m = st.metric) => x == null ? null : m === 'oph' ? x * SC.OPH : isEx(m) ? SC.BASE + x : x;
-// shown unit: per 30 m, or per 10 m (labels only: the colour is the same)
-const UDIV = () => st.per10 ? 3 : 1;
-const tickVal = (T, m = st.metric) => (m === 'oph' ? T / SC.OPH : isEx(m) ? T - SC.BASE : T) / UDIV();
+// value of a measure (per 30 m) shown at T on the legend
+const tickVal = (T, m = st.metric) => m === 'oph' ? T / SC.OPH : isEx(m) ? T - SC.BASE : T;
 const colorFor = v => !shown(v) ? MASKC : timeColor(toT(metricVal(v)));
 
 // ---------------------------------------------------------------- helpers
@@ -609,14 +626,16 @@ const whenLabel = () => st.band ? `${tx().bandl[st.band].toLowerCase()} (${BANDD
 function tipHtml(E, v) {
   const t = tx().tip, s = stopBefore(E, v.x0), lk = E.links[v.l];
   let h = `<b>${t.after(Math.round(v.x0 - s.x), Math.round(v.x0 - s.x + v.len), esc(s.name))}</b> (${t.towards(esc(lk ? lk.to : E.to))})<br>`;
+  // every value per 30 m of track, as on the legend
+  const z = v.s30;
   if (v.oph == null) h += t.nodata;
   else {
-    h += t.oph(nfa(v.oph)) + ` · ${t.oph10(nfa(v.oph10))}`;
-    if (v.opp != null) h += '<br>' + t.opp(nf(v.opp, 2), nf(v.opp * TICK, 0));
-    if (v.ex != null) h += '<br>' + (Math.abs(v.ex * TICK) < .5 ? t.same : t.ex(signed(v.ex, 2), signed(v.ex * TICK, 0)));
-    if (v.exl != null) h += '<br>' + t.exl(signed(v.exl, 2), signed(v.exl * TICK, 0));
+    if (z.opp != null) h += t.opp(nfa(z.opp), nf(SC.K / Math.max(z.opp, 1e-9), z.opp > 12 ? 1 : 0), noun(false)) + '<br>';
+    if (z.ex != null) h += (Math.abs(z.ex) < .5 ? t.same : t.ex(signed(z.ex, 0))) + '<br>';
+    if (z.exl != null) h += t.exl(signed(z.exl, 0)) + '<br>';
+    h += t.oph(nfa(z.oph));
   }
-  if (v.pph != null) h += '<br>' + t.freq(nf(v.pph, 1), noun(true));
+  if (v.pph != null) h += ' · ' + t.freq(nf(v.pph, 1), noun(true));
   h += `<br><span style="color:var(--ink-3)">${t.days(Math.round(v.nd))}${v.flags & 32 ? ' · ' + t.partial : ''}</span>`;
   if (v.stop) h += `<br><i>${t.stop}</i>`;
   return h;
@@ -716,8 +735,8 @@ function cTipHtml(E, v) {
   if (v.d == null) return h + l.nodata;
   h += t.d(signed(v.d * TICK, 0), noun(false)) + (v.sig ? '' : ` · <span style="color:var(--ink-3)">${t.unsure}</span>`);
   if (v.lo != null && v.hi != null) h += `<br><span style="color:var(--ink-3)">${ctx().ci(signed(v.lo * TICK, 0), signed(v.hi * TICK, 0))}</span>`;
-  if (v.oa != null) h += '<br>' + t.a(nf(v.oa, 2), nf(v.oa * TICK, 0));
-  if (v.ob != null) h += '<br>' + t.b(nf(v.ob, 2), nf(v.ob * TICK, 0));
+  if (v.oa != null) h += '<br>' + t.a(nf(v.oa * TICK * SC.L / v.len, 0), noun(false));
+  if (v.ob != null) h += '<br>' + t.b(nf(v.ob * TICK * SC.L / v.len, 0), noun(false));
   if (v.fa != null || v.fb != null) h += '<br>' + t.freq(v.fa == null ? '–' : nf(v.fa, 1), v.fb == null ? '–' : nf(v.fb, 1), noun(true));
   if (v.stop) h += `<br><i>${l.stop}</i>`;
   return h;
@@ -728,8 +747,8 @@ const chgDir = () => st.hotAll ? chgShown() : chgShown().slice(0, HOT_TOP);
 const signCol = s => s < 0 ? FASTC : SLOWC;
 function cmpLegend() {
   const c = ctx().legend, mm = st.cmetric, M = SC.CMP;
-  const pos = v => (Math.sign(v) * Math.sqrt(Math.abs(v) / M) + 1) * 50;
-  const bar = Array.from({length: 41}, (_, i) => { const t = (i - 20) / 20; return divColor(Math.sign(t) * M * t * t, false); }).join(',');
+  const pos = v => (Math.min(M, Math.max(-M, v)) / M + 1) * 50;   // linear axis
+  const bar = Array.from({length: 41}, (_, i) => divColor(M * (i - 20) / 20, false)).join(',');
   const tk = SC.CTICKS.map(v => `<span style="left:${pos(v)}%">${v === M ? '≥ ' : v === -M ? '≤ ' : ''}${v ? signed(v, 0) + ' s' : '0'}</span>`).join('');
   const html = `<div class="ramp"><div class="bar" style="background:linear-gradient(90deg,${bar})"></div><div class="tk">${tk}</div></div>` +
     `<span class="txt">${esc(c[mm](noun(false)))}${helpBtn(c.help[mm](noun(false)))}</span>` +
@@ -820,7 +839,7 @@ function texts() {
   document.getElementById('lede').textContent = cm ? ctx().lede(`${fmtDate(CMP.a.first)} – ${fmtDate(CMP.a.last)}`, `${fmtDate(CMP.b.first)} – ${fmtDate(CMP.b.last)}`, noun(false), noun(true))
     : l.lede(nf(P.segment_m || 30, 0), nf(TICK, 0), noun(false), noun(true));
   document.getElementById('l_mode').textContent = l.view;
-  for (const [id, k] of [['l_days', 'days'], ['l_dir', 'dir'], ['l_ver', 'ver'], ['l_bands', 'bands'], ['l_metric', 'metric'], ['l_unit', 'unit'], ['l_stops', 'stops']])
+  for (const [id, k] of [['l_days', 'days'], ['l_dir', 'dir'], ['l_ver', 'ver'], ['l_bands', 'bands'], ['l_metric', 'metric'], ['l_stops', 'stops']])
     document.getElementById(id).textContent = l[k];
   document.getElementById('stopsT').title = l.stopsTitle(...(P.stop_zone || [30, 60]));
   document.getElementById('hstitle').textContent = l.hstitle;
@@ -832,9 +851,12 @@ function texts() {
   document.getElementById('footer').textContent = l.footer(D.source);
   document.getElementById('play').textContent = timer ? l.pause : l.play;
   document.getElementById('mxfull').textContent = mxCard.classList.contains('full') ? l.unfull : l.full;
-  document.getElementById('map').setAttribute('aria-label', l.metrics[st.metric]);
-  const hs = D.hours, tk = [hs[0], 8, 12, 17, hs[hs.length - 1]].filter((h, i, a) => hs.includes(h) && a.indexOf(h) === i);
-  document.getElementById('hticks').innerHTML = tk.map(h => `<span>${h} h</span>`).join('');
+  document.getElementById('map').setAttribute('aria-label', l.mname(noun(false))[st.metric]);
+  // hour ticks at the thumb's true position for that hour (they used to be spread evenly, so the thumb
+  // looked off from the hour shown in the clock)
+  const hs = D.hours, H0 = +hourEl.min, H1 = +hourEl.max, tk = [hs[0], 8, 12, 17, hs[hs.length - 1]].filter((h, i, a) => hs.includes(h) && a.indexOf(h) === i);
+  document.getElementById('hticks').innerHTML = tk.map(h => { const f = H1 > H0 ? (h - H0) / (H1 - H0) : 0;
+    return `<span style="left:calc(var(--th) / 2 + ${f.toFixed(4)} * (100% - var(--th)))">${h} h</span>`; }).join('');
 }
 // "4 jours écartés : 2 fériés, 2 flux incomplets" (missing, frozen and empty feed hours count as one reason)
 const FEED_REASONS = ['low_coverage', 'frozen', 'no_data'];
@@ -864,13 +886,12 @@ function tiles() {
       .map(([b, s]) => `<div class="tile"><b>${b}</b><span>${esc(s)}</span></div>`).join('');
     return;
   }
-  const big = v => v >= 1e6 ? nf(v / 1e6, 1) + (st.lang === 'fr' ? ' M' : 'M') : v >= 1e4 ? nf(v / 1e3, 0) + (st.lang === 'fr' ? ' k' : 'k') : nf(v, 0);
   document.getElementById('tiles').classList.remove('t2');
   document.getElementById('tiles').classList.toggle('t3', !hsOn());
   document.getElementById('tiles').innerHTML = [
     [nf(D.period.days, 0), esc(l.tiles.days(D.period.days, exclSummary(D.period.excluded)))],
     [nf(nseg, 0), l.tiles.segs(nseg, nf(P.segment_m || 30, 0))],
-    [big(tot), l.tiles.obs],
+    [bigNum(tot), l.tiles.obs],
     ...(hsOn() ? [[nf(nh, 0), l.tiles.hs(nh)]] : []),
   ].map(([b, s]) => `<div class="tile"><b>${b}</b><span>${s}</span></div>`).join('');
 }
@@ -902,9 +923,8 @@ function buildControls() {
   buttons($('bands'), Object.keys(BANDDEF).map(k => [k, l.bandl[k], `${BANDDEF[k][0]}–${BANDDEF[k][1]} h`]), k => { stop(); st.band = st.band === k ? null : k; render(); });
   $('g_mode').hidden = !CMP;
   if (CMP) buttons($('modes'), [['one', l.modes.one], ['cmp', l.modes.cmp]], k => { st.mode = k; st.ver = null; st.hot = null; st.chg = null; buildControls(); texts(); tiles(); drawAll(); });
-  if (isCmp()) buttons($('metric'), Object.entries(l.cmetrics), k => { st.cmetric = k; render(); });
-  else buttons($('metric'), Object.entries(l.metrics), k => { st.metric = k; render(); });
-  buttons($('unit'), [['seg', l.unitl.seg], ['m10', l.unitl.m10]], k => { st.per10 = k === 'm10'; render(); });
+  if (isCmp()) buttons($('metric'), Object.entries(l.cmetrics(noun(false))), k => { st.cmetric = k; render(); });
+  else buttons($('metric'), Object.entries(l.metrics(noun(false))).map(([k, t]) => [k, t, l.mname(noun(false))[k]]), k => { st.metric = k; render(); });
   buttons($('stopsT'), [['true', l.stopsl.true], ['false', l.stopsl.false]], k => { st.stops = k === 'true'; render(); });
   buildVersions();
 }
@@ -1009,14 +1029,22 @@ function recolor() {
 // The same bar and tick positions for every measure; only the labels say which measure and unit.
 function legend() {
   if (isCmp()) return cmpLegend();
-  const l = tx().legend, m = st.metric, u = st.per10 ? '10 m' : '30 m', n = SC.TICKS.length;
-  const bar = Array.from({length: 25}, (_, i) => timeColor(SC.T0 * (SC.T1 / SC.T0) ** (i / 24))).join(',');
+  const l = tx().legend, m = st.metric, n = SC.TICKS.length;
+  // linear axis in T: colour stops at evenly spaced T
+  const bar = Array.from({length: 29}, (_, i) => timeColor(SC.T0 + (SC.T1 - SC.T0) * i / 28)).join(',');
   const lab = (T, i) => { const x = tickVal(T, m), d = Math.abs(x - Math.round(x)) < 1e-9 ? 0 : 1;
-    return (i === n - 1 ? '≥ ' : i === 0 && !isEx(m) ? '≤ ' : '') + (isEx(m) && x ? '+' : '') + nf(x, d) + (m === 'oph' ? '' : ' s'); };
+    return (i === n - 1 ? '≥ ' : i === 0 && !isEx(m) ? '≤ ' : '') + (isEx(m) && x ? '+' : '') + nf(x, d) + (m === 'oph' || (i && i < n - 1) ? '' : ' s'); };
   const ticks = SC.TICKS.map((T, i) => `<span style="left:${tPos(T) * 100}%">${lab(T, i)}</span>`).join('');
-  const txt = esc((m === 'oph' ? l.oph(noun(false), u) : m === 'opp' ? l.opp(noun(false), u) : m === 'exl' ? l.exl(noun(false), u)
-    : l.ex(noun(false), u) + (st.band === 'evening' || (!st.band && st.hour >= REFH[0] && st.hour < REFH[1]) ? l.evening : ''))) + helpBtn(l.help[m](noun(false), noun(true)));
-  $('legend').innerHTML = `<div class="ramp"><div class="bar" style="background:linear-gradient(90deg,${bar})"></div><div class="tk">${ticks}</div></div>` +
+  // time per vehicle is a speed: 30 m in T s = K / T km/h, shown under each tick
+  const kmh = m !== 'opp' ? '' : `<div class="tk kmh">${SC.TICKS.map((T, i) => { const k = SC.K / T;
+    return `<span style="left:${tPos(T) * 100}%">${i === n - 1 ? '≤ ' : ''}${nf(k, k % 1 && k < 10 ? 1 : 0)}</span>`; }).join('')}</div>`;
+  // position reports per hour also count the frequency: say how many vehicles pass at that time
+  let freq = '';
+  if (m === 'oph' && entry()) { const f = vals(entry()).map(b => b.pph).filter(x => x != null).sort((a, b) => a - b);
+    if (f.length) freq = l.freq(nf(f[Math.floor(f.length / 2)], 1), noun(true)); }
+  const txt = esc(l.lab[m](noun(false)) + (m === 'ex' && (st.band === 'evening' || (!st.band && st.hour >= REFH[0] && st.hour < REFH[1])) ? l.evening : ''))
+    + (kmh ? esc(l.kmhRow) : '') + helpBtn(l.help[m](noun(false), noun(true))) + (freq ? `<br><b>${esc(freq)}</b>` : '');
+  $('legend').innerHTML = `<div class="ramp"><div class="bar" style="background:linear-gradient(90deg,${bar})"></div><div class="tk">${ticks}</div>${kmh}</div>` +
     `<span class="txt">${txt}</span><span><i class="sw" style="background:${NULLC}"></i>${l.nodata}</span>` +
     (st.stops ? '' : `<span><i class="sw hatch"></i>${l.masked}</span>`) +
     (hotOfDir().length && isMain() ? `<span><i class="hk"></i>${l.hot}</span>` : '');
@@ -1088,7 +1116,7 @@ function drawMatrix() {
   else if (st.band) { const hs = D.hours.filter(h => h >= BANDDEF[st.band][0] && h < BANDDEF[st.band][1]); if (hs.length) s += `<rect x="${m.l - 1}" y="${m.t + D.hours.indexOf(hs[0]) * RH}" width="${W - m.l - m.r + 2}" height="${hs.length * RH}" fill="none" stroke="#b4bdd0" stroke-width="1.5" stroke-dasharray="4 3" pointer-events="none"/>`; }
   svg.innerHTML = s;
   MX = {E, rows, m, RH, W, Ltot, tip: cm ? cTipHtml : tipHtml};
-  const what = l.metrics[st.metric].toLowerCase() + (st.per10 ? ' (10 m)' : ' (30 m)');
+  const what = l.mname(noun(false))[st.metric].toLowerCase() + ' (30 m)';
   setSub($('mxsub'), cm ? ctx().mxsub(E.from, E.to, perLabel(CMP.a), perLabel(CMP.b), noun(false), st.stops, chgDir().length > 0) : l.mxsub(E.from, E.to, daysLabel(), what, st.stops, hsOn() && hotOfDir().length > 0));
 }
 $('mx').addEventListener('mousemove', e => {
@@ -1111,7 +1139,7 @@ function drawProfile() {
   const Ltot = E.stops.length ? E.stops[E.stops.length - 1].x : 1, v = vals(E);
   const evening = st.band !== 'evening' && st.metric !== 'ex' ? vals(E, 'evening') : null;
   // fixed height: the top of the colour scale in the shown unit, whatever the line, hour or days
-  const YM = tickVal(SC.T1), pv = b => { const u = metricVal(b); return u == null ? null : u / UDIV(); };
+  const YM = tickVal(SC.T1), pv = metricVal;
   const x = u => m.l + u / Ltot * (W - m.l - m.r), y = u => m.t + (1 - Math.min(Math.max(u, 0), YM) / YM) * (H - m.t - m.b);
   let s = '<g class="axis">';
   const e10 = Math.pow(10, Math.floor(Math.log10(YM / 5))), step = [1, 2, 2.5, 5, 10].map(f => f * e10).find(v => YM / v <= 6);
@@ -1129,7 +1157,7 @@ function drawProfile() {
   if (evening) { let pth = ''; evening.forEach(b => { const u = pv(b); if (u != null && shown(b)) pth += `M${x(b.x0).toFixed(1)},${y(u).toFixed(1)}H${x(b.x0 + b.len).toFixed(1)}`; });
     s += `<path d="${pth}" stroke="#eef1f6" stroke-width="1.5" fill="none" opacity=".7"/>`; }
   s += freqLine(v.map(b => b.pph), v, x, H, m, W);
-  s += `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${esc(l.metrics[st.metric].toLowerCase())} (${st.metric === 'oph' ? '' : 's, '}${st.per10 ? '10 m' : '30 m'})</text>`;
+  s += `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${W < 560 ? '' : esc(l.mname(noun(false))[st.metric].toLowerCase()) + ' '}(${st.metric === 'oph' ? '' : 's, '}30 m)</text>`;
   svg.innerHTML = s;
   svg.onmousemove = e => { const r = svg.getBoundingClientRect(), u = (e.clientX - r.left - m.l) / (W - m.l - m.r) * Ltot; if (u < 0 || u > Ltot) return hideTip();
     let i = v.findIndex(b => u >= b.x0 && u < b.x0 + b.len); if (i < 0) i = v.length - 1; showTip(e, tipHtml(E, v[i])); };
@@ -1184,8 +1212,6 @@ function render() {
   pressed($('metric'), k => k === (isCmp() ? st.cmetric : st.metric));
   if (CMP) pressed($('modes'), k => k === st.mode);
   $('g_days').hidden = isCmp();
-  pressed($('unit'), k => (k === 'm10') === st.per10);
-  $('g_unit').hidden = isCmp();
   pressed($('stopsT'), k => k === String(st.stops));
   const d = dirOf(); if (!$('g_ver').hidden && d) pressed($('vers'), k => k === (st.ver || d.pattern_uid));
   const dl = isCmp() ? ctx().days : daysLabel();
