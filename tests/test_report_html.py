@@ -223,8 +223,8 @@ def test_page_stop_zone_is_one_block(an_hs):
     script = p[p.index('<script>\n"use strict"'):]
     block = script[script.index("// <zones>"):script.index("// </zones>")]
     # stop zone, 30 m explanation, legend swatch, tooltips: FR and EN
-    for s in ("stopsHelp:", "why30: `Pourquoi 30 m ? À cette taille", "why30: `Why 30 m?", "zone: 'zone d\\'arrêt (un seul bloc)'",
-              "zone: 'stop zone (one block)'", "montée et descente comprises", "boarding included", 'id="mszone"', 'id="stopsQ"'):
+    for s in ("stopsHelp:", "why30: `Pourquoi 30\u00a0m\u00a0? À cette taille", "why30: `Why 30 m?", "zone: 'zone d\\'arrêt'",
+              "zone: 'stop zone'", "montée et descente comprises", "boarding included", 'id="mszone"', 'id="stopsQ"'):
         assert s in p, s
     E = {"seg": {"key": list("abcdefgh"), "zone": ["stop", "running", "running", "stop", "stop", "stop", "running", "stop"],
                  "x0": [0, 30, 60, 90, 120, 150, 180, 210], "len": [30] * 8, "link": [0, 0, 0, 0, 1, 1, 1, 1]},

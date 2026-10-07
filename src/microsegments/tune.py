@@ -172,6 +172,8 @@ def _sb(a: np.ndarray, b: np.ndarray) -> float:
     if ok.sum() < 3:
         return np.nan
     r = np.corrcoef(a[ok], b[ok])[0, 1]
+    # a negative half-half correlation means no reliability; unclipped, r near -1 would explode the mean
+    r = max(float(r), 0.0) if np.isfinite(r) else np.nan
     return float(2 * r / (1 + r)) if np.isfinite(r) else np.nan
 
 
@@ -289,6 +291,7 @@ def segment_length(placed: pl.DataFrame, segment_fn: SegmentFn,
     rows, devs, base_tot = [], {}, None
     fine = cube_f = None
     for L in lengths:
+        rng = np.random.default_rng(seed)   # every L is scored on the same day splits
         segs = segment_fn(L, 0.0)
         cube = count(placed, segs, params.tick_s, per_vehicle=False)
         an = analyse(cube, coverage, passages, segs, pattern_days, select, params, quality)
@@ -369,7 +372,8 @@ def segment_length(placed: pl.DataFrame, segment_fn: SegmentFn,
     else:
         rec = float(params.segment_m)
         rule = (f"no length passed (split-half reliability of the time lost per vehicle >= {min_reliability}, "
-                f"localisation spread <= {max_spread_m:g} m): default segment_m={rec:g} kept")
+                f"localisation spread <= {max_spread_m:g} m): default segment_m={rec:g} kept"
+                + ("" if rec in Ls else " (not among the lengths tried)"))
     return TuneResult(table=table, recommended=rec, rule=rule, per_day_deviance=devs)
 
 

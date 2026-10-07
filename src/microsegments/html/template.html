@@ -210,40 +210,39 @@ const LINEH = [6, 23];   // window of the line-level reference
 
 // ---------------------------------------------------------------- words (fr default, en)
 const NOUN = {
-  fr: {tram: ['tram', 'trams'], bus: ['bus', 'bus'], trolleybus: ['trolleybus', 'trolleybus'], metro: ['métro', 'métros'], rail: ['train', 'trains'], ferry: ['bateau', 'bateaux'], _: ['véhicule', 'véhicules']},
-  en: {tram: ['tram', 'trams'], bus: ['bus', 'buses'], trolleybus: ['trolleybus', 'trolleybuses'], metro: ['metro train', 'metro trains'], rail: ['train', 'trains'], ferry: ['boat', 'boats'], _: ['vehicle', 'vehicles']},
+  fr: {tram: ['tram', 'trams'], bus: ['bus', 'bus'], trolleybus: ['trolleybus', 'trolleybus'], metro: ['rame', 'rames'], rail: ['train', 'trains'], ferry: ['bateau', 'bateaux'], _: ['véhicule', 'véhicules']},
+  en: {tram: ['tram', 'trams'], bus: ['bus', 'buses'], trolleybus: ['trolleybus', 'trolleybuses'], metro: ['train', 'trains'], rail: ['train', 'trains'], ferry: ['boat', 'boats'], _: ['vehicle', 'vehicles']},
 };
 const MODE = {fr: {tram: 'Tram', bus: 'Bus', trolleybus: 'Trolleybus', metro: 'Métro', rail: 'Train', ferry: 'Bateau', _: 'Ligne'},
               en: {tram: 'Tram', bus: 'Bus', trolleybus: 'Trolleybus', metro: 'Metro', rail: 'Train', ferry: 'Ferry', _: 'Line'}};
-const REFL = () => `${REFH[0]}–${REFH[1]} h`;
+const REFL = () => `${REFH[0]}–${REFH[1]} h`;
 const T = {
   fr: {
     title: (m, l) => `Où les ${m} s'attardent-ils ?`,
-    lede: (L, tk, m1, m) => `Toutes les ${tk} secondes, chaque ${m1} signale sa position. La ligne est découpée en tronçons d'environ ${L} m§ : 1 signalement dans un tronçon ≈ ${tk} secondes passées là. Le temps passé par ${m1} ne dépend pas du nombre de ${m} qui passent. Vert = ça roule, rouge = ça bloque.`,
-    days: 'Jours', dir: 'Sens', ver: 'Version du tracé', bands: 'Moyennes', metric: 'Mesure', stops: 'Arrêts',
+    lede: (L, tk, m1, m) => `Toutes les ${tk} secondes, chaque ${m1} signale sa position. La ligne est découpée en microsegments de ${L} m§ : 1 signalement dans un microsegment ≈ ${tk} secondes passées là. Le temps passé par ${m1} ne dépend pas du nombre de ${m} qui passent. Vert = ça roule, rouge = ça bloque.`,
+    days: 'Jours', dir: 'Sens', ver: 'Version du tracé', bands: 'Moyennes', metric: 'Mesure', stops: 'Zones d\'arrêt',
     dow: ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'], dowl: ['lundis', 'mardis', 'mercredis', 'jeudis', 'vendredis', 'samedis', 'dimanches'],
     dowd: ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'],
     alldays: 'tous les jours retenus', weekdays: 'jours ouvrables',
     bandl: {am: 'Pointe du matin', pm: 'Pointe du soir', day: 'Journée', evening: 'Soirée'},
     // buttons (short) and full names of the measures; the order is the buttons' order
-    metrics: m1 => ({opp: `Temps passé par ${m1}`, ex: `Temps perdu par rapport à la soirée (${REFL()})`, exl: 'Temps perdu par rapport au rythme habituel de la ligne', oph: 'Signalements par heure'}),
+    metrics: m1 => ({opp: 'Temps passé', ex: 'Temps perdu (soirée)', exl: 'Temps perdu (ligne)', oph: 'Signalements / h'}),
     mname: m1 => ({opp: `Temps passé par ${m1}`, ex: `Temps perdu par rapport à la soirée (${REFL()})`, exl: 'Temps perdu par rapport au rythme habituel de la ligne', oph: 'Signalements par heure'}),
     view: 'Vue', modes: {one: 'Une période', cmp: 'Comparer deux périodes'},
-    cmetrics: m1 => ({d: `Temps passé par ${m1}`, dx: `Temps perdu par rapport à la soirée (${REFL()})`}),
-    stopsl: {true: 'Inclus', false: 'Exclus'},
+    cmetrics: m1 => ({d: 'Temps passé', dx: 'Temps perdu (soirée)'}),
+    stopsl: {true: 'Affichées', false: 'Masquées'},
     stopsTitle: (a, b) => `Zone d'arrêt : de ${a} m avant à ${b} m après chaque arrêt`,
     // stop zone '*' (toggle and legend); stib: the feed is STIB vehicle-distance (its ~36 m blind zone)
-    stopsHelp: (a, b, stib) => `Zone d'arrêt (${a} m avant, ${b} m après) : ` + (stib
-      ? `la STIB y signale « distance 0 » d'environ 36 m avant à 36 m après l'arrêt, donc on ne sait pas où le temps se perd. `
-      : `près de l'arrêt, la position publiée ne dit pas où le temps se perd. `)
-      + `Elle est montrée comme un seul bloc, montée et descente comprises.`,
-    why30: `Pourquoi 30 m ? À cette taille, le temps perdu sur un tronçon est connu à ± 0,5–1,5 s par véhicule, 2 à 3 fois moins que les écarts visibles sur la carte. Plus court, c'est plus incertain ; plus long, on ne sait plus où est le point lent.`,
+    stopsHelp: (a, b, stib) => `De ${a} m avant à ${b} m après l'arrêt, montrée comme un seul bloc, montée et descente comprises. ` + (stib
+      ? `La STIB y signale « distance 0 » : on ne sait pas où, dans la zone, le temps se perd.`
+      : `Près de l'arrêt, la position publiée ne dit pas où le temps se perd.`),
+    why30: `Pourquoi 30 m ? À cette taille, le temps perdu sur un microsegment est connu à ± 0,5–1,5 s par véhicule, 2 à 3 fois moins que les écarts visibles sur la carte. Plus court, c'est plus incertain ; plus long, on ne sait plus où est le point lent.`,
     towards: t => `vers ${t}`,
-    play: '▶ Journée', pause: '❚❚ Pause', mean: 'moyenne',
+    play: '▶ Lecture', pause: '❚❚ Pause', mean: 'moyenne',
     tiles: {
-      days: (n, x) => `jours analysés${x ? ` ; ${x}` : ''}`,
-      segs: (n, L) => `microsegments d'environ ${L} m, dans les deux sens`,
-      obs: 'signalements de position comptés sur la période',
+      days: (n, x) => `jours retenus${x ? ` ; ${x}` : ''}`,
+      segs: (n, L) => `microsegments de ${L} m (deux sens)`,
+      obs: 'signalements sur la période',
       hs: (n) => D.hotspots_status === 'not_computed' ? 'points chauds : pas assez de jours pour les repérer' : n ? 'points chauds : des retards répétés d\'un jour à l\'autre' : 'aucun point chaud net sur la période',
     },
     hstitle: 'Points chauds', hsnote: (m1, tk) => `Tronçons où chaque ${m1} perd nettement du temps jour après jour, par rapport à la soirée ou au rythme habituel de la ligne. Valeur : secondes perdues par ${m1} sur le tronçon. Cliquez pour le voir sur la carte.`,
@@ -257,18 +256,18 @@ const T = {
     zone: {stop: 'à l\'arrêt', running: 'entre les arrêts'},
     perveh: m1 => `s perdues par ${m1}`, ci: (a, b) => `IC 95 % : ${a} à ${b}`, daysPct: p => `${p} % des jours`, secs: s => `${s} signalements`,
     legend: {
-      lab: {opp: m1 => `Temps passé par ${m1}, en secondes pour 30 m`,
-            ex: m1 => `Temps perdu par rapport à la soirée (${REFL()}), s par ${m1} pour 30 m`,
-            exl: m1 => `Temps perdu par rapport au rythme habituel de la ligne, s par ${m1} pour 30 m`,
-            oph: m1 => 'Signalements par heure, pour 30 m'},
-      freq: (v, m) => `≈ ${v} ${m} par heure à ce moment`, kmhRow: ' ; ligne du bas\u00a0: vitesse en km/h',
+      lab: {opp: m1 => `Temps passé par ${m1}, s pour 30 m`,
+            ex: m1 => `Temps perdu par rapport à la soirée (${REFL()}), s pour 30 m`,
+            exl: m1 => `Temps perdu par rapport au rythme habituel de la ligne, s pour 30 m`,
+            oph: m1 => 'Signalements par heure, pour 30 m'},
+      freq: (v, m) => `≈ ${v} ${m} par heure à ce moment`, kmhRow: ' ; en bas\u00a0: km/h',
       help: {
-        opp: (m1, m) => `Le temps moyen d'un ${m1} sur ces 30 m (1 signalement ≈ ${TICK} s). 30 m en 3 s = 36 km/h ; en 24 s = 4,5 km/h.`,
-        oph: (m1, m) => `Combien de fois par heure un ${m1} est signalé sur ces 30 m. Ce nombre grandit aussi avec le nombre de ${m} : pour comparer, préférez « Temps passé par ${m1} ».`,
-        ex: (m1, m) => `Le temps passé ici par ${m1} à l'heure choisie, moins celui de la soirée (${REFL()}), quand ça roule. Vert : comme en soirée ; rouge : nettement plus lent.`,
-        exl: (m1, m) => `Le temps passé ici par ${m1}, moins le temps médian de la ligne entre les arrêts (${LINEH[0]}–${LINEH[1]} h). Fait ressortir un feu ou un carrefour lent à toute heure.`,
+        opp: (m1, m) => `Temps moyen d'un ${m1} sur 30 m. Chaque ${m1} signale sa position toutes les ${TICK} s : 1 signalement ≈ ${TICK} s.`,
+        oph: (m1, m) => `Nombre de signalements par heure sur ces 30 m ; il augmente aussi avec le nombre de ${m}.`,
+        ex: (m1, m) => `Temps passé à cette heure moins celui de la soirée (${REFL()}, trafic fluide), par ${m1}.`,
+        exl: (m1, m) => `Temps passé ici moins le temps habituel de la ligne entre les arrêts (médiane ${LINEH[0]}–${LINEH[1]} h). Fait ressortir les feux et carrefours lents à toute heure.`,
       },
-      masked: 'zone d\'arrêt masquée', zone: 'zone d\'arrêt (un seul bloc)', nodata: 'pas assez de données', hot: 'point chaud', evening: ' (la soirée est la référence)',
+      masked: 'zone d\'arrêt masquée', zone: 'zone d\'arrêt', nodata: 'pas assez de données', hot: 'point chaud', evening: ' (la soirée est la référence)',
       what: 'Explication',
     },
     tip: {
@@ -283,7 +282,7 @@ const T = {
       zoph: v => `Signalements par heure : ${v}`, zone: (a, b) => `Zone d'arrêt : ${a} m avant, ${b} m après`,
     },
     mxtitle: 'Toute la journée d\'un coup d\'œil',
-    mxsub: (f, t, d, what, stops, hs) => [`De ${f} à ${t}, ${d}.`, `En colonnes, la ligne (traits sombres : arrêts) ; en lignes, les heures. Cliquez une heure pour l'afficher sur la carte.`],
+    mxsub: (f, t, d, what, stops, hs) => [`De ${f} à ${t}, ${d}.`, `En colonnes, la ligne (traits sombres : arrêts) ; en lignes, les heures. Cliquez sur une heure pour l'afficher sur la carte.`],
     full: '⛶ Plein écran', unfull: '✕ Quitter le plein écran',
     proftitle: 'Le long de la ligne, microsegment par microsegment',
     profsub: (f, t, w, ref, m) => [`De ${f} à ${t}, ${w}.`, `Hauteur : la mesure choisie dans chaque microsegment. Traits verticaux : arrêts.${ref ? ` Trait blanc : la soirée (${REFL()}).` : ''} Pointillés jaunes : ${m} par heure (échelle de droite).`],
@@ -291,12 +290,12 @@ const T = {
     covtitle: 'Les jours retenus',
     covsub: (n, x) => [`${n} jours retenus${x ? ` ; ${x}` : ''}.`, `Une case par jour. Un jour est écarté quand le flux de positions manque ou se fige sur plus d'un quart des heures de ${DAYH[0]} à ${DAYH[1]} h ; une heure est écartée sous 80 % de relevés. Survolez une case pour le détail.`],
     cal: {inc: 'retenu', exc: 'écarté', off: 'hors sélection', none: 'pas de données'},
-    reasons: {low_coverage: 'trop peu de relevés', frozen: 'flux figé', line_absent: 'ligne absente du flux', deviation: 'trajets hors itinéraire', vehicle_ratio: 'nombre de véhicules anormal', no_data: 'aucune donnée', excluded: 'écarté à la demande', holiday: 'jour férié', not_selected: 'hors sélection'},
+    reasons: {low_coverage: 'flux incomplet', frozen: 'flux figé', line_absent: 'ligne absente du flux', deviation: 'trajets hors itinéraire', vehicle_ratio: 'nombre de véhicules anormal', no_data: 'aucune donnée', excluded: 'écarté à la demande', holiday: 'jour férié', not_selected: 'hors sélection'},
     // excluded days per reason, short (tiles, calendar caption): [one, several]
     xsum: (n, parts) => `${n} ${n > 1 ? 'jours écartés' : 'jour écarté'} : ${parts}`,
-    xr: {holiday: ['férié', 'fériés'], feed: ['flux incomplet', 'flux incomplets'], line_absent: ['sans la ligne dans le flux', 'sans la ligne dans le flux'],
+    xr: {holiday: ['férié', 'fériés'], feed: ['flux incomplet', 'flux incomplets'], line_absent: ['ligne absente du flux', 'ligne absente du flux'],
       deviation: ['hors itinéraire', 'hors itinéraire'], vehicle_ratio: ['nombre de véhicules anormal', 'nombre de véhicules anormal'], excluded: ['à la demande', 'à la demande']},
-    covday: (c) => `relevés : ${c} % des heures ${DAYH[0]}–${DAYH[1]} h`,
+    covday: (c) => `positions reçues : ${c} % des heures (${DAYH[0]}–${DAYH[1]} h)`,
     vers: (a, b, n) => `${a} – ${b} · ${n} j`, verMain: 'principale', verNote: (r, a) => `${r} tronçon(s) en moins, ${a} en plus que la version principale`,
     mtitle: 'Méthode',
     method: (m, m1) => [
@@ -319,28 +318,27 @@ const T = {
   en: {
     title: (m, l) => `Where do ${m} linger?`,
     lede: (L, tk, m1, m) => `Every ${tk} seconds, each ${m1} reports its position. The line is cut into stretches of about ${L} m§: 1 position report in a stretch ≈ ${tk} seconds spent there. The time per ${m1} does not depend on how many ${m} pass. Green = moving, red = stuck.`,
-    days: 'Days', dir: 'Direction', ver: 'Route version', bands: 'Averages', metric: 'Measure', stops: 'Stops',
+    days: 'Days', dir: 'Direction', ver: 'Route version', bands: 'Averages', metric: 'Measure', stops: 'Stop zones',
     dow: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'], dowl: ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'],
     dowd: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     alldays: 'all selected days', weekdays: 'weekdays',
     bandl: {am: 'Morning peak', pm: 'Evening peak', day: 'Daytime', evening: 'Evening'},
-    metrics: m1 => ({opp: `Time spent per ${m1}`, ex: `Time lost compared with the evening (${REFL()})`, exl: 'Time lost compared with the line\'s usual rhythm', oph: 'Position reports per hour'}),
+    metrics: m1 => ({opp: 'Time spent', ex: 'Time lost (evening)', exl: 'Time lost (line)', oph: 'Reports / h'}),
     mname: m1 => ({opp: `Time spent per ${m1}`, ex: `Time lost compared with the evening (${REFL()})`, exl: 'Time lost compared with the line\'s usual rhythm', oph: 'Position reports per hour'}),
     view: 'View', modes: {one: 'One period', cmp: 'Compare two periods'},
-    cmetrics: m1 => ({d: `Time spent per ${m1}`, dx: `Time lost compared with the evening (${REFL()})`}),
+    cmetrics: m1 => ({d: 'Time spent', dx: 'Time lost (evening)'}),
     stopsl: {true: 'Shown', false: 'Hidden'},
     stopsTitle: (a, b) => `Stop zone: ${a} m before to ${b} m after each stop`,
-    stopsHelp: (a, b, stib) => `Stop zone (${a} m before, ${b} m after): ` + (stib
-      ? `the STIB reports "distance 0" from about 36 m before to 36 m after the stop, so we cannot tell where the time is lost. `
-      : `near the stop, the published position does not tell where the time is lost. `)
-      + `It is shown as one block, boarding included.`,
-    why30: `Why 30 m? At this size, the time lost on a stretch is known to ± 0.5–1.5 s per vehicle, 2 to 3 times less than the differences visible on the map. Shorter is more uncertain; longer, we no longer know where the slow spot is.`,
+    stopsHelp: (a, b, stib) => `From ${a} m before to ${b} m after the stop, shown as one block, boarding included. ` + (stib
+      ? `STIB reports "distance 0" there, so we cannot tell where in the zone the time is lost.`
+      : `Near the stop, the published position does not tell where the time is lost.`),
+    why30: `Why 30 m? At this size, the time lost on a microsegment is known to ± 0.5–1.5 s per vehicle, 2 to 3 times less than the differences visible on the map. Shorter is more uncertain; longer, we no longer know where the slow spot is.`,
     towards: t => `to ${t}`,
-    play: '▶ Day', pause: '❚❚ Pause', mean: 'average',
+    play: '▶ Play', pause: '❚❚ Pause', mean: 'average',
     tiles: {
-      days: (n, x) => `days analysed${x ? `; ${x}` : ''}`,
-      segs: (n, L) => `micro-segments of about ${L} m, both directions`,
-      obs: 'position reports counted over the period',
+      days: (n, x) => `days used${x ? `; ${x}` : ''}`,
+      segs: (n, L) => `${L} m microsegments (both directions)`,
+      obs: 'position reports over the period',
       hs: (n) => D.hotspots_status === 'not_computed' ? 'hotspots: too few days to find them' : n ? 'hotspots: delays that recur day after day' : 'no clear hotspot over the period',
     },
     hstitle: 'Hotspots', hsnote: (m1, tk) => `Stretches where each ${m1} clearly loses time day after day, compared with the evening or with the line's usual rhythm. Value: seconds lost per ${m1} over the stretch. Click one to see it on the map.`,
@@ -354,18 +352,18 @@ const T = {
     zone: {stop: 'at a stop', running: 'between stops'},
     perveh: m1 => `s lost per ${m1}`, ci: (a, b) => `95 % CI: ${a} to ${b}`, daysPct: p => `${p} % of days`, secs: s => `${s} position reports`,
     legend: {
-      lab: {opp: m1 => `Time spent per ${m1}, in seconds per 30 m`,
-            ex: m1 => `Time lost compared with the evening (${REFL()}), s per ${m1} per 30 m`,
-            exl: m1 => `Time lost compared with the line's usual rhythm, s per ${m1} per 30 m`,
+      lab: {opp: m1 => `Time spent per ${m1}, s per 30 m`,
+            ex: m1 => `Time lost compared with the evening (${REFL()}), s per 30 m`,
+            exl: m1 => `Time lost compared with the line's usual rhythm, s per 30 m`,
             oph: m1 => 'Position reports per hour, per 30 m'},
-      freq: (v, m) => `≈ ${v} ${m} per hour at this time`, kmhRow: '; below: the speed in km/h',
+      freq: (v, m) => `≈ ${v} ${m} per hour at this time`, kmhRow: '; below: km/h',
       help: {
-        opp: (m1, m) => `The average time of a ${m1} on these 30 m (1 position report ≈ ${TICK} s). 30 m in 3 s = 36 km/h; in 24 s = 4.5 km/h.`,
-        oph: (m1, m) => `How many times an hour a ${m1} is reported on these 30 m. It also grows with the number of ${m}: to compare, prefer "Time spent per ${m1}".`,
-        ex: (m1, m) => `The time spent here per ${m1} at the chosen hour, minus that of the evening (${REFL()}), when traffic flows. Green: like the evening; red: clearly slower.`,
-        exl: (m1, m) => `The time spent here per ${m1}, minus the line's median time between stops (${LINEH[0]}–${LINEH[1]} h). It brings out a signal or junction that is slow at every hour.`,
+        opp: (m1, m) => `Average time of a ${m1} on 30 m. Each ${m1} reports its position every ${TICK} s: 1 report ≈ ${TICK} s.`,
+        oph: (m1, m) => `Position reports per hour on these 30 m; it also grows with the number of ${m}.`,
+        ex: (m1, m) => `Time spent at this hour minus that of the evening (${REFL()}, free-flowing), per ${m1}.`,
+        exl: (m1, m) => `Time spent here minus the line's usual time between stops (median ${LINEH[0]}–${LINEH[1]} h). Brings out signals and junctions that are slow at every hour.`,
       },
-      masked: 'stop zone hidden', zone: 'stop zone (one block)', nodata: 'not enough data', hot: 'hotspot', evening: ' (the evening is the reference)',
+      masked: 'stop zone hidden', zone: 'stop zone', nodata: 'not enough data', hot: 'hotspot', evening: ' (the evening is the reference)',
       what: 'Explanation',
     },
     tip: {
@@ -388,11 +386,11 @@ const T = {
     covtitle: 'Days used',
     covsub: (n, x) => [`${n} days used${x ? `; ${x}` : ''}.`, `One square per day. A day is dropped when the position feed is missing or frozen for more than a quarter of the hours from ${DAYH[0]} to ${DAYH[1]} h; an hour is dropped below 80 % of polls. Hover a square for details.`],
     cal: {inc: 'used', exc: 'dropped', off: 'not selected', none: 'no data'},
-    reasons: {low_coverage: 'too few polls', frozen: 'frozen feed', line_absent: 'line missing from the feed', deviation: 'off-route trips', vehicle_ratio: 'abnormal vehicle count', no_data: 'no data', excluded: 'excluded on request', holiday: 'public holiday', not_selected: 'not selected'},
+    reasons: {low_coverage: 'incomplete feed', frozen: 'frozen feed', line_absent: 'line missing from the feed', deviation: 'off-route trips', vehicle_ratio: 'abnormal vehicle count', no_data: 'no data', excluded: 'excluded on request', holiday: 'public holiday', not_selected: 'not selected'},
     xsum: (n, parts) => `${n} ${n > 1 ? 'days' : 'day'} dropped: ${parts}`,
     xr: {holiday: ['public holiday', 'public holidays'], feed: ['incomplete feed', 'incomplete feed'], line_absent: ['line missing from the feed', 'line missing from the feed'],
       deviation: ['off-route trips', 'off-route trips'], vehicle_ratio: ['abnormal vehicle count', 'abnormal vehicle count'], excluded: ['on request', 'on request']},
-    covday: (c) => `polls: ${c} % of ${DAYH[0]}–${DAYH[1]} h`,
+    covday: (c) => `positions received: ${c} % of hours (${DAYH[0]}–${DAYH[1]} h)`,
     vers: (a, b, n) => `${a} – ${b} · ${n} d`, verMain: 'main', verNote: (r, a) => `${r} stretch(es) fewer, ${a} more than the main version`,
     mtitle: 'Method',
     method: (m, m1) => [
@@ -420,56 +418,56 @@ const CT = {
     title: m => `Qu'est-ce qui a changé pour les ${m} ?`,
     more: n => `Voir les ${n} changements`,
     stops: 'Dans ce sens, les changements nets sont aux arrêts : affichez les zones d\'arrêt pour les voir.',
-    lede: (a, b, m1, m) => `${a} (avant) et ${b} (après), comparées tronçon par tronçon d'environ 30 m§ sur le temps passé par ${m1}, qui ne dépend pas du nombre de ${m}. Vert : plus rapide qu'avant ; rouge : plus lent.`,
+    lede: (a, b, m1, m) => `Différence de temps passé par ${m1} entre les deux périodes, microsegment par microsegment (30 m§). Vert : plus rapide qu'avant ; rouge : plus lent.`,
     tiles: {a: 'jours avant', b: 'jours après', slower: 'tronçons plus lents', faster: 'tronçons plus rapides'},
     title2: 'Ce qui a changé',
     note: (m1, m) => `Tronçons où chaque ${m1} gagne ou perd nettement du temps (au moins ${HTH} s, 95 % de confiance), classés par temps gagné ou perdu par jour. Cliquez pour le voir sur la carte.`,
     none: 'Aucun changement net dans ce sens.',
     few: 'Pas assez de jours dans une des périodes pour conclure (au moins 5).',
     sign: {'-1': 'plus rapide', '1': 'plus lent'},
-    perveh: m1 => `s par ${m1}`, per30: m1 => `s par ${m1}, pour 30 m`, perday: v => `${v} min par jour au total`,
+    perveh: m1 => `s par ${m1}`, per30: m1 => `s par ${m1} pour 30 m`, perday: v => `${v} min par jour au total`,
     freq: (a, b, m) => `${a} → ${b} ${m}/h`, freqflag: 'fréquence modifiée : une partie de l\'écart peut venir de l\'horaire',
     ci: (a, b) => `IC 95 % : ${a} à ${b} s`,
-    legend: {d: m1 => `Différence de temps passé par ${m1}, s pour 30 m`,
-             dx: m1 => `Différence de temps perdu par rapport à la soirée (${REFL()}), s par ${m1} pour 30 m`,
+    legend: {d: m1 => `Différence de temps passé par ${m1}, s pour 30 m`,
+             dx: m1 => `Différence de temps perdu par rapport à la soirée (${REFL()}), s pour 30 m`,
              help: {d: m1 => `Le temps passé par ${m1} après, moins avant. Pâle : différence incertaine.`,
                     dx: m1 => `La même différence, sur le temps perdu par rapport à la soirée (${REFL()}) : un changement de la soirée elle-même n'est pas compté.`},
              faster: 'plus rapide', slower: 'plus lent', pale: 'pâle : différence incertaine', absent: 'absent avant', chg: 'changement retenu'},
     tip: {a: (s, m1) => `avant : ${s} s par ${m1} pour 30 m`, b: (s, m1) => `après : ${s} s par ${m1} pour 30 m`,
-          d: (v, m1) => `<b>${v} s par ${m1}</b>`, unsure: 'différence incertaine', absent: 'absent de la première période',
+          d: (v, m1) => `Différence : <b>${v} s</b> par ${m1} pour 30 m`, unsure: 'différence incertaine', absent: 'absent de la première période',
           freq: (a, b, m) => `${a} → ${b} ${m} par heure`,
-          zd: (v, m1) => `<b>${v} s par ${m1}</b>`, za: (s, m1) => `avant : ${s} s par ${m1}`, zb: (s, m1) => `après : ${s} s par ${m1}`},
-    mxsub: (f, t, a, b, m1, stops, hs) => [`De ${f} à ${t}.`, `En colonnes, la ligne (traits sombres : arrêts) ; en lignes, les heures. Cliquez une heure pour l'afficher sur la carte.`],
+          zd: (v, m1) => `Différence : <b>${v} s</b> par ${m1} dans la zone`, za: (s, m1) => `avant : ${s} s par ${m1}`, zb: (s, m1) => `après : ${s} s par ${m1}`},
+    mxsub: (f, t, a, b, m1, stops, hs) => [`De ${f} à ${t}.`, `En colonnes, la ligne (traits sombres : arrêts) ; en lignes, les heures. Cliquez sur une heure pour l'afficher sur la carte.`],
     profsub: (f, t, w, m1, m) => [`De ${f} à ${t}, ${w}.`, `Au-dessus de zéro, chaque ${m1} met plus de temps qu'avant ; en dessous, moins. Pointillés jaunes : ${m} par heure après (échelle de droite).`],
-    days: 'mêmes jours de semaine que chaque période',
+    days: 'mêmes jours dans les deux périodes',
     method: (m1, m, a, b) => `<b>Comparaison de deux périodes.</b> ${a} (avant) et ${b} (après), chacune sur ses propres jours et avec sa propre référence. Les microsegments sont appariés d'une période à l'autre ; ceux qui n'existent que dans une période sont écartés. La différence porte sur le temps passé par ${m1} (signalements divisés par passages), ce qui la rend indépendante de la fréquence. L'incertitude vient d'un rééchantillonnage des jours de chaque période. Quand la fréquence change de plus de 20 %, le tronçon est signalé : un horaire différent (plus de ${m}, plus de files) peut expliquer une partie de l'écart.`,
   },
   en: {
     title: m => `What changed for the ${m}?`,
     more: n => `Show all ${n} changes`,
     stops: 'In this direction the clear changes are at stops: show the stop zones to see them.',
-    lede: (a, b, m1, m) => `${a} (before) and ${b} (after), compared stretch by stretch of about 30 m§ on the time spent per ${m1}, which does not depend on how many ${m} pass. Green: faster than before; red: slower.`,
+    lede: (a, b, m1, m) => `Difference in time spent per ${m1} between the two periods, microsegment by microsegment (30 m§). Green: faster than before; red: slower.`,
     tiles: {a: 'days before', b: 'days after', slower: 'slower stretches', faster: 'faster stretches'},
     title2: 'What changed',
     note: (m1, m) => `Stretches where each ${m1} clearly gains or loses time (at least ${HTH} s, 95 % confidence), ranked by time gained or lost per day. Click one to see it on the map.`,
     none: 'No clear change in this direction.',
     few: 'Too few days in one of the periods to conclude (at least 5).',
     sign: {'-1': 'faster', '1': 'slower'},
-    perveh: m1 => `s per ${m1}`, per30: m1 => `s per ${m1}, per 30 m`, perday: v => `${v} min per day in total`,
+    perveh: m1 => `s per ${m1}`, per30: m1 => `s per ${m1} per 30 m`, perday: v => `${v} min per day in total`,
     freq: (a, b, m) => `${a} → ${b} ${m}/h`, freqflag: 'frequency changed: part of the difference may come from the timetable',
     ci: (a, b) => `95 % CI: ${a} to ${b} s`,
     legend: {d: m1 => `Difference in time spent per ${m1}, s per 30 m`,
-             dx: m1 => `Difference in time lost compared with the evening (${REFL()}), s per ${m1} per 30 m`,
+             dx: m1 => `Difference in time lost compared with the evening (${REFL()}), s per 30 m`,
              help: {d: m1 => `The time spent per ${m1} after, minus before. Pale: uncertain difference.`,
                     dx: m1 => `The same difference, on the time lost compared with the evening (${REFL()}): a change of the evening itself is left out.`},
              faster: 'faster', slower: 'slower', pale: 'pale: uncertain difference', absent: 'absent before', chg: 'retained change'},
     tip: {a: (s, m1) => `before: ${s} s per ${m1} per 30 m`, b: (s, m1) => `after: ${s} s per ${m1} per 30 m`,
-          d: (v, m1) => `<b>${v} s per ${m1}</b>`, unsure: 'uncertain difference', absent: 'absent from the first period',
+          d: (v, m1) => `Difference: <b>${v} s</b> per ${m1} per 30 m`, unsure: 'uncertain difference', absent: 'absent from the first period',
           freq: (a, b, m) => `${a} → ${b} ${m} per hour`,
-          zd: (v, m1) => `<b>${v} s per ${m1}</b>`, za: (s, m1) => `before: ${s} s per ${m1}`, zb: (s, m1) => `after: ${s} s per ${m1}`},
+          zd: (v, m1) => `Difference: <b>${v} s</b> per ${m1} in the zone`, za: (s, m1) => `before: ${s} s per ${m1}`, zb: (s, m1) => `after: ${s} s per ${m1}`},
     mxsub: (f, t, a, b, m1, stops, hs) => [`From ${f} to ${t}.`, `Columns: the line (dark lines: stops); rows: hours. Click an hour to show it on the map.`],
     profsub: (f, t, w, m1, m) => [`From ${f} to ${t}, ${w}.`, `Above zero, each ${m1} takes longer than before; below, less. Yellow dots: ${m} per hour after (right scale).`],
-    days: 'same weekdays as each period',
+    days: 'same days in both periods',
     method: (m1, m, a, b) => `<b>Comparing two periods.</b> ${a} (before) and ${b} (after), each on its own days and with its own reference. Micro-segments are matched from one period to the other; those that exist in one period only are left out. The difference is in time spent per ${m1} (position reports divided by passages), which makes it independent of the frequency. The uncertainty comes from resampling the days of each period. When the frequency changes by more than 20 %, the stretch is flagged: a different timetable (more ${m}, more queues) may explain part of the difference.`,
   },
 };
@@ -545,7 +543,8 @@ const nfa = v => nf(v, Math.abs(v) >= 10 ? 0 : 1);
 // do not group 6-digit numbers in fr-BE. From 10 000, rounded to the thousand.
 const grp = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, st.lang === 'fr' ? '\u202f' : ',');
 const bigNum = v => {
-  if (v < 1e6) return grp(v >= 1e4 ? Math.round(v / 1e3) * 1e3 : Math.round(v));
+  v = v >= 1e4 ? Math.round(v / 1e3) * 1e3 : Math.round(v);   // round first: 999 600 -> "1 million"
+  if (v < 1e6) return grp(v);
   const x = v / 1e6, d = x < 10 ? 1 : 0, r = +x.toFixed(d);
   return nf(r, r % 1 ? d : 0) + (st.lang === 'fr' ? (r >= 2 ? ' millions' : ' million') : ' million');
 };
@@ -567,6 +566,9 @@ st.dir = DIRS.some(d => String(d.dir) === qs.get('dir')) ? +qs.get('dir') : DIRS
 // contract options for an embedding page: dir_control false hides the page's direction buttons (the
 // host drives the direction with postMessage({ms: 'dir', dir})); method false drops the method section
 const DIR_CONTROL = D.dir_control !== false, METHOD = D.method !== false;
+// host_controls true: the host page already has the days, period mode, language, coverage and footer, so
+// the page drops its own (weekday buttons, one/two-period switch, FR/EN, coverage calendar, footer)
+const HOST = D.host_controls === true;
 st.hour = D.hours.includes(8) ? 8 : D.hours[0];
 const dirOf = () => DIRS.find(x => x.dir === st.dir);
 // the entry shown: the display version of the direction, or one of its other versions
@@ -659,13 +661,10 @@ function zonesOf(E) {
   for (const z of Z) {
     const at = E.stops.filter(t => t.x >= z.x0 - .5 && t.x <= z.x1 + .5);
     z.name = at.length ? at.map(t => t.name).join(' / ') : (stopBefore(E, z.x0) || {}).name || '';
-    // nominal length: the union of the stops' [stop - before, stop + after] inside the drawn run (one-sided at a
-    // terminus; two stops closer than the zone share one run and count their union, not a single 90 m)
+    // the totals cover every drawn micro-segment (the grid does not stop exactly at 30 m / 60 m), so the colour is
+    // the total brought to 30 m of the drawn run
     z.len = z.x1 - z.x0;
-    const iv = at.map(t => [Math.max(z.x0, t.x - ZONE[0]), Math.min(z.x1, t.x + ZONE[1])]).filter(([a, b]) => b > a).sort((p, q) => p[0] - q[0]);
-    let nom = 0, end = -Infinity;
-    for (const [a, b] of iv) { if (b > end) { nom += b - Math.max(a, end); end = b; } }
-    z.nom = nom > 0 ? nom : Math.min(z.len, ZONE[0] + ZONE[1]);
+    z.nom = z.len;
   }
   return (E._zones = {Z, zi});
 }
@@ -676,7 +675,9 @@ const zfirst = (bs, f) => { const b = bs.find(x => x[f] != null); return b ? b[f
 function zvals(E, v) {
   return zonesOf(E).Z.map((z, n) => {
     const bs = z.idx.map(i => v[i]), k = SC.L / z.nom;
-    const opp = zsum(bs, 'opp'), ex = zsum(bs, 'ex'), exl = zsum(bs, 'exl'), oph = zsum(bs, 'oph');
+    // no position report at all in the zone (e.g. a metro terminus): no data, not 0 s
+    const none = !bs.some(b => b.obs > 0), zs = f => none ? null : zsum(bs, f);
+    const opp = zs('opp'), ex = zs('ex'), exl = zs('exl'), oph = zs('oph');
     return {z, zone: n, i: z.idx[0], l: bs[bs.length - 1].l, x0: z.x0, len: z.len, nom: z.nom, stop: true,
             flags: bs.reduce((f, b) => f | b.flags, 0), nd: Math.min(...bs.map(b => b.nd)), obs: bs.reduce((t, b) => t + b.obs, 0),
             opp, ex, exl, oph, pph: zfirst(bs, 'pph'),
@@ -732,9 +733,9 @@ function zTipHtml(E, v) {
     if (z.exl != null) h += t.zexl(signed(z.exl, 0), m1) + '<br>';
     if (v.oph != null) h += t.zoph(nfa(v.oph));
   }
-  if (v.pph != null) h += ' · ' + t.freq(nf(v.pph, 1), noun(true));
-  h += `<br><span style="color:var(--ink-3)">${t.days(Math.round(v.nd))}${v.flags & 32 ? ' · ' + t.partial : ''}</span>`;
-  return h + `<br><i>${t.zone(nf(ZONE[0], 0), nf(ZONE[1], 0))}</i>`;
+  if (v.pph != null) h += '<br>' + t.freq(nf(v.pph, 1), noun(true));
+  if (v.flags & 32) h += `<br><span style="color:var(--ink-3)">${t.days(Math.round(v.nd))} · ${t.partial}</span>`;
+  return h;
 }
 function tipHtml(E, v) {
   if (v.z) return zTipHtml(E, v);
@@ -744,13 +745,13 @@ function tipHtml(E, v) {
   const z = v.s30;
   if (v.oph == null) h += t.nodata;
   else {
-    if (z.opp != null) h += t.opp(nfa(z.opp), nf(SC.K / Math.max(z.opp, 1e-9), z.opp > 12 ? 1 : 0), noun(false)) + '<br>';
-    if (z.ex != null) h += (Math.abs(z.ex) < .5 ? t.same : t.ex(signed(z.ex, 0))) + '<br>';
+    if (z.opp != null) h += t.opp(nfa(z.opp), (z.opp < SC.T0 ? '≥ ' + nf(SC.K / SC.T0, 0) : nf(SC.K / z.opp, z.opp > 12 ? 1 : 0)), noun(false)) + '<br>';
+    if (z.ex != null) h += t.ex(signed(z.ex, 0)) + '<br>';
     if (z.exl != null) h += t.exl(signed(z.exl, 0)) + '<br>';
     h += t.oph(nfa(z.oph));
   }
-  if (v.pph != null) h += ' · ' + t.freq(nf(v.pph, 1), noun(true));
-  h += `<br><span style="color:var(--ink-3)">${t.days(Math.round(v.nd))}${v.flags & 32 ? ' · ' + t.partial : ''}</span>`;
+  if (v.pph != null) h += '<br>' + t.freq(nf(v.pph, 1), noun(true));
+  if (v.flags & 32) h += `<br><span style="color:var(--ink-3)">${t.days(Math.round(v.nd))} · ${t.partial}</span>`;
   if (v.stop) h += `<br><i>${t.stop}</i>`;
   return h;
 }
@@ -848,22 +849,23 @@ function czTipHtml(E, v) {
   if (v.absent) return h + t.absent;
   const d = v[st.cmetric];
   if (d == null) return h + l.nodata;
-  h += t.zd(signed(d * TICK, 0), m1) + (v.sig ? '' : ` · <span style="color:var(--ink-3)">${t.unsure}</span>`);
-  if (v.oa != null) h += '<br>' + t.za(nf(v.oa * TICK, 0), m1);
-  if (v.ob != null) h += '<br>' + t.zb(nf(v.ob * TICK, 0), m1);
+  h += t.zd(signed(d * TICK, 0), m1) + (v.sig || st.cmetric !== 'd' ? '' : ` · <span style="color:var(--ink-3)">${t.unsure}</span>`);
+  if (st.cmetric === 'd' && v.oa != null) h += '<br>' + t.za(nf(v.oa * TICK, 0), m1);
+  if (st.cmetric === 'd' && v.ob != null) h += '<br>' + t.zb(nf(v.ob * TICK, 0), m1);
   if (v.fa != null || v.fb != null) h += '<br>' + t.freq(v.fa == null ? '–' : nf(v.fa, 1), v.fb == null ? '–' : nf(v.fb, 1), noun(true));
-  return h + `<br><i>${l.zone(nf(ZONE[0], 0), nf(ZONE[1], 0))}</i>`;
+  return h;
 }
 function cTipHtml(E, v) {
   if (v.z) return czTipHtml(E, v);
   const t = ctx().tip, s = stopBefore(E, v.x0), lk = E.links[v.l], l = tx().tip;
   let h = `<b>${l.after(Math.round(v.x0 - s.x), Math.round(v.x0 - s.x + v.len), esc(s.name))}</b> (${l.towards(esc(lk ? lk.to : E.to))})<br>`;
   if (v.absent) return h + t.absent;
-  if (v.d == null) return h + l.nodata;
-  h += t.d(signed(v.d * TICK, 0), noun(false)) + (v.sig ? '' : ` · <span style="color:var(--ink-3)">${t.unsure}</span>`);
-  if (v.lo != null && v.hi != null) h += `<br><span style="color:var(--ink-3)">${ctx().ci(signed(v.lo * TICK, 0), signed(v.hi * TICK, 0))}</span>`;
-  if (v.oa != null) h += '<br>' + t.a(nf(v.oa * TICK * SC.L / v.len, 0), noun(false));
-  if (v.ob != null) h += '<br>' + t.b(nf(v.ob * TICK * SC.L / v.len, 0), noun(false));
+  const dd = v[st.cmetric], isd = st.cmetric === 'd';
+  if (dd == null) return h + l.nodata;
+  h += t.d(signed(dd * TICK * SC.L / v.len, 0), noun(false)) + (v.sig || !isd ? '' : ` · <span style="color:var(--ink-3)">${t.unsure}</span>`);
+  if (isd && v.lo != null && v.hi != null) h += `<br><span style="color:var(--ink-3)">${ctx().ci(signed(v.lo * TICK * SC.L / v.len, 0), signed(v.hi * TICK * SC.L / v.len, 0))}</span>`;
+  if (isd && v.oa != null) h += '<br>' + t.a(nf(v.oa * TICK * SC.L / v.len, 0), noun(false));
+  if (isd && v.ob != null) h += '<br>' + t.b(nf(v.ob * TICK * SC.L / v.len, 0), noun(false));
   if (v.fa != null || v.fb != null) h += '<br>' + t.freq(v.fa == null ? '–' : nf(v.fa, 1), v.fb == null ? '–' : nf(v.fb, 1), noun(true));
   if (v.stop) h += `<br><i>${l.stop}</i>`;
   return h;
@@ -960,9 +962,9 @@ function texts() {
   const d0 = DIRS[0];
   const ends = d0 ? `${d0.from} ↔ ${d0.to}` : '';
   const per = D.period.first ? `${fmtDate(D.period.first)} – ${fmtDate(D.period.last)}` : '';
-  document.getElementById('kicker').textContent = [`${mode} ${D.line || ''}`.trim(), ends, per].filter(Boolean).join(' · ');
+  document.getElementById('kicker').textContent = [`${mode} ${D.line || ''}`.trim(), ends, per].filter(Boolean).join(' · ').replace(/\b1er\b/g, '1ᵉʳ');   // uppercase kicker: not "1ER"
   const cm = isCmp();
-  if (cm) document.getElementById('kicker').textContent = [`${mode} ${D.line || ''}`.trim(), ends, `${perLabel(CMP.a)} → ${perLabel(CMP.b)}`].filter(Boolean).join(' · ');
+  if (cm) document.getElementById('kicker').textContent = [`${mode} ${D.line || ''}`.trim(), ends, `${perLabel(CMP.a)} → ${perLabel(CMP.b)}`].filter(Boolean).join(' · ').replace(/\b1er\b/g, '1ᵉʳ');
   document.getElementById('h1').innerHTML = (D.line ? `<span class="badge">${esc(D.line)}</span>` : '') + esc(D.title || (cm ? ctx().title(noun(true)) : l.title(noun(true), D.line)));
   document.getElementById('lede').innerHTML = esc(cm ? ctx().lede(`${fmtDate(CMP.a.first)} – ${fmtDate(CMP.a.last)}`, `${fmtDate(CMP.b.first)} – ${fmtDate(CMP.b.last)}`, noun(false), noun(true))
     : l.lede(nf(P.segment_m || 30, 0), nf(TICK, 0), noun(false), noun(true))).replace('§', helpBtn(l.why30));
@@ -970,7 +972,7 @@ function texts() {
   document.getElementById('l_mode').textContent = l.view;
   for (const [id, k] of [['l_days', 'days'], ['l_dir', 'dir'], ['l_ver', 'ver'], ['l_bands', 'bands'], ['l_metric', 'metric'], ['l_stops', 'stops']])
     document.getElementById(id).textContent = l[k];
-  document.getElementById('stopsT').title = l.stopsTitle(...(P.stop_zone || [30, 60]));
+  document.getElementById('stopsT').title = '';
   document.getElementById('hstitle').textContent = l.hstitle;
   document.getElementById('mxtitle').textContent = l.mxtitle;
   document.getElementById('proftitle').textContent = l.proftitle;
@@ -1050,7 +1052,7 @@ function buildControls() {
   $('dirs').closest('.grp').style.display = DIR_CONTROL ? '' : 'none'; $('mxdirs').style.display = DIR_CONTROL ? '' : 'none';
   SETDIR = setDir;
   buttons($('bands'), Object.keys(BANDDEF).map(k => [k, l.bandl[k], `${BANDDEF[k][0]}–${BANDDEF[k][1]} h`]), k => { stop(); st.band = st.band === k ? null : k; render(); });
-  $('g_mode').hidden = !CMP;
+  $('g_mode').hidden = !CMP || HOST;
   if (CMP) buttons($('modes'), [['one', l.modes.one], ['cmp', l.modes.cmp]], k => { st.mode = k; st.ver = null; st.hot = null; st.chg = null; buildControls(); texts(); tiles(); drawAll(); });
   if (isCmp()) buttons($('metric'), Object.entries(l.cmetrics(noun(false))), k => { st.cmetric = k; render(); });
   else buttons($('metric'), Object.entries(l.metrics(noun(false))).map(([k, t]) => [k, t, l.mname(noun(false))[k]]), k => { st.metric = k; render(); });
@@ -1355,7 +1357,7 @@ function render() {
   pressed($('bands'), k => k === st.band);
   pressed($('metric'), k => k === (isCmp() ? st.cmetric : st.metric));
   if (CMP) pressed($('modes'), k => k === st.mode);
-  $('g_days').hidden = isCmp();
+  $('g_days').hidden = isCmp() || HOST;
   pressed($('stopsT'), k => k === String(st.stops));
   const d = dirOf(); if (!$('g_ver').hidden && d) pressed($('vers'), k => k === (st.ver || d.pattern_uid));
   const dl = isCmp() ? ctx().days : daysLabel();
@@ -1394,6 +1396,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && mxCard.cla
 
 buildControls(); texts(); tiles(); initMap(); drawAll();
 document.querySelector('section.method').hidden = !METHOD;
+if (HOST) for (const el of [$('langs'), $('footer'), $('covtitle').closest('section')]) el.style.display = 'none';
 // embedded: tell the host the directions, follow its direction control
 if (window.parent !== window) {
   try { parent.postMessage({ms: 'dirs', dir: st.dir, dirs: DIRS.map(d => ({dir: d.dir, from: d.from, to: d.to}))}, '*'); } catch (x) {}
