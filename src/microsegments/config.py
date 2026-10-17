@@ -85,6 +85,7 @@ class Params:
     phase_m: float = 0.0
     grid: Literal["equal", "fixed", "stops"] = "equal"  # equal: L' = len/round(len/L) per link; fixed: L with a short last bin; stops: zones as own bins
     tick_s: float = 20.0                     # nominal poll interval; per-vehicle feeds are put on this grid
+    tick_from_coverage: bool = False         # each report is worth its hour's real time per poll (coverage covered_s / n_snapshots), not tick_s
     per_vehicle: Literal["resample", "thin"] = "resample"   # resample: locate.resample (unbiased); thin: 1 fix / tick
     gap_cap_s: float = 40.0                  # a poll covers at most this long
     stop_zone: tuple[float, float] = (30.0, 60.0)   # metres before / after a stop masked as "stop" zone

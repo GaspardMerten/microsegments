@@ -153,3 +153,15 @@ def test_min_passages_nulls(sim):
     r = an.result.filter(pl.col("hour") == 5)          # 4 vehicles / h at 5 h
     assert r["obs_per_passage"].is_null().all()
     assert an.result.filter(pl.col("hour") == 8)["obs_per_passage"].is_not_null().all()
+
+
+def test_tick_from_coverage(sim):
+    """Each report weighs its hour's real seconds per poll: 25 s per poll -> 1.25 x the 20 s value."""
+    segs = sim.segment_fn(30)
+    cube = aggregate.count(sim.placed, segs)
+    cov = sim.coverage.with_columns(n_snapshots=pl.lit(144, pl.UInt32), covered_s=pl.lit(3600.0, pl.Float32))
+    base = metrics.analyse(cube, cov, sim.passages, segs, sim.pattern_days)
+    w = metrics.analyse(cube, cov, sim.passages, segs, sim.pattern_days, params=Params(tick_from_coverage=True))
+    a = base.result.filter(pl.col("obs_per_passage").is_not_null())["obs_per_passage"].to_numpy()
+    b = w.result.filter(pl.col("obs_per_passage").is_not_null())["obs_per_passage"].to_numpy()
+    assert np.allclose(b, 1.25 * a)

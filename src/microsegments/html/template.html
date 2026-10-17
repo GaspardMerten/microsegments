@@ -68,7 +68,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .leaflet-control-attribution a{color:var(--ink-2)!important}
 .leaflet-tooltip{background:#0f1830;color:var(--ink);border:1px solid var(--line);box-shadow:0 4px 16px rgba(0,0,0,.4);font:13px/1.45 var(--sans)}
 .svpop .leaflet-popup-content-wrapper,.svpop .leaflet-popup-tip{background:#0f1830;color:var(--ink);border:1px solid var(--line)}
-.svpop .leaflet-popup-content{margin:8px;width:320px!important}.svpop iframe{display:block;width:320px;height:200px;border:0;border-radius:4px}
+.svpop .leaflet-popup-content{margin:8px;width:min(320px,calc(100vw - 72px))!important}.svpop iframe{display:block;width:100%;height:200px;border:0;border-radius:4px}
 .svpop a{display:block;margin-top:6px;font:13px var(--sans);color:var(--ink)}
 .leaflet-tooltip-top:before,.leaflet-tooltip-bottom:before,.leaflet-tooltip-left:before,.leaflet-tooltip-right:before{display:none}
 .lab{font:600 11px/1 var(--sans);color:var(--ink-2);white-space:nowrap;text-shadow:0 0 4px var(--deep),0 0 8px var(--deep);pointer-events:none}
@@ -234,7 +234,6 @@ const T = {
     view: 'Vue', modes: {one: 'Une période', cmp: 'Comparer deux périodes'},
     cmetrics: m1 => ({d: 'Temps passé', dx: 'Temps perdu (soirée)'}),
     stopsl: {true: 'Affichées', false: 'Masquées'},
-    stopsTitle: (a, b) => `Zone d'arrêt : de ${a} m avant à ${b} m après chaque arrêt`,
     // stop zone '*' (toggle and legend); stib: the feed is STIB vehicle-distance (its ~36 m blind zone)
     stopsHelp: (stib) => `${zoneSpan('fr', true)}, montrée comme un seul bloc, montée et descente comprises. ` + (stib
       ? `Dans cette zone, la STIB signale « distance 0 » : on ne sait pas où le temps se perd.`
@@ -330,7 +329,6 @@ const T = {
     view: 'View', modes: {one: 'One period', cmp: 'Compare two periods'},
     cmetrics: m1 => ({d: 'Time spent', dx: 'Time lost (evening)'}),
     stopsl: {true: 'Shown', false: 'Hidden'},
-    stopsTitle: (a, b) => `Stop zone: ${a} m before to ${b} m after each stop`,
     stopsHelp: (stib) => `${zoneSpan('en', true)}, shown as one block, boarding included. ` + (stib
       ? `In this zone, STIB reports "distance 0", so we cannot tell where the time is lost.`
       : `Near the stop, the published position does not tell where the time is lost.`),
@@ -653,9 +651,11 @@ const ZONE = P.stop_zone || [30, 60];
 const FEEDZ = P.grid === 'stops';
 function zoneSpan(lang, one) {
   const fr = lang === 'fr', a = nf(ZONE[0], 0), b = nf(ZONE[1], 0), m1 = noun(false);
+  // "le tram" / "la rame"; the feed is STIB's on the platform, any linear feed otherwise
+  const le = fr ? (m1 === 'rame' ? 'la' : 'le') : 'the', who = isStib() ? (fr ? 'la STIB' : 'STIB') : (fr ? 'le flux' : 'the feed');
   if (!FEEDZ) return fr ? `De ${a}\u00a0m avant à ${b}\u00a0m après ${one ? 'l\'arrêt' : 'chaque arrêt'}` : `From ${a} m before to ${b} m after ${one ? 'the stop' : 'each stop'}`;
-  return fr ? (one ? `La partie où la STIB rattache le ${m1} à l'arrêt, de son approche jusqu'à son départ` : `Les parties où la STIB rattache le ${m1} à un arrêt, de son approche jusqu'à son départ`)
-            : (one ? `The stretch where STIB ties the ${m1} to the stop, from its approach until it leaves` : `The stretches where STIB ties the ${m1} to a stop, from its approach until it leaves`);
+  return fr ? (one ? `La partie où ${who} rattache ${le} ${m1} à l'arrêt, de son approche jusqu'à son départ` : `Les parties où ${who} rattache ${le} ${m1} à un arrêt, de son approche jusqu'à son départ`)
+            : (one ? `The stretch where ${who} ties the ${m1} to the stop, from its approach until it leaves` : `The stretches where ${who} ties the ${m1} to a stop, from its approach until it leaves`);
 }
 function zonesOf(E) {
   if (E._zones) return E._zones;

@@ -18,8 +18,10 @@ an unmatched detection opens a new track. A track that starts standing >= 100 s 
 stop is a short working waiting to start: those rows are layover (``count`` False, flag LAYOVER).
 
 Event passages (port of ``passages()``): a trip passes link A->B (consecutive stop_sequence) if its
-timed calls (observed or inferred) reach A or B; hour = time at A, interpolated between the trip's
-timed calls, else time at B.
+timed calls (observed or inferred) reach A or B; hour = time at the middle of the link (mean of the
+times at A and B, interpolated between the trip's timed calls), else the one of them that is known.
+Dating at A would put a vehicle that crosses the hour inside the link in an earlier hour than the
+feed count (which sees it mid-link), and ``max`` would then count it in both hours.
 
 Both sources only ever miss vehicles, so ``n = max(n_feed, n_events)``. Rows are per
 (service_date, hour, link_key): patterns sharing a link (branches, detours, short workings) add up,
@@ -307,8 +309,10 @@ def _link_keys_by_date(net, dates, id_normaliser: str):
     return dv.select("service_date", "_ver"), tab
 
 
-def event_passages(events, net, *, tz: str = "Europe/Brussels", id_normaliser: str = "leading_digits") -> pl.DataFrame:
-    """Trips per (service_date, hour, link_key) from STOP_EVENT rows -> column n_events."""
+def event_passages(events, net, *, tz: str = "Europe/Brussels", id_normaliser: str = "leading_digits",
+                   compat: bool = False) -> pl.DataFrame:
+    """Trips per (service_date, hour, link_key) from STOP_EVENT rows -> column n_events.
+    ``compat``: dated at A as in the prototype (regression tests)."""
     ev = events.collect() if isinstance(events, pl.LazyFrame) else events
     out_schema = {"service_date": pl.Date, "hour": pl.Int8, "pattern_uid": pl.Utf8, "link_key": pl.Utf8,
                   "n_events": pl.Float64}
@@ -330,7 +334,8 @@ def event_passages(events, net, *, tz: str = "Europe/Brussels", id_normaliser: s
     )
     lk = ev.filter((pl.col("next_seq") == pl.col("stop_sequence") + 1) & (pl.col("f") <= pl.col("k") + 1)
                    & (pl.col("l") >= pl.col("k")))
-    lk = lk.with_columns(pl.coalesce("e", "eb").alias("tt")).filter(pl.col("tt").is_not_null())
+    mid = [] if compat else [(pl.col("e") + pl.col("eb")) / 2]
+    lk = lk.with_columns(pl.coalesce(*mid, "e", "eb").alias("tt")).filter(pl.col("tt").is_not_null())
     lk = lk.with_columns(_service_hour(lk, "tt", tz).alias("hour"))
     dv, tab = _link_keys_by_date(net, lk["service_date"].unique().to_list(), id_normaliser)
     lk = lk.join(dv, on="service_date", how="left").join(tab, on=["_ver", "a", "b"], how="inner")
@@ -346,7 +351,8 @@ def passages(placed, net, events=None, mode: str = "auto", *, tz: str = "Europe/
 
     ``placed``: Placed or PLACED frame. ``mode``: "auto" (feed tracks + events when given, n = max),
     "feed", "events". Rows without any ``track_id`` are first tracked with :func:`track_anonymous`.
-    ``compat``: the prototype's exact tracker and no short-working extension (regression tests)."""
+    ``compat``: the prototype's exact tracker, no short-working extension and events dated at A
+    (regression tests)."""
     frame = getattr(placed, "frame", placed)
     use_feed = mode in ("auto", "feed")
     use_ev = mode in ("auto", "events") and events is not None
@@ -363,7 +369,7 @@ def passages(placed, net, events=None, mode: str = "auto", *, tz: str = "Europe/
         parts.append(f.group_by(key).agg(pl.col("n_feed").sum(),
                                          pl.col("pattern_uid").sort_by("n_feed", descending=True).first().alias("_pf")))
     if use_ev:
-        e = event_passages(events, net, tz=tz, id_normaliser=id_normaliser)
+        e = event_passages(events, net, tz=tz, id_normaliser=id_normaliser, compat=compat)
         parts.append(e.rename({"pattern_uid": "_pe"}))
     if not parts:
         return schema.empty(schema.PASSAGES)

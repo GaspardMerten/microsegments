@@ -325,14 +325,16 @@ def approach(placed: pl.DataFrame, links: pl.DataFrame, approach_m: float) -> pl
     """Undo the stretch of step 4 for a feed that switches to the next stop ``approach_m`` before it.
 
     ``pos = min(dist / flen, 1) * len`` becomes ``... * (len - approach_m)`` (so ``pos`` ~ ``dist`` on a
-    link whose feed metres are GTFS metres); rows standing at a stop (flag AT_STOP) keep their place,
-    ``s_m`` follows. ``links``: LINK rows (``pattern_uid``, ``link_idx``, ``len_m``)."""
+    link whose feed metres are GTFS metres); rows standing at a stop (flag AT_STOP) or at a terminus
+    (LAYOVER pseudo rows) keep their place, and so do links no longer than ``approach_m``; ``s_m``
+    follows. ``links``: LINK rows (``pattern_uid``, ``link_idx``, ``len_m``)."""
     if not placed.height or approach_m <= 0:
         return placed
     ln = links.select("pattern_uid", pl.col("link_idx").cast(placed.schema["link_idx"]), pl.col("len_m").alias("_len"))
-    x = placed.join(ln, on=["pattern_uid", "link_idx"], how="left")
-    keep = ((pl.col("flags") & int(Flag.AT_STOP)) != 0) | pl.col("_len").is_null() | (pl.col("_len") <= 0)
-    k = (pl.max_horizontal(pl.col("_len") - approach_m, pl.lit(0.0)) / pl.col("_len"))
+    x = placed.join(ln, on=["pattern_uid", "link_idx"], how="left", maintain_order="left")
+    keep = (((pl.col("flags") & int(Flag.AT_STOP | Flag.LAYOVER)) != 0) | pl.col("_len").is_null()
+            | (pl.col("_len") <= approach_m))
+    k = (pl.col("_len") - approach_m) / pl.col("_len")
     pos = pl.when(keep).then(pl.col("pos_m")).otherwise(pl.col("pos_m") * k)
     dt_ = placed.schema["pos_m"]
     x = x.with_columns(pos.cast(dt_).alias("_pos"))

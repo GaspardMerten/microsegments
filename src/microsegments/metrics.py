@@ -4,7 +4,9 @@ Notation (per direction): days d (included service days), hours h, segments k (k
 ``seg_key``), links l (``link_key``).
 
 * ``N[d,h,k]`` observations, ``C[d,h]`` coverage (share of the hour the feed was alive),
-  ``P[d,h,l]`` passages.
+  ``P[d,h,l]`` passages. With ``params.tick_from_coverage``, each observation of hour (d,h) weighs
+  ``covered_s / n_snapshots / tick_s``: the real time a distinct poll stands for (polls slower than
+  ``tick_s``, repeated snapshots), so ``O * tick_s`` stays seconds.
 * Day-hour (d,h) excluded (numerator and denominator) when coverage < ``min_hour_coverage``, or the
   hour carries a LOW_COVERAGE / FROZEN / LINE_ABSENT / DEVIATION / VEHICLE_RATIO flag, or it has no
   coverage row at all. A day is excluded when more than ``1 - min_day_coverage`` of its 6-21 h
@@ -334,6 +336,7 @@ def analyse(cube: pl.DataFrame, coverage: pl.DataFrame | None = None, passages: 
     nd = len(dates)
     covA = np.full((nd, 28), np.nan)
     flA = np.zeros((nd, 28), np.int64)
+    wA = np.ones((nd, 28))     # weight of one report (tick_from_coverage: real seconds per poll / tick_s)
     if coverage is None:
         covA[:] = 1.0
     elif nd:
@@ -342,6 +345,11 @@ def analyse(cube: pl.DataFrame, coverage: pl.DataFrame | None = None, passages: 
         hh = cv["hour"].to_numpy().astype(np.int64)
         covA[di, hh] = np.clip(cv["coverage"].fill_null(0).to_numpy(), 0, 1)
         flA[di, hh] = cv["flags"].fill_null(0).to_numpy().astype(np.int64)
+        if params.tick_from_coverage and {"covered_s", "n_snapshots"} <= set(cv.columns):
+            n = cv["n_snapshots"].fill_null(0).to_numpy().astype(float)
+            sec = np.divide(cv["covered_s"].fill_null(0).to_numpy().astype(float), n, out=np.full(n.shape, np.nan),
+                            where=n > 0)
+            wA[di, hh] = np.where(np.isfinite(sec) & (sec > 0), sec / params.tick_s, 1.0)
     ex = np.isnan(covA) | (np.nan_to_num(covA) < quality.min_hour_coverage) | ((flA & EXCLUDING) != 0)
 
     excluded, included = [], []
@@ -390,7 +398,7 @@ def analyse(cube: pl.DataFrame, coverage: pl.DataFrame | None = None, passages: 
     dirs: dict[int, DirData] = {}
     for (dirid,), md in mains.group_by(["direction_id"], maintain_order=True):
         md = md.sort("service_date")
-        dd = _build_dir(int(dirid), md, seg, cube, passages, passage_col, covA, ex, day_pos, hours, cols)
+        dd = _build_dir(int(dirid), md, seg, cube, passages, passage_col, covA, ex, day_pos, hours, cols, wA)
         if dd is not None:
             dirs[int(dirid)] = dd
 
@@ -419,7 +427,7 @@ def _reason(cov, fl, exd, quality) -> str:
     return max(votes, key=votes.get) if votes else "low_coverage"
 
 
-def _build_dir(dirid, md, seg, cube, passages, passage_col, covA, ex, day_pos, hours, cols) -> DirData | None:
+def _build_dir(dirid, md, seg, cube, passages, passage_col, covA, ex, day_pos, hours, cols, wA=None) -> DirData | None:
     days_l = md["service_date"].to_list()
     main_uid = np.array(md["pattern_uid"].to_list(), dtype=object)
     if not days_l:
@@ -479,6 +487,8 @@ def _build_dir(dirid, md, seg, cube, passages, passage_col, covA, ex, day_pos, h
          .select("_d", "_h", "_k", "obs").collect())
     flat = (c["_d"].to_numpy() * H + c["_h"].to_numpy()) * K + c["_k"].to_numpy()
     N = np.bincount(flat, weights=c["obs"].to_numpy().astype(np.float64), minlength=D * H * K).reshape(D, H, K)
+    if wA is not None:
+        N *= wA[gi][:, hours][:, :, None]
 
     P = np.zeros((D, H, Lk))
     if passages is not None and passages.height:
