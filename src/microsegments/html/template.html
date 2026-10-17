@@ -67,6 +67,9 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .leaflet-control-attribution{background:rgba(9,17,36,.75)!important;color:var(--ink-3)!important;font-size:10px}
 .leaflet-control-attribution a{color:var(--ink-2)!important}
 .leaflet-tooltip{background:#0f1830;color:var(--ink);border:1px solid var(--line);box-shadow:0 4px 16px rgba(0,0,0,.4);font:13px/1.45 var(--sans)}
+.svpop .leaflet-popup-content-wrapper,.svpop .leaflet-popup-tip{background:#0f1830;color:var(--ink);border:1px solid var(--line)}
+.svpop .leaflet-popup-content{margin:8px;width:320px!important}.svpop iframe{display:block;width:320px;height:200px;border:0;border-radius:4px}
+.svpop a{display:block;margin-top:6px;font:13px var(--sans);color:var(--ink)}
 .leaflet-tooltip-top:before,.leaflet-tooltip-bottom:before,.leaflet-tooltip-left:before,.leaflet-tooltip-right:before{display:none}
 .lab{font:600 11px/1 var(--sans);color:var(--ink-2);white-space:nowrap;text-shadow:0 0 4px var(--deep),0 0 8px var(--deep);pointer-events:none}
 .lab.u{transform:translate(-50%,-100%) translateY(-8px)}
@@ -226,7 +229,7 @@ const T = {
     alldays: 'tous les jours retenus', weekdays: 'jours ouvrables',
     bandl: {am: 'Pointe du matin', pm: 'Pointe du soir', day: 'Journée', evening: 'Soirée'},
     // buttons (short) and full names of the measures; the order is the buttons' order
-    metrics: m1 => ({opp: 'Temps passé', ex: 'Temps perdu (soirée)', exl: 'Temps perdu (ligne)', oph: 'Signalements / h'}),
+    metrics: m1 => ({opp: 'Temps passé', ex: 'Temps perdu (soirée)'}),
     mname: m1 => ({opp: `Temps passé par ${m1}`, ex: `Temps perdu par rapport à la soirée (${REFL()})`, exl: 'Temps perdu par rapport au rythme habituel de la ligne', oph: 'Signalements par heure'}),
     view: 'Vue', modes: {one: 'Une période', cmp: 'Comparer deux périodes'},
     cmetrics: m1 => ({d: 'Temps passé', dx: 'Temps perdu (soirée)'}),
@@ -239,6 +242,7 @@ const T = {
     why30: `Pourquoi 30 m ? À cette taille, le temps perdu sur un microsegment est connu à ± 0,5–1,5 s par véhicule, 2 à 3 fois moins que les écarts visibles sur la carte. Plus court, c'est plus incertain ; plus long, on ne sait plus où est le point lent.`,
     towards: t => `vers ${t}`,
     play: '▶ Lecture', pause: '❚❚ Pause', mean: 'moyenne',
+    sv: 'Ouvrir dans Street View ↗',
     tiles: {
       days: (n, x) => `jours retenus${x ? ` ; ${x}` : ''}`,
       segs: (n, L) => `microsegments de ${L} m (deux sens)`,
@@ -323,7 +327,7 @@ const T = {
     dowd: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     alldays: 'all selected days', weekdays: 'weekdays',
     bandl: {am: 'Morning peak', pm: 'Evening peak', day: 'Daytime', evening: 'Evening'},
-    metrics: m1 => ({opp: 'Time spent', ex: 'Time lost (evening)', exl: 'Time lost (line)', oph: 'Reports / h'}),
+    metrics: m1 => ({opp: 'Time spent', ex: 'Time lost (evening)'}),
     mname: m1 => ({opp: `Time spent per ${m1}`, ex: `Time lost compared with the evening (${REFL()})`, exl: 'Time lost compared with the line\'s usual rhythm', oph: 'Position reports per hour'}),
     view: 'View', modes: {one: 'One period', cmp: 'Compare two periods'},
     cmetrics: m1 => ({d: 'Time spent', dx: 'Time lost (evening)'}),
@@ -335,6 +339,7 @@ const T = {
     why30: `Why 30 m? At this size, the time lost on a microsegment is known to ± 0.5–1.5 s per vehicle, 2 to 3 times less than the differences visible on the map. Shorter is more uncertain; longer, we no longer know where the slow spot is.`,
     towards: t => `to ${t}`,
     play: '▶ Play', pause: '❚❚ Pause', mean: 'average',
+    sv: 'Open in Street View ↗',
     tiles: {
       days: (n, x) => `days used${x ? `; ${x}` : ''}`,
       segs: (n, L) => `${L} m microsegments (both directions)`,
@@ -728,10 +733,8 @@ function zTipHtml(E, v) {
   let h = `<b>${t.zhead(esc(v.z.name))}</b> (${t.towards(esc(lk ? lk.to : E.to))})<br>`;
   if (z.opp == null) h += t.nodata;
   else {
-    h += `<b>${t.zopp(nfa(z.opp), m1)}</b><br>`;
-    if (z.ex != null) h += t.zex(signed(z.ex, 0), m1) + '<br>';
-    if (z.exl != null) h += t.zexl(signed(z.exl, 0), m1) + '<br>';
-    if (v.oph != null) h += t.zoph(nfa(v.oph));
+    h += `<b>${t.zopp(nfa(z.opp), m1)}</b>`;
+    if (z.ex != null) h += '<br>' + t.zex(signed(z.ex, 0), m1);
   }
   if (v.pph != null) h += '<br>' + t.freq(nf(v.pph, 1), noun(true));
   if (v.flags & 32) h += `<br><span style="color:var(--ink-3)">${t.days(Math.round(v.nd))} · ${t.partial}</span>`;
@@ -745,10 +748,8 @@ function tipHtml(E, v) {
   const z = v.s30;
   if (v.oph == null) h += t.nodata;
   else {
-    if (z.opp != null) h += t.opp(nfa(z.opp), (z.opp < SC.T0 ? '≥ ' + nf(SC.K / SC.T0, 0) : nf(SC.K / z.opp, z.opp > 12 ? 1 : 0)), noun(false)) + '<br>';
-    if (z.ex != null) h += t.ex(signed(z.ex, 0)) + '<br>';
-    if (z.exl != null) h += t.exl(signed(z.exl, 0)) + '<br>';
-    h += t.oph(nfa(z.oph));
+    if (z.opp != null) h += t.opp(nfa(z.opp), (z.opp < SC.T0 ? '≥ ' + nf(SC.K / SC.T0, 0) : nf(SC.K / z.opp, z.opp > 12 ? 1 : 0)), noun(false));
+    if (z.ex != null) h += '<br>' + t.ex(signed(z.ex, 0));
   }
   if (v.pph != null) h += '<br>' + t.freq(nf(v.pph, 1), noun(true));
   if (v.flags & 32) h += `<br><span style="color:var(--ink-3)">${t.days(Math.round(v.nd))} · ${t.partial}</span>`;
@@ -1104,6 +1105,17 @@ function declutter() {
     if (ok) placed.push(p);
   });
 }
+// Street View at the clicked point, looking along the direction of travel of the micro-segment
+function svPopup(c, ll) {
+  const [x0, y0] = c[0], [x1, y1] = c[c.length - 1];
+  const hd = ((Math.atan2((x1 - x0) * Math.cos(y0 * Math.PI / 180), y1 - y0) * 180 / Math.PI) + 360) % 360;
+  const lat = ll.lat.toFixed(6), lng = ll.lng.toFixed(6), h = hd.toFixed(0);
+  const link = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}&heading=${h}`;
+  const emb = `https://maps.google.com/maps?layer=c&cbll=${lat},${lng}&cbp=11,${h},0,0,0&output=svembed`;
+  window.L.popup({className: 'svpop', maxWidth: 340, minWidth: 320}).setLatLng(ll)
+    .setContent(`<iframe src="${emb}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe><a href="${link}" target="_blank" rel="noopener">${tx().sv}</a>`)
+    .openOn(map);
+}
 function drawMap() {
   if (!map) return;
   const Lf = window.L, E = entry();
@@ -1116,6 +1128,7 @@ function drawMap() {
       // in a shown stop zone, every micro-segment carries the zone's tooltip
       const b = st.stops && n >= 0 ? (cm ? czvals : zvals)(E, v)[n] : v[i];
       return cm ? cTipHtml(E, b) : tipHtml(E, b); }, {sticky: true});
+    p.on('click', e => { p.closeTooltip(); svPopup(c, e.latlng); });
     segs.push(p);
   });
   E.stops.forEach((s, k) => {
