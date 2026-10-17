@@ -29,7 +29,7 @@ stops: p90 5-11 s, p98 12-23 s; so with ``BASE_S`` = 3 s typical values stay gre
 p90 3-6 (6-12 s), stop zones p98 13-25 (26-50 s, dark red). Metro positions only come at stations, so metro
 lines saturate at stations whatever the scale.
 
-The HTML page shows speeds only (km/h): the colour is the same ramp, the bar is labelled at ``KMH_TICKS``,
+The HTML page shows speeds only (km/h): the colour is the same ramp, on a bar linear in km/h at ``KMH_TICKS``,
 and speed gaps (vs the evening, between two periods) use the diverging ramp over +-``CMP_REL`` of the
 reference speed, red for slower. The matplotlib figures keep the seconds scales below.
 
@@ -49,8 +49,8 @@ OPH_S = 2.0                # observations per hour: T = OPH_S * obs per hour per
 CMP_S = 10.0               # comparison: +-10 s per passage per 30 m
 CMP_TICKS = (-10, -5, 0, 5, 10)            # linear axis
 KMH_PER_T = 108.0          # 30 m in T s = 108 / T km/h
-# the page shows speeds only: the same T-linear bar labelled in km/h, and gaps in km/h (evening, two periods)
-KMH_TICKS = (36, 18, 12, 9, 6, 4.5)        # km/h at T = 3, 6, 9, 12, 18, 24 s
+# the page shows speeds only: a km/h-linear bar (same ramp), and gaps (evening, two periods)
+KMH_TICKS = (0, 6, 12, 18, 24, 30, 36)    # the page's speed bar: linear in km/h, slow to fast
 CMP_KMH = 10.0             # speed gaps: +-10 km/h (diverging, red = slower)
 CMP_KMH_TICKS = (-10, -5, 0, 5, 10)
 # the page colours speed gaps relative to the reference speed: +-25 % (diverging, red = slower)

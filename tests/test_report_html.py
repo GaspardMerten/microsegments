@@ -186,13 +186,12 @@ def test_plot_scale_fixed(an_hs):
 
 
 def test_page_linear_legend_and_fixed_30m(an_hs):
-    """The page's legend axis is linear in T (tPos), the per-10 m toggle is gone, the default measure is the
-    time per vehicle, and the hour ticks sit at their true place on the slider."""
+    """The page's speed bar is linear in km/h (slow to fast), the per-10 m toggle is gone, the default measure is
+    the speed, and the hour ticks sit at their true place on the slider."""
     an, hs = an_hs
     p = render(to_contract(an, hotspots=hs))
     script = p[p.index('<script>\n"use strict"'):]
-    assert "const tPos = T => (Math.min(SC.T1, Math.max(SC.T0, T)) - SC.T0) / (SC.T1 - SC.T0);" in script
-    assert "Math.log(" not in script.split("const tPos")[1].split("\n")[0]
+    assert "KTICKS: [0, 6, 12, 18, 24, 30, 36]" in script and "left:${k / K1 * 100}%" in script
     assert 'id="unit"' not in p and "per10" not in script and "10 m" not in script
     assert "metric: 'opp'" in script
     assert "var(--th) / 2 +" in script

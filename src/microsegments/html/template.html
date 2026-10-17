@@ -520,11 +520,11 @@ function colorOf(v) {
 // Same constants as microsegments/scale.py (kept in sync by a test). Colour is a fixed function of the value,
 // never computed from the data (no percentile): every line, period, day, hour, band and stop-zone toggle
 // shares it. The page shows speeds: v km/h = K / T, T = seconds per passage for 30 m (obs per passage x tick x 30 / len),
-// coloured on the STIB speed ramp (4.5 km/h dark red .. 27 km/h dark green). The legend bar keeps a LINEAR axis in T
-// (3 to 24 s, i.e. >= 36 to <= 4.5 km/h), labelled in km/h at KTICKS. Speed gaps (evening, two periods): +-CMPR, relative to the reference speed.
+// coloured on the STIB speed ramp (4.5 km/h dark red .. 27 km/h dark green). The legend bar is linear in km/h
+// (0 to >= 36 km/h at KTICKS, slow to fast). Speed gaps (evening, two periods): +-CMPR, relative to the reference speed.
 // Why these constants (tram and bus lines, weekdays 2025): between stops the median is 24-36 km/h, the slowest 2 %
 // 5-9 km/h. TICKS, BASE, OPH, CMP, CTICKS: the seconds scales of scale.py (matplotlib figures), unused here.
-const SC = {L: 30, T0: 3, T1: 24, TICKS: [3, 6, 9, 12, 15, 18, 21, 24], BASE: 3, OPH: 2, CMP: 10, CTICKS: [-10, -5, 0, 5, 10], K: 108, KTICKS: [36, 18, 12, 9, 6, 4.5], CMPK: 10, CKTICKS: [-10, -5, 0, 5, 10], CMPR: 0.25, CRTICKS: [-25, -10, 0, 10, 25]};
+const SC = {L: 30, T0: 3, T1: 24, TICKS: [3, 6, 9, 12, 15, 18, 21, 24], BASE: 3, OPH: 2, CMP: 10, CTICKS: [-10, -5, 0, 5, 10], K: 108, KTICKS: [0, 6, 12, 18, 24, 30, 36], CMPK: 10, CKTICKS: [-10, -5, 0, 5, 10], CMPR: 0.25, CRTICKS: [-25, -10, 0, 10, 25]};
 // no data: flat discreet grey; masked stop zone: grey hatching (SVG pattern #mshatch, legend swatch .sw.hatch)
 const NULLC = '#3a4560', MASKC = 'url(#mshatch)';
 function timeColor(T) {
@@ -532,7 +532,6 @@ function timeColor(T) {
   return colorOf(SC.K / Math.max(T, 1e-9));
 }
 // position on the legend bar: linear in T
-const tPos = T => (Math.min(SC.T1, Math.max(SC.T0, T)) - SC.T0) / (SC.T1 - SC.T0);
 // The page shows speeds only: a value is a speed (km/h = K / T), read on the ramp above (colorOf). Speed gaps (vs the
 // evening, between two periods) use a diverging ramp: green (faster) - grey - red (slower), fixed +-SC.CMPR of the reference speed.
 // The colour eases in with the square root of the gap (a few km/h already show); the legend axis is linear.
@@ -562,7 +561,6 @@ const kmhOf = (o, len, n) => o == null || !(len > 0) || n != null && n < MINO ? 
 const gapOf = (a, b) => a != null && b != null && a < KMAX && b < KMAX ? b - a : null;
 const relOf = (a, b) => { const g = gapOf(a, b); return g == null || !(a > 0) ? null : g / a; };
 const pc = r => r == null ? '–' : signed(100 * r, 0) + ' %';
-const kmhT = k => SC.K / k;   // the T (s per 30 m) of a speed, for the legend bar
 
 // ---------------------------------------------------------------- state
 const qs = new URLSearchParams(location.search);
@@ -1380,15 +1378,15 @@ const stopsHelpText = () => tx().stopsHelp(isStib());
 const zoneSw = () => `<span><i class="sw zone"${isCmp() || st.metric === 'ex' ? ` style="background-color:${DIV[2][1]}"` : ''}></i>${esc(tx().legend.zone)}${helpBtn(stopsHelpText())}</span>`;
 // stop zones (shown or hidden); interarrêts: the excluded swatch
 const zoneOrX = () => isIA() ? `<span><i class="sw" style="background:${XC}"></i>${esc(tx().ia.excl)}</span>` : st.stops ? zoneSw() : `<span><i class="sw hatch"></i>${esc(tx().legend.masked)}</span>`;
-// The speed bar keeps the fixed T-linear layout (tPos), labelled in km/h; the gap with the evening uses the km/h gap bar.
+// The speed bar is linear in km/h, slow (left) to fast (right), the same ramp as the map; the gap with the evening uses the km/h gap bar.
 function legend() {
   if (isCmp()) return cmpLegend();
   const l = tx().legend, m = st.metric, n = SC.KTICKS.length;
   let ramp;
   if (m === 'ex') ramp = gapBar(false);
   else {
-    const bar = Array.from({length: 29}, (_, i) => timeColor(SC.T0 + (SC.T1 - SC.T0) * i / 28)).join(',');
-    const ticks = SC.KTICKS.map((k, i) => `<span style="left:${tPos(kmhT(k)) * 100}%">${i === 0 ? '≥ ' : i === n - 1 ? '≤ ' : ''}${nf(k, k % 1 ? 1 : 0)}</span>`).join('');
+    const K1 = SC.KTICKS[n - 1], bar = Array.from({length: 37}, (_, i) => colorOf(K1 * i / 36)).join(',');
+    const ticks = SC.KTICKS.map((k, i) => `<span style="left:${k / K1 * 100}%">${i === n - 1 ? '≥ ' : ''}${nf(k, 0)}</span>`).join('');
     ramp = `<div class="ramp"><div class="bar" style="background:linear-gradient(90deg,${bar})"></div><div class="tk">${ticks}</div></div>`;
   }
   const evening = m === 'ex' && st.h0 >= REFH[0] && st.h1 <= REFH[1];
