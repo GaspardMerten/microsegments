@@ -318,7 +318,7 @@ def test_page_speed_only_and_host_api(an_hs):
     hour range and the host's version switch."""
     an, hs = an_hs
     p = render(to_contract(an, hotspots=hs))
-    for s in ("opp: 'Vitesse moyenne', ex: 'Écart avec la soirée'", "bands: 'Période'", "school_holiday: ['en vacances scolaires'",
+    for s in ("opp: 'Vitesse moyenne', ex: 'Écart avec le soir'", "bands: 'Période'", "school_holiday: ['en vacances scolaires'",
               "user_period: ['en période exclue'", "user_period: ['in an excluded period', 'in excluded periods']", "reduced_service: ['de grève'", "m.ms === 'ver'", "qs.get('ver')",
               'id="hA"', 'id="hB"', "tile.openstreetmap.org", "osmdark"):
         assert s in p, s
