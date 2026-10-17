@@ -524,7 +524,7 @@ function colorOf(v) {
 // (3 to 24 s, i.e. >= 36 to <= 4.5 km/h), labelled in km/h at KTICKS. Speed gaps (evening, two periods): +-CMPR, relative to the reference speed.
 // Why these constants (tram and bus lines, weekdays 2025): between stops the median is 24-36 km/h, the slowest 2 %
 // 5-9 km/h. TICKS, BASE, OPH, CMP, CTICKS: the seconds scales of scale.py (matplotlib figures), unused here.
-const SC = {L: 30, T0: 3, T1: 24, TICKS: [3, 6, 9, 12, 15, 18, 21, 24], BASE: 3, OPH: 2, CMP: 10, CTICKS: [-10, -5, 0, 5, 10], K: 108, KTICKS: [36, 18, 12, 9, 6, 4.5], CMPK: 10, CKTICKS: [-10, -5, 0, 5, 10], CMPR: 0.5, CRTICKS: [-50, -25, 0, 25, 50]};
+const SC = {L: 30, T0: 3, T1: 24, TICKS: [3, 6, 9, 12, 15, 18, 21, 24], BASE: 3, OPH: 2, CMP: 10, CTICKS: [-10, -5, 0, 5, 10], K: 108, KTICKS: [36, 18, 12, 9, 6, 4.5], CMPK: 10, CKTICKS: [-10, -5, 0, 5, 10], CMPR: 0.25, CRTICKS: [-25, -10, 0, 10, 25]};
 // no data: flat discreet grey; masked stop zone: grey hatching (SVG pattern #mshatch, legend swatch .sw.hatch)
 const NULLC = '#3a4560', MASKC = 'url(#mshatch)';
 function timeColor(T) {

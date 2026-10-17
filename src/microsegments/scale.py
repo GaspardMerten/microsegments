@@ -53,9 +53,9 @@ KMH_PER_T = 108.0          # 30 m in T s = 108 / T km/h
 KMH_TICKS = (36, 18, 12, 9, 6, 4.5)        # km/h at T = 3, 6, 9, 12, 18, 24 s
 CMP_KMH = 10.0             # speed gaps: +-10 km/h (diverging, red = slower)
 CMP_KMH_TICKS = (-10, -5, 0, 5, 10)
-# the page colours speed gaps relative to the reference speed: +-50 % (diverging, red = slower)
-CMP_REL = 0.5
-CMP_REL_TICKS = (-50, -25, 0, 25, 50)      # %
+# the page colours speed gaps relative to the reference speed: +-25 % (diverging, red = slower)
+CMP_REL = 0.25
+CMP_REL_TICKS = (-25, -10, 0, 10, 25)      # %
 
 # the STIB speed ramp (km/h, colour), interpolated in OKLab
 RAMP = ((4.5, "#7a1020"), (7.5, "#e5484d"), (10.5, "#f0a13a"), (13.5, "#b8e27f"), (16.5, "#3fb950"),
