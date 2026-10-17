@@ -236,8 +236,8 @@ const T = {
     stopsl: {true: 'Affichées', false: 'Masquées'},
     stopsTitle: (a, b) => `Zone d'arrêt : de ${a} m avant à ${b} m après chaque arrêt`,
     // stop zone '*' (toggle and legend); stib: the feed is STIB vehicle-distance (its ~36 m blind zone)
-    stopsHelp: (a, b, stib) => `De ${a} m avant à ${b} m après l'arrêt, montrée comme un seul bloc, montée et descente comprises. ` + (stib
-      ? `La STIB y signale « distance 0 » : on ne sait pas où, dans la zone, le temps se perd.`
+    stopsHelp: (stib) => `${zoneSpan('fr', true)}, montrée comme un seul bloc, montée et descente comprises. ` + (stib
+      ? `${FEEDZ ? 'Entre les deux' : 'Dans la zone'}, la STIB signale « distance 0 » : on ne sait pas où le temps se perd.`
       : `Près de l'arrêt, la position publiée ne dit pas où le temps se perd.`),
     why30: `Pourquoi 30 m ? À cette taille, le temps perdu sur un microsegment est connu à ± 0,5–1,5 s par véhicule, 2 à 3 fois moins que les écarts visibles sur la carte. Plus court, c'est plus incertain ; plus long, on ne sait plus où est le point lent.`,
     towards: t => `vers ${t}`,
@@ -304,13 +304,11 @@ const T = {
     mtitle: 'Méthode',
     method: (m, m1) => [
       `<b>Signalements.</b> Chaque position publiée (environ toutes les ${TICK} s) d'un ${m1} sur la ligne compte pour un signalement dans le microsegment où il se trouve. Les ${m} qui attendent au terminus ne comptent pas. Un flux plus dense (GTFS-RT) est ramené à une position par ${m1} toutes les ${TICK} s.`,
-      `<b>Microsegments.</b> Chaque tronçon entre deux arrêts est coupé en parts égales d'environ ${P.segment_m} m${P.phase_m ? ` (décalage ${P.phase_m} m)` : ''}.`,
+      `<b>Microsegments.</b> ${FEEDZ ? 'Entre les zones d\'arrêt, chaque' : 'Chaque'} tronçon entre deux arrêts est coupé en parts égales d'environ ${P.segment_m} m${P.phase_m ? ` (décalage ${P.phase_m} m)` : ''}.`,
       `<b>Temps passé par ${m1}.</b> Le nombre de signalements divisé par le nombre de ${m} passés, multiplié par ${TICK} s : à peu près le temps que chaque ${m1} passe dans le microsegment, ramené à 30 m. Il ne dépend pas de la fréquence.`,
-      `<b>Signalements par heure.</b> Le total des signalements divisé par le nombre d'heures où le flux était actif ; une heure à 50 % de relevés compte pour une demi-heure, donc les trous dans les données ne font pas baisser les valeurs. Ce nombre dépend à la fois de la lenteur et du nombre de ${m} qui passent.`,
       `<b>Temps perdu par rapport à la soirée.</b> Le temps passé par ${m1} à l'heure choisie, moins celui de ${REFH[0]} à ${REFH[1]} h, sur les mêmes jours. La comparaison se fait par ${m1} : qu'il passe moins de ${m} en soirée ne la fausse pas ; seuls restent des effets comme des ${m} moins souvent groupés.`,
-      `<b>Temps perdu par rapport au rythme habituel de la ligne.</b> Le rythme habituel : la médiane, sur les microsegments entre deux arrêts (hors zones d'arrêt) de la ligne dans ce sens, du temps moyen par ${m1} et par mètre de ${LINEH[0]} à ${LINEH[1]} h (soirée comprise) sur les jours choisis, ramenée à la longueur du microsegment. La valeur : le temps passé ici moins ce rythme. Elle fait ressortir ce qui ralentit à toute heure, soirée comprise.${agreeText('fr')}`,
-      `<b>Zones d'arrêt.</b> De ${(P.stop_zone || [30, 60])[0]} m avant à ${(P.stop_zone || [30, 60])[1]} m après chaque arrêt, montrées comme un seul bloc : le temps total par ${m1} dans la zone, ramené à 30 m pour la couleur. Les masquer fait ressortir les feux et les carrefours.`,
-      `<b>Échelle.</b> Les mêmes couleurs pour toutes les lignes, périodes, jours, heures et options. Chaque mesure est ramenée à 30 m de voie et lue comme une vitesse sur l'échelle de la STIB, du vert (fluide) au rouge (lent) : 30 m en T secondes, c'est 108 / T km/h, soit 3 s = 36 km/h, 6 s = 18 km/h, 12 s = 9 km/h, 24 s ou plus = 4,5 km/h ou moins (rouge foncé). La légende va de 3 à 24 s sur un axe régulier. Les temps perdus (par rapport à la soirée, au rythme de la ligne) partagent la même échelle : +x s se lit comme un passage fluide de 3 s rallongé de x s, donc 0 s en vert, +10 s en rouge, +21 s ou plus en rouge foncé. Les signalements par heure se lisent à raison de 2 s par signalement (≈ 10 passages par heure) : 1,5 en vert foncé, 12 ou plus en rouge foncé. Ces repères viennent des données 2025 de plusieurs lignes de tram et de bus : entre les arrêts, un passage prend en médiane 3 à 4,5 s pour 30 m et, au 98e centile, 12 à 23 s.`,
+      `<b>Zones d'arrêt.</b> ${zoneSpan('fr')}, montrées comme un seul bloc : le temps total par ${m1} dans la zone, ramené à 30 m pour la couleur. Les masquer fait ressortir les feux et les carrefours.`,
+      `<b>Échelle.</b> Les mêmes couleurs pour toutes les lignes, périodes, jours, heures et options. Chaque mesure est ramenée à 30 m de voie et lue comme une vitesse sur l'échelle de la STIB, du vert (fluide) au rouge (lent) : 30 m en T secondes, c'est 108 / T km/h, soit 3 s = 36 km/h, 6 s = 18 km/h, 12 s = 9 km/h, 24 s ou plus = 4,5 km/h ou moins (rouge foncé). La légende va de 3 à 24 s sur un axe régulier. Le temps perdu par rapport à la soirée partage la même échelle : +x s se lit comme un passage fluide de 3 s rallongé de x s, donc 0 s en vert, +10 s en rouge, +21 s ou plus en rouge foncé. Ces repères viennent des données 2025 de plusieurs lignes de tram et de bus : entre les arrêts, un passage prend en médiane 3 à 4,5 s pour 30 m et, au 98e centile, 12 à 23 s.`,
       `<b>Jours.</b> Chaque valeur est un rapport de sommes sur les jours choisis. Moins il y a de jours, plus les valeurs sont bruitées.`,
       `<b>Changements de tracé.</b> Un microsegment n'est compté que les jours où il fait partie de l'itinéraire principal. La carte suit la version la plus fréquente ; les autres versions s'affichent avec le sélecteur.`,
       `<b>Points chauds.</b> Deux critères. Par rapport à la soirée : à certaines heures (au moins deux de suite, ou toute une pointe), chaque ${m1} est signalé plus souvent qu'entre ${REFH[0]} et ${REFH[1]} h. Par rapport au rythme habituel de la ligne, entre les arrêts seulement : sur toute la journée, soirée comprise, plus de signalements par mètre que ce rythme dans ce sens (la médiane des microsegments entre arrêts) ; c'est ce qui fait ressortir un feu ou un carrefour lent à toute heure, que la comparaison à la soirée efface. Dans les deux cas : au moins ${HTH} s de plus par ${m1} avec 95 % de confiance (en rééchantillonnant les jours), un écart positif au moins 60 % des jours, et une correction pour les tests multiples. Les microsegments voisins forment un tronçon ; les tronçons sont classés par signalements en plus par jour. « Toute la journée » : le retard ne disparaît pas en soirée ; « aux heures de pointe » : il est surtout là aux pointes ; « mixte » : un peu des deux.`,
@@ -333,8 +331,8 @@ const T = {
     cmetrics: m1 => ({d: 'Time spent', dx: 'Time lost (evening)'}),
     stopsl: {true: 'Shown', false: 'Hidden'},
     stopsTitle: (a, b) => `Stop zone: ${a} m before to ${b} m after each stop`,
-    stopsHelp: (a, b, stib) => `From ${a} m before to ${b} m after the stop, shown as one block, boarding included. ` + (stib
-      ? `STIB reports "distance 0" there, so we cannot tell where in the zone the time is lost.`
+    stopsHelp: (stib) => `${zoneSpan('en', true)}, shown as one block, boarding included. ` + (stib
+      ? `${FEEDZ ? 'In between' : 'There'}, STIB reports "distance 0", so we cannot tell where the time is lost.`
       : `Near the stop, the published position does not tell where the time is lost.`),
     why30: `Why 30 m? At this size, the time lost on a microsegment is known to ± 0.5–1.5 s per vehicle, 2 to 3 times less than the differences visible on the map. Shorter is more uncertain; longer, we no longer know where the slow spot is.`,
     towards: t => `to ${t}`,
@@ -400,13 +398,11 @@ const T = {
     mtitle: 'Method',
     method: (m, m1) => [
       `<b>Position reports.</b> Every position fix (about every ${TICK} s) of a ${m1} on the line counts as one report in the micro-segment it falls in. ${m[0].toUpperCase() + m.slice(1)} waiting at the terminus are not counted. Denser feeds (GTFS-RT) are thinned to one position per ${m1} every ${TICK} s.`,
-      `<b>Micro-segments.</b> Each stretch between two stops is split into equal parts of about ${P.segment_m} m${P.phase_m ? ` (offset ${P.phase_m} m)` : ''}.`,
+      `<b>Micro-segments.</b> ${FEEDZ ? 'Between the stop zones, each' : 'Each'} stretch between two stops is split into equal parts of about ${P.segment_m} m${P.phase_m ? ` (offset ${P.phase_m} m)` : ''}.`,
       `<b>Time spent per ${m1}.</b> The number of position reports divided by the number of ${m} that went through, times ${TICK} s: roughly the time each ${m1} spends in the micro-segment, brought to 30 m. It does not depend on the frequency.`,
-      `<b>Position reports per hour.</b> Total reports divided by the hours during which the feed was alive; an hour with 50 % of polls counts as half an hour, so data gaps do not lower the values. This number depends both on how slow the ${m} are and on how many pass.`,
       `<b>Time lost compared with the evening.</b> The time spent per ${m1} at the chosen hour minus that from ${REFH[0]} to ${REFH[1]} h, on the same days. The comparison is per ${m1}, so fewer ${m} in the evening do not bias it; only effects such as fewer bunched ${m} remain.`,
-      `<b>Time lost compared with the line's usual rhythm.</b> The usual rhythm: the median, over the micro-segments between two stops (outside stop zones) of the line in that direction, of the average time per ${m1} and per metre from ${LINEH[0]} to ${LINEH[1]} h (evening included) on the chosen days, times the micro-segment's length. Value: the time spent here minus that rhythm. It brings out what is slow at every hour, evening included.${agreeText('en')}`,
-      `<b>Stop zones.</b> From ${(P.stop_zone || [30, 60])[0]} m before to ${(P.stop_zone || [30, 60])[1]} m after each stop, shown as one block: the total time per ${m1} in the zone, brought to 30 m for the colour. Hiding them brings out signals and junctions.`,
-      `<b>Scale.</b> The same colours for every line, period, day, hour and option. Each measure is brought to 30 m of track and read as a speed on the STIB scale, from green (fluid) to red (slow): 30 m in T seconds is 108 / T km/h, so 3 s = 36 km/h, 6 s = 18 km/h, 12 s = 9 km/h, 24 s or more = 4.5 km/h or less (dark red). The legend runs from 3 to 24 s on an even axis. Both times lost (compared with the evening, with the line's usual rhythm) share that scale: +x s reads as a fluid 3 s passage made x s longer, so 0 s is green, +10 s red, +21 s or more dark red. Position reports per hour are read at 2 s per report (≈ 10 passages an hour): 1.5 is dark green, 12 or more dark red. These marks come from 2025 data of several tram and bus lines: between stops a passage takes a median 3 to 4.5 s per 30 m and, at the 98th percentile, 12 to 23 s.`,
+      `<b>Stop zones.</b> ${zoneSpan('en')}, shown as one block: the total time per ${m1} in the zone, brought to 30 m for the colour. Hiding them brings out signals and junctions.`,
+      `<b>Scale.</b> The same colours for every line, period, day, hour and option. Each measure is brought to 30 m of track and read as a speed on the STIB scale, from green (fluid) to red (slow): 30 m in T seconds is 108 / T km/h, so 3 s = 36 km/h, 6 s = 18 km/h, 12 s = 9 km/h, 24 s or more = 4.5 km/h or less (dark red). The legend runs from 3 to 24 s on an even axis. The time lost compared with the evening shares that scale: +x s reads as a fluid 3 s passage made x s longer, so 0 s is green, +10 s red, +21 s or more dark red. These marks come from 2025 data of several tram and bus lines: between stops a passage takes a median 3 to 4.5 s per 30 m and, at the 98th percentile, 12 to 23 s.`,
       `<b>Days.</b> Each value is a ratio of sums over the chosen days. Fewer days means noisier values.`,
       `<b>Route changes.</b> A micro-segment only counts on days when it is part of the main route. The map follows the most frequent version; the others can be picked with the selector.`,
       `<b>Hotspots.</b> Two criteria. Compared with the evening: at some hours (at least two in a row, or a whole peak), each ${m1} is reported more often than from ${REFH[0]} to ${REFH[1]} h. Compared with the line's usual rhythm, between stops only: over the whole day, evening included, more reports per metre than that rhythm in that direction (the median of the micro-segments between stops); this brings out a signal or a slow junction present at every hour, which the evening comparison cancels. Both need at least ${HTH} s more per ${m1} with 95 % confidence (resampling days), a positive excess on at least 60 % of days, and a multiple-testing correction. Neighbouring micro-segments form a stretch; stretches are ranked by extra reports per day. "All day": the delay does not go away in the evening; "at peak hours": it is mostly there at peaks; "mixed": a bit of both.`,
@@ -653,6 +649,24 @@ const colorFor = v => !shown(v) ? MASKC : timeColor(toT(metricVal(v)));
 // length: a terminus zone is one-sided). ~30 s per tram over 90 m reads as 10 s per 30 m (10.8 km/h,
 // orange) on the same fixed scale, not as a saturated dark red; a long dwell (> 60 s) still turns dark red.
 const ZONE = P.stop_zone || [30, 60];
+// grid "stops": the zones follow the feed (from where it switches to the stop to its exit mark, set per stop)
+const FEEDZ = P.grid === 'stops';
+// metres after the stop actually drawn (min and max over the zones around one stop), for the texts
+function zoneAfter() {
+  const a = [];
+  for (const E of DIRS.flatMap(d => [d, ...(d.alt || [])])) for (const z of zonesOf(E).Z) {
+    const t = E.stops.filter(t => t.x > z.x0 + .5 && t.x < z.x1 - .5);
+    if (t.length === 1) a.push(z.x1 - t[0].x);
+  }
+  return a.length ? [Math.min(...a), Math.max(...a)] : [ZONE[1], ZONE[1]];
+}
+function zoneSpan(lang, one) {
+  const fr = lang === 'fr', [lo, hi] = FEEDZ ? zoneAfter() : [ZONE[1], ZONE[1]];
+  const a = nf(ZONE[0], 0), b = nf(lo, 0) === nf(hi, 0) ? nf(lo, 0) : `${nf(lo, 0)}–${nf(hi, 0)}`;
+  if (!FEEDZ) return fr ? `De ${a}\u00a0m avant à ${b}\u00a0m après ${one ? 'l\'arrêt' : 'chaque arrêt'}` : `From ${a} m before to ${b} m after ${one ? 'the stop' : 'each stop'}`;
+  return fr ? `Du point où la STIB rattache le ${noun(false)} à l'arrêt (${a}\u00a0m avant) jusqu'à son message de départ (${b}\u00a0m après, selon l'arrêt)`
+            : `From where STIB ties the ${noun(false)} to the stop (${a} m before) to its departure message (${b} m after, depending on the stop)`;
+}
 function zonesOf(E) {
   if (E._zones) return E._zones;
   const Z = [], zi = E.seg.key.map(() => -1);
@@ -1180,7 +1194,7 @@ function recolor() {
 
 // ---------------------------------------------------------------- legend
 const isStib = () => /STIB|vehicle-distance/i.test(D.source || '');
-const stopsHelpText = () => tx().stopsHelp(nf(ZONE[0], 0), nf(ZONE[1], 0), isStib());
+const stopsHelpText = () => tx().stopsHelp(isStib());
 const zoneSw = () => `<span><i class="sw zone"${isCmp() ? ` style="background-color:${DIV[2][1]}"` : ''}></i>${esc(tx().legend.zone)}${helpBtn(stopsHelpText())}</span>`;
 // The same bar and tick positions for every measure; only the labels say which measure and unit.
 function legend() {

@@ -102,6 +102,45 @@ def test_zone_tagging():
     assert set(segment(short, 30)["zone"].head(2)) == {"stop"}
 
 
+def test_stops_grid():
+    links = pl.DataFrame({
+        "pattern_uid": ["p", "p", "p"], "link_idx": [0, 1, 2], "link_key": ["A>B~x", "B>C~y", "C>D~z"],
+        "from_stop": ["A", "B", "C"], "to_stop": ["B", "C", "D"], "from_name": ["A", "B", "C"], "to_name": ["B", "C", "D"],
+        "s0_m": [0.0, 300.0, 370.0], "len_m": [300.0, 70.0, 200.0], "geometry": [None, None, None]}, schema=schema.LINK)
+    seg = segment(links, 30, 0, "stops", stop_zone=(36, 38))
+    l0 = seg.filter(pl.col("link_idx") == 0)
+    # [0, 38] zone after A, 226 m running in 8 bins of 28.25 m, [264, 300] zone before B
+    assert l0["zone"].to_list() == ["stop"] + ["running"] * 8 + ["stop"]
+    assert np.allclose(l0["len_m"].to_numpy(), [38] + [226 / 8] * 8 + [36])
+    assert l0["seg_key"][0] == "A>B~x/0@30:0s38_36"
+    # 70 m < 38 + 36: one stop bin
+    assert seg.filter(pl.col("link_idx") == 1)["zone"].to_list() == ["stop"]
+    # per-link zones: the pattern's own row first, then the link's row, then the defaults
+    z = pl.DataFrame({"pattern_uid": ["p", "q"], "link_key": ["C>D~z", "A>B~x"], "head_m": [44.0, 50.0]})
+    seg = segment(links, 30, 0, "stops", stop_zone=(36, 38), zones=z)
+    assert seg.filter(pl.col("link_idx") == 2)["len_m"][0] == pytest.approx(44)
+    assert seg.filter(pl.col("link_idx") == 0)["len_m"][0] == pytest.approx(50)
+    with pytest.raises(ValueError):
+        segment(links, 30, 0, "equal", zones=z)
+    # no zone at all: plain equal bins
+    assert segment(links, 30, 0, "stops", stop_zone=(0, 0))["zone"].unique().to_list() == ["running"]
+
+
+def test_approach():
+    from microsegments.locate.linear import approach
+    from microsegments.schema import Flag
+    links = pl.DataFrame({"pattern_uid": ["p", "p"], "link_idx": [0, 1], "len_m": [300.0, 200.0]})
+    placed = pl.DataFrame({"pattern_uid": ["p", "p", "p", "p"], "link_idx": pl.Series([0, 0, 0, 1], dtype=pl.Int16),
+                           "pos_m": pl.Series([150.0, 300.0, 300.0, 100.0], dtype=pl.Float32),
+                           "s_m": pl.Series([150.0, 300.0, 300.0, 400.0], dtype=pl.Float32),
+                           "flags": pl.Series([0, 0, int(Flag.AT_STOP), 0], dtype=pl.UInt16)})
+    out = approach(placed, links, 36.0)
+    assert np.allclose(out["pos_m"].to_numpy(), [132.0, 264.0, 300.0, 82.0])
+    assert np.allclose(out["s_m"].to_numpy(), [132.0, 264.0, 300.0, 382.0])
+    assert out.schema == placed.schema
+    assert approach(placed, links, 0).equals(placed)
+
+
 def test_assign():
     links = pl.DataFrame({
         "pattern_uid": ["p", "p"], "link_idx": [0, 1], "link_key": ["A>B~x", "B>C~y"],

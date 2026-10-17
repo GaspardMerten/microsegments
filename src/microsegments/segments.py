@@ -6,18 +6,24 @@ segment never spans two links. Grids:
 * ``"equal"`` (default): ``n = max(1, round(len / L))`` bins of ``L' = len / n``;
 * ``"fixed"``: bins of exactly ``L`` from the link start, the last one shorter (the prototype's
   ``time30m_2025`` buckets);
-* ``"adaptive"``: breaks given per pattern (see :func:`adaptive_breaks`).
+* ``"adaptive"``: breaks given per pattern (see :func:`adaptive_breaks`);
+* ``"stops"``: the stop zones are bins of their own and the running part between them is cut as
+  ``"equal"``. A link A->B is ``[0, head]`` (zone after A), the running bins, ``[len - tail, len]`` (zone
+  before B); ``head`` / ``tail`` default to ``stop_zone[1]`` / ``stop_zone[0]`` and can be given per link
+  (``zones``: a frame with ``link_key``, optional ``pattern_uid``, and ``head_m`` / ``tail_m``). A link
+  shorter than its two zones is one stop bin. Meant for feeds whose positions are blind around a stop
+  (STIB vehicle-distance: from ~36 m before a stop to an exit mark 34-50 m after it, set per stop).
 
 ``phase`` shifts the grid inside each link (metres, in units of the nominal ``L``: for ``"equal"`` the
 shift is ``phase / L`` of a bin), leaving a remainder bin at both ends. Bins shorter than 1 m are
 merged into their neighbour (the previous one, or the next one for the first bin).
 
-``zone`` is ``"stop"`` when the segment overlaps ``[stop - up, stop + down]`` around any stop of the
+For the other grids, ``zone`` is ``"stop"`` when the segment overlaps ``[stop - up, stop + down]`` around any stop of the
 pattern (``stop_zone = (up, down)``; *up* is before the stop, i.e. the end of the incoming link,
 *down* after it, the start of the outgoing link), else ``"running"``.
 
-``seg_key = f"{link_key}/{k}@{L:g}:{phase:g}"`` (+ ``"f"`` for the fixed grid, ``@a:<hash>`` for
-adaptive breaks): stable for a given segmentation whatever the pattern / GTFS version the link
+``seg_key = f"{link_key}/{k}@{L:g}:{phase:g}"`` (+ ``"f"`` for the fixed grid, ``"s<head>_<tail>"`` for
+the stops grid, ``@a:<hash>`` for adaptive breaks): stable for a given segmentation whatever the pattern / GTFS version the link
 belongs to.
 """
 from __future__ import annotations
@@ -75,6 +81,43 @@ def _hash_offsets(offsets) -> str:
     return hashlib.sha1(";".join(f"{x:.1f}" for x in offsets).encode()).hexdigest()[:6]
 
 
+def _stop_edges(len_m: float, head: float, tail: float, length: float, phase: float):
+    """Edges, zones and the (rounded) head / tail of one link on the stops grid."""
+    len_m = float(len_m)
+    h, t = round(max(float(head), 0.0), 1), round(max(float(tail), 0.0), 1)
+    if len_m - h - t < SLIVER_M:   # the two zones cover the link: one stop bin
+        return np.array([0.0, max(len_m, 0.0)]), np.array(["stop"], dtype=object), h, t
+    a = h if h >= SLIVER_M else 0.0
+    b = len_m - t if t >= SLIVER_M else len_m
+    e = np.concatenate([[0.0] if a > 0 else [], a + link_edges(b - a, length, phase, "equal"),
+                        [len_m] if b < len_m else []])
+    zone = np.array(["running"] * (len(e) - 1), dtype=object)
+    if a > 0:
+        zone[0] = "stop"
+    if b < len_m:
+        zone[-1] = "stop"
+    return e, zone, h, t
+
+
+def _with_zones(links: pl.DataFrame, zones: pl.DataFrame | None, head: float, tail: float) -> pl.DataFrame:
+    """links + ``_head`` / ``_tail``: the pattern's own row of ``zones`` if any, else the link's row
+    (median over its patterns), else the defaults."""
+    out = links.with_columns(pl.lit(None, pl.Float64).alias("_head"), pl.lit(None, pl.Float64).alias("_tail"))
+    if zones is not None and zones.height:
+        z = zones.with_columns([pl.col(c).cast(pl.Float64) if c in zones.columns else pl.lit(None, pl.Float64).alias(c)
+                                for c in ("head_m", "tail_m")])
+        lookups = [z.group_by("link_key").agg(pl.col("head_m").median(), pl.col("tail_m").median())]
+        if "pattern_uid" in z.columns:
+            lookups.insert(0, z.unique(["pattern_uid", "link_key"], keep="first"))
+        for zk in lookups:
+            k = [c for c in ("pattern_uid", "link_key") if c in zk.columns]
+            zk = zk.select(*k, pl.col("head_m").alias("_h"), pl.col("tail_m").alias("_t"))
+            out = (out.join(zk, on=k, how="left")
+                   .with_columns(pl.coalesce("_head", "_h").alias("_head"), pl.coalesce("_tail", "_t").alias("_tail"))
+                   .drop("_h", "_t"))
+    return out.with_columns(pl.col("_head").fill_null(head), pl.col("_tail").fill_null(tail))
+
+
 # ---------------------------------------------------------------- segmentation
 def _links_table(network_or_links) -> pl.DataFrame:
     links = getattr(network_or_links, "links", network_or_links)
@@ -84,22 +127,28 @@ def _links_table(network_or_links) -> pl.DataFrame:
 
 
 def segment(network_or_links, length: float = 30.0, phase: float = 0.0,
-            grid: Literal["equal", "fixed", "adaptive"] = "equal",
+            grid: Literal["equal", "fixed", "adaptive", "stops"] = "equal",
             stop_zone: tuple[float, float] = (30.0, 60.0), *,
             patterns: list[str] | None = None,
+            zones: pl.DataFrame | None = None,
             breaks: dict[str, np.ndarray] | None = None,
             geometry: bool = True) -> pl.DataFrame:
     """SEGMENT table for every pattern of a Network (or a LINK table).
 
     ``breaks`` (grid ``"adaptive"``): ``{pattern_uid: break positions along the pattern, metres}``
-    (from :func:`adaptive_breaks`); stops are always breaks. ``geometry=False`` skips cutting the
-    polylines (faster, geometry column left empty)."""
+    (from :func:`adaptive_breaks`); stops are always breaks. ``zones`` (grid ``"stops"``): per-link
+    ``head_m`` / ``tail_m``, see the module docstring. ``geometry=False`` skips cutting the polylines
+    (faster, geometry column left empty)."""
     links = _links_table(network_or_links)
     if patterns is not None:
         links = links.filter(pl.col("pattern_uid").is_in(patterns))
     if grid == "adaptive" and breaks is None:
         raise ValueError("grid='adaptive' needs breaks={pattern_uid: positions}")
+    if zones is not None and grid != "stops":
+        raise ValueError("zones needs grid='stops'")
     up, down = float(stop_zone[0]), float(stop_zone[1])
+    if grid == "stops":
+        links = _with_zones(links, zones, head=down, tail=up)
     suffix = f"@{length:g}:{phase:g}" + ("f" if grid == "fixed" else "")
     cols = {k: [] for k in schema.SEGMENT}
     for (uid,), lk in links.sort("pattern_uid", "link_idx").group_by("pattern_uid", maintain_order=True):
@@ -113,14 +162,18 @@ def segment(network_or_links, length: float = 30.0, phase: float = 0.0,
                 inner = bk[(bk > a) & (bk < a + L_)] - a
                 e = _merge_slivers(np.concatenate([[0.0], inner, [L_]]))
                 sfx = f"@a:{_hash_offsets(e)}"
+            elif grid == "stops":
+                e, zone, h, t = _stop_edges(L_, r["_head"], r["_tail"], length, phase)
+                sfx = f"{suffix}s{h:g}_{t:g}"
             else:
                 e = link_edges(L_, length, phase, grid)
                 sfx = suffix
             lo, hi = e[:-1], e[1:]
             x0, x1 = a + lo, a + hi
             # overlap with [stop - up, stop + down] of any stop (positive length, or touching for 0-length bins)
-            ov = (x0[:, None] < stops[None, :] + down) & (x1[:, None] > stops[None, :] - up)
-            zone = np.where(ov.any(axis=1), "stop", "running")
+            if grid != "stops":
+                ov = (x0[:, None] < stops[None, :] + down) & (x1[:, None] > stops[None, :] - up)
+                zone = np.where(ov.any(axis=1), "stop", "running")
             g = r["geometry"]
             for k in range(len(lo)):
                 cols["pattern_uid"].append(uid)

@@ -83,7 +83,7 @@ class Select:
 class Params:
     segment_m: float = 30.0
     phase_m: float = 0.0
-    grid: Literal["equal", "fixed"] = "equal"  # equal: L' = len/round(len/L) per link; fixed: L with a short last bin
+    grid: Literal["equal", "fixed", "stops"] = "equal"  # equal: L' = len/round(len/L) per link; fixed: L with a short last bin; stops: zones as own bins
     tick_s: float = 20.0                     # nominal poll interval; per-vehicle feeds are put on this grid
     per_vehicle: Literal["resample", "thin"] = "resample"   # resample: locate.resample (unbiased); thin: 1 fix / tick
     gap_cap_s: float = 40.0                  # a poll covers at most this long

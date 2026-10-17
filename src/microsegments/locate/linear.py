@@ -32,6 +32,10 @@ date and GTFS version:
 6. **Short working end.** A short working in the last quarter (``frac >= 0.75``) of the link that
    leads to its own terminus stands at its terminus platform: dropped.
 
+**Approach gap** (:func:`approach`, applied after placing): STIB switches a vehicle to the next stop
+~36 m before it (``dist`` 0 until it leaves), so the feed metres of a link stop ~36 m short of it and
+step 4 stretches them over the whole link. :func:`approach` puts them back on ``[0, len - approach_m]``.
+
 The "short working start" rule (a track starting with >= 100 s standing at an intermediate stop) needs
 tracks: see :func:`microsegments.tracks.track_anonymous`, applied by :func:`microsegments.locate.place`.
 """
@@ -315,3 +319,23 @@ def place_linear(obs, net, params: Params | None = None, *, feed_length="auto",
     learned = {k: v for k, v in aliases.items() if k not in given}
     report["aliases_learned"] = len(learned)
     return Placed(frame=out, report=report, aliases=aliases, flen=flen)
+
+
+def approach(placed: pl.DataFrame, links: pl.DataFrame, approach_m: float) -> pl.DataFrame:
+    """Undo the stretch of step 4 for a feed that switches to the next stop ``approach_m`` before it.
+
+    ``pos = min(dist / flen, 1) * len`` becomes ``... * (len - approach_m)`` (so ``pos`` ~ ``dist`` on a
+    link whose feed metres are GTFS metres); rows standing at a stop (flag AT_STOP) keep their place,
+    ``s_m`` follows. ``links``: LINK rows (``pattern_uid``, ``link_idx``, ``len_m``)."""
+    if not placed.height or approach_m <= 0:
+        return placed
+    ln = links.select("pattern_uid", pl.col("link_idx").cast(placed.schema["link_idx"]), pl.col("len_m").alias("_len"))
+    x = placed.join(ln, on=["pattern_uid", "link_idx"], how="left")
+    keep = ((pl.col("flags") & int(Flag.AT_STOP)) != 0) | pl.col("_len").is_null() | (pl.col("_len") <= 0)
+    k = (pl.max_horizontal(pl.col("_len") - approach_m, pl.lit(0.0)) / pl.col("_len"))
+    pos = pl.when(keep).then(pl.col("pos_m")).otherwise(pl.col("pos_m") * k)
+    dt_ = placed.schema["pos_m"]
+    x = x.with_columns(pos.cast(dt_).alias("_pos"))
+    if "s_m" in x.columns:
+        x = x.with_columns((pl.col("s_m") - pl.col("pos_m") + pl.col("_pos")).cast(placed.schema["s_m"]).alias("s_m"))
+    return x.with_columns(pl.col("_pos").alias("pos_m")).drop("_pos", "_len")
