@@ -3,6 +3,7 @@ import polars as pl
 import pytest
 
 from microsegments import aggregate, metrics, tune
+from microsegments.config import Params
 from t4_fixtures import hotspot_line, simulate
 
 LENGTHS = (10, 15, 20, 30, 40, 50, 75, 100)
@@ -33,7 +34,8 @@ def _oracle(sim):
 
 def test_segment_length_matches_truth(sharp):
     res = tune.segment_length(sharp.placed, sharp.segment_fn, LENGTHS, coverage=sharp.coverage,
-                              passages=sharp.passages, pattern_days=sharp.pattern_days, n_splits=8, B=60, n_jaccard=1)
+                              passages=sharp.passages, pattern_days=sharp.pattern_days, n_splits=8, B=60, n_jaccard=1,
+                              params=Params(reference_hours=(20, 23)))   # the simulator's quiet evening ends at 23 h
     t = res.table
     assert t.height == len(LENGTHS)
     assert (t["link_total_dev"] == 0).all()

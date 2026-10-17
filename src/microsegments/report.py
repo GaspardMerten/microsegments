@@ -4,7 +4,7 @@
 Additive keys beyond ``contract.py`` (all optional for consumers):
 
 * ``bands``: the page's bands, in button order, ``{"am": [7, 10], "midday": [10, 16], "pm": [16, 19],
-  "evening": [20, 23]}`` ([start, end) hours; ``day_hours`` keeps the internal 6-21 h day);
+  "evening": [20, 24]}`` ([start, end) hours; ``day_hours`` keeps the internal 6-21 h day);
 * ``coverage.inc``: per date, ``true`` if the day is included, else the exclusion reason;
 * ``dirs[].alt``: one entry per non-display GTFS version of the direction (same keys as a ``dirs``
   item: ``pattern_uid, from, to, stops, links, seg, wk``), so the page can show its own segments;

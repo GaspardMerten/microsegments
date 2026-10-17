@@ -32,7 +32,7 @@ weekday)::
                          columns ``ref_line_obs_per_passage`` and ``excess_line_per_passage`` = O - r_l)
 
 Bands are emitted as extra rows with ``hour`` = -1 (am 7-10), -2 (pm 16-19), -3 (day 6-21),
--4 (evening 20-23), -5 (midday 10-16), all [start, end). The page offers ``PAGE_BANDS``; "day" stays
+-4 (evening 20-24), -5 (midday 10-16), all [start, end). The page offers ``PAGE_BANDS``; "day" stays
 internal (hotspots, tune, reference agreement).
 """
 from __future__ import annotations
@@ -48,7 +48,7 @@ from .config import Params, Quality, Select
 from .schema import RESULT, Flag, conform
 
 # same key order in both (band columns follow it); new bands go at the end so the codes stay stable
-BANDS: dict[str, tuple[int, int]] = {"am": (7, 10), "pm": (16, 19), "day": (6, 21), "evening": (20, 23), "midday": (10, 16)}
+BANDS: dict[str, tuple[int, int]] = {"am": (7, 10), "pm": (16, 19), "day": (6, 21), "evening": (20, 24), "midday": (10, 16)}
 BAND_HOUR: dict[str, int] = {"am": -1, "pm": -2, "day": -3, "evening": -4, "midday": -5}
 PAGE_BANDS = ("am", "midday", "pm", "evening")    # the page's "Période" buttons, in this order
 DAY_HOURS = (6, 21)

@@ -303,7 +303,7 @@ def test_contract_bands_and_longest_version():
     segs = sim.segment_fn(30)
     an = metrics.analyse(aggregate.count(sim.placed, segs), sim.coverage, sim.passages, segs, sim.pattern_days)
     c = to_contract(an)
-    assert c["bands"] == {"am": [7, 10], "midday": [10, 16], "pm": [16, 19], "evening": [20, 23]}
+    assert c["bands"] == {"am": [7, 10], "midday": [10, 16], "pm": [16, 19], "evening": [20, 24]}
     assert list(c["bands"]) == list(metrics.PAGE_BANDS) and c["day_hours"] == [6, 21]
     assert metrics.BAND_HOUR["midday"] in an.result["hour"].to_list()
     v = {r["pattern_uid"]: r for r in c["versions"] if r["dir"] == 0}

@@ -89,7 +89,7 @@ class Params:
     per_vehicle: Literal["resample", "thin"] = "resample"   # resample: locate.resample (unbiased); thin: 1 fix / tick
     gap_cap_s: float = 40.0                  # a poll covers at most this long
     stop_zone: tuple[float, float] = (30.0, 60.0)   # metres before / after a stop masked as "stop" zone
-    reference_hours: tuple[int, int] = (20, 23)     # [start, end) "normal" evening reference
+    reference_hours: tuple[int, int] = (20, 24)     # [start, end) "normal" evening reference
     reference: Literal["evening", "freeflow"] = "evening"
     layover_m: float = 10.0                  # at the first stop of a pattern closer than this = terminus layover
     max_lateral_m: float = 40.0              # map matching: reject fixes farther from the shape

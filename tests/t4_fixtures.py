@@ -66,7 +66,7 @@ class Sim:
         """True density obs / m / passage at pattern position x (m)."""
         return density(x, hour, self.link_len, self.hots, self.speed, self.stop_dwell_s, factor)
 
-    def truth_seg(self, segs: pl.DataFrame, hour: int, ref_hours=(20, 23)) -> dict[str, np.ndarray]:
+    def truth_seg(self, segs: pl.DataFrame, hour: int, ref_hours=(20, 24)) -> dict[str, np.ndarray]:
         """Expected obs per passage per segment of P0 at ``hour`` and its evening reference."""
         s = segs.filter(pl.col("pattern_uid") == "P0").sort("seg_idx")
         x0, ln = s["x0_m"].to_numpy(), s["len_m"].to_numpy()
