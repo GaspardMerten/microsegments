@@ -237,7 +237,7 @@ const T = {
     stopsTitle: (a, b) => `Zone d'arrêt : de ${a} m avant à ${b} m après chaque arrêt`,
     // stop zone '*' (toggle and legend); stib: the feed is STIB vehicle-distance (its ~36 m blind zone)
     stopsHelp: (stib) => `${zoneSpan('fr', true)}, montrée comme un seul bloc, montée et descente comprises. ` + (stib
-      ? `${FEEDZ ? 'Entre les deux' : 'Dans la zone'}, la STIB signale « distance 0 » : on ne sait pas où le temps se perd.`
+      ? `Dans cette zone, la STIB signale « distance 0 » : on ne sait pas où le temps se perd.`
       : `Près de l'arrêt, la position publiée ne dit pas où le temps se perd.`),
     why30: `Pourquoi 30 m ? À cette taille, le temps perdu sur un microsegment est connu à ± 0,5–1,5 s par véhicule, 2 à 3 fois moins que les écarts visibles sur la carte. Plus court, c'est plus incertain ; plus long, on ne sait plus où est le point lent.`,
     towards: t => `vers ${t}`,
@@ -332,7 +332,7 @@ const T = {
     stopsl: {true: 'Shown', false: 'Hidden'},
     stopsTitle: (a, b) => `Stop zone: ${a} m before to ${b} m after each stop`,
     stopsHelp: (stib) => `${zoneSpan('en', true)}, shown as one block, boarding included. ` + (stib
-      ? `${FEEDZ ? 'In between' : 'There'}, STIB reports "distance 0", so we cannot tell where the time is lost.`
+      ? `In this zone, STIB reports "distance 0", so we cannot tell where the time is lost.`
       : `Near the stop, the published position does not tell where the time is lost.`),
     why30: `Why 30 m? At this size, the time lost on a microsegment is known to ± 0.5–1.5 s per vehicle, 2 to 3 times less than the differences visible on the map. Shorter is more uncertain; longer, we no longer know where the slow spot is.`,
     towards: t => `to ${t}`,
@@ -651,21 +651,11 @@ const colorFor = v => !shown(v) ? MASKC : timeColor(toT(metricVal(v)));
 const ZONE = P.stop_zone || [30, 60];
 // grid "stops": the zones follow the feed (from where it switches to the stop to its exit mark, set per stop)
 const FEEDZ = P.grid === 'stops';
-// metres after the stop actually drawn (min and max over the zones around one stop), for the texts
-function zoneAfter() {
-  const a = [];
-  for (const E of DIRS.flatMap(d => [d, ...(d.alt || [])])) for (const z of zonesOf(E).Z) {
-    const t = E.stops.filter(t => t.x > z.x0 + .5 && t.x < z.x1 - .5);
-    if (t.length === 1) a.push(z.x1 - t[0].x);
-  }
-  return a.length ? [Math.min(...a), Math.max(...a)] : [ZONE[1], ZONE[1]];
-}
 function zoneSpan(lang, one) {
-  const fr = lang === 'fr', [lo, hi] = FEEDZ ? zoneAfter() : [ZONE[1], ZONE[1]];
-  const a = nf(ZONE[0], 0), b = nf(lo, 0) === nf(hi, 0) ? nf(lo, 0) : `${nf(lo, 0)}–${nf(hi, 0)}`;
+  const fr = lang === 'fr', a = nf(ZONE[0], 0), b = nf(ZONE[1], 0), m1 = noun(false);
   if (!FEEDZ) return fr ? `De ${a}\u00a0m avant à ${b}\u00a0m après ${one ? 'l\'arrêt' : 'chaque arrêt'}` : `From ${a} m before to ${b} m after ${one ? 'the stop' : 'each stop'}`;
-  return fr ? `Du point où la STIB rattache le ${noun(false)} à l'arrêt (${a}\u00a0m avant) jusqu'à son message de départ (${b}\u00a0m après, selon l'arrêt)`
-            : `From where STIB ties the ${noun(false)} to the stop (${a} m before) to its departure message (${b} m after, depending on the stop)`;
+  return fr ? (one ? `La partie où la STIB rattache le ${m1} à l'arrêt, de son approche jusqu'à son départ` : `Les parties où la STIB rattache le ${m1} à un arrêt, de son approche jusqu'à son départ`)
+            : (one ? `The stretch where STIB ties the ${m1} to the stop, from its approach until it leaves` : `The stretches where STIB ties the ${m1} to a stop, from its approach until it leaves`);
 }
 function zonesOf(E) {
   if (E._zones) return E._zones;
