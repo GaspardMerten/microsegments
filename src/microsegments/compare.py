@@ -53,7 +53,7 @@ import polars as pl
 from .hotspots import _bh, _erfc, bootstrap_weights, nanquantile0
 from .metrics import BAND_HOUR, BANDS, Analysis, DirData
 
-COMPARE_BANDS = ("am", "pm", "day", "evening")
+COMPARE_BANDS = ("am", "pm", "day", "evening", "midday")
 MIN_DAYS = 5          # per period, as hotspots.MIN_HOTSPOT_DAYS: fewer days, no stretch is reported
 STRETCH_BANDS = ("am", "pm", "day")
 

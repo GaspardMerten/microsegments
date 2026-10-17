@@ -3,7 +3,8 @@
 
 Additive keys beyond ``contract.py`` (all optional for consumers):
 
-* ``bands``: ``{"am": [7, 10], "pm": [16, 19], "day": [6, 21], "evening": [20, 23]}`` ([start, end) hours);
+* ``bands``: the page's bands, in button order, ``{"am": [7, 10], "midday": [10, 16], "pm": [16, 19],
+  "evening": [20, 23]}`` ([start, end) hours; ``day_hours`` keeps the internal 6-21 h day);
 * ``coverage.inc``: per date, ``true`` if the day is included, else the exclusion reason;
 * ``dirs[].alt``: one entry per non-display GTFS version of the direction (same keys as a ``dirs``
   item: ``pattern_uid, from, to, stops, links, seg, wk``), so the page can show its own segments;
@@ -18,6 +19,13 @@ Additive keys beyond ``contract.py`` (all optional for consumers):
 * ``reference_agreement``: per direction, ``metrics.reference_agreement`` (Spearman of the two day-band
   excess profiles, top-segment overlap, hotspots per criterion and share found by both);
 * ``compare``: present on a two-period page (``compare.Comparison.to_contract``), see ``contract.py``.
+
+The display version of a direction (``dirs[]``, ``versions[].display``) is the longest one (route length,
+then segment count, then the most recent). Page options a host may add: ``host_controls``, ``dir_control``,
+``method``, ``show_hotspots``, ``tile_url`` / ``tile_attr`` (its own basemap; default OpenStreetMap,
+darkened). Exclusion reasons the page names: the metrics ones plus ``holiday``, ``reduced_service``,
+``school_holiday``, ``user_period``. postMessage to the page: ``{ms: "dir", dir}``, ``{ms: "ver", uid}``
+(a ``pattern_uid`` of ``dirs[]`` or ``dirs[].alt``; also ``?ver=<uid>`` on load).
 """
 from __future__ import annotations
 
@@ -29,7 +37,7 @@ import numpy as np
 import polars as pl
 
 from .contract import CONTRACT_VERSION
-from .metrics import BANDS, DAY_HOURS, Analysis
+from .metrics import BANDS, DAY_HOURS, PAGE_BANDS, Analysis
 from .schema import Flag
 
 ROUTE_TYPES = {0: "tram", 1: "metro", 2: "rail", 3: "bus", 4: "ferry", 5: "cable_tram", 6: "aerial_lift",
@@ -292,7 +300,7 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
                    "stop_zone": list(p.stop_zone), "reference_hours": list(p.reference_hours)},
         "period": period,
         "hours": list(an.hours),
-        "bands": {k: list(v) for k, v in BANDS.items()},
+        "bands": {k: list(BANDS[k]) for k in PAGE_BANDS},
         "day_hours": list(DAY_HOURS),
         "coverage": {"dates": [d.isoformat() for d in dates], "c": c, "inc": inc},
         "versions": versions,

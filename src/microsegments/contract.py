@@ -43,7 +43,7 @@ is period B's, plus an additive ``compare`` section (the page then opens in "com
       "a": {"first", "last", "days", "per_dow", "excluded"},   # period A, before
       "b": {...},                                              # period B, after
       "params": {B, seed, theta_s, theta_bin_s, q, level, freq_change, gap, tick_s, status},
-      "cols": [5, ..., 23, "am", "pm", "day", "evening"],     # column labels of the matrices below
+      "cols": [5, ..., 23, "am", "pm", "day", "evening", "midday"],   # column labels of the matrices below
       "dirs": [{"dir", "pattern_uid",                          # B's display pattern
                 "seg_key": [seg], "matched": [0|1],            # segments without match: null values
                 "only_a": n, "only_b": n,                      # unmatched segment counts

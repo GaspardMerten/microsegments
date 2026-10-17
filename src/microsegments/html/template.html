@@ -25,27 +25,42 @@ html,body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 var(--
 a{color:var(--acc)}
 .wrap{max-width:1180px;margin:0 auto;padding-left:24px;padding-right:24px}
 header{padding-top:40px;padding-bottom:8px}
-.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.kicker{font:500 12px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
-h1{font:800 clamp(32px,5vw,56px)/1.04 var(--serif);letter-spacing:-.02em;margin:14px 0 16px;max-width:24ch;hyphens:manual}
-h1 .badge{display:inline-block;background:var(--acc);color:#111;font:700 .62em/1 var(--sans);padding:.14em .32em;border-radius:.18em;vertical-align:.12em;margin-right:.22em}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+h1{font:800 clamp(28px,4.4vw,48px)/1.08 var(--serif);letter-spacing:-.02em;margin:0 0 10px;max-width:28ch;hyphens:manual}
+h1 .badge{display:inline-block;background:var(--acc);color:#111;font:700 .7em/1 var(--sans);padding:.12em .3em;border-radius:.18em;vertical-align:.08em;margin:0 .04em}
 h2{font:700 24px/1.2 var(--serif);margin:0 0 6px}
-p.lede{font-size:clamp(17px,1.6vw,19px);color:var(--ink-2);max-width:68ch;margin:0}
+p.per{font-size:clamp(15px,1.5vw,17px);color:var(--ink-2);max-width:90ch;margin:0}
+p.per .x{color:var(--ink-3)}
 .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:28px}
 .tiles.t3{grid-template-columns:repeat(3,1fr)}
+.tiles[hidden]{display:none}
+#langs{flex:none;flex-wrap:nowrap}
 .tiles.t2{grid-template-columns:repeat(2,1fr)}
 .tile{background:var(--surface);padding:18px 18px 16px;min-width:0}
 .tile b{display:block;font:700 clamp(24px,3vw,32px)/1 var(--serif);font-variant-numeric:tabular-nums}
 .tile span{display:block;margin-top:8px;color:var(--ink-2);font-size:14px;line-height:1.4}
 .controls{display:flex;align-items:center;gap:12px 18px;flex-wrap:wrap;margin-top:24px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
-.clock{font:600 30px/1 var(--mono);min-width:110px;font-variant-numeric:tabular-nums}
+.clock{font:600 26px/1 var(--mono);min-width:200px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .clock small{display:block;font:500 11px var(--mono);letter-spacing:.1em;color:var(--ink-3);text-transform:uppercase;margin-top:4px}
 #play{font:inherit;min-width:120px;background:var(--acc);border:0;border-radius:10px;color:#111;font-weight:700;padding:9px 14px;cursor:pointer}
 #play:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .slider{flex:1 1 240px;display:flex;flex-direction:column;gap:2px;min-width:0}
-input[type=range]{width:100%;accent-color:var(--acc)}
+/* two-handle hour range: two stacked range inputs, only their thumbs take the pointer */
+.dual{position:relative;height:24px;--th:18px}
+.dual .trk,.dual .sel{position:absolute;top:10px;height:4px;border-radius:2px}
+.dual .trk{left:calc(var(--th) / 2);right:calc(var(--th) / 2);background:var(--line)}
+.dual .sel{background:var(--acc)}
+.dual input{position:absolute;inset:0;width:100%;height:24px;margin:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}
+.dual input::-webkit-slider-runnable-track{background:none;border:0}
+.dual input::-moz-range-track{background:none;border:0}
+.dual input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:var(--th);height:var(--th);border-radius:50%;background:var(--acc);border:3px solid var(--surface);box-shadow:0 0 0 1px var(--acc);cursor:grab}
+.dual input::-moz-range-thumb{pointer-events:auto;width:12px;height:12px;border-radius:50%;background:var(--acc);border:3px solid var(--surface);box-shadow:0 0 0 1px var(--acc);cursor:grab}
+.dual input.top{z-index:2}
+@media (max-width:600px){.dual,.ticks{--th:14px}.dual input::-webkit-slider-thumb{border-width:2px}}
+.dual input:focus-visible::-webkit-slider-thumb{outline:2px solid #fff;outline-offset:1px}
+.dual input:focus-visible::-moz-range-thumb{outline:2px solid #fff;outline-offset:1px}
 /* hour ticks at their true place on the slider (the thumb centre runs from --th/2 to 100% - --th/2) */
-.ticks{position:relative;height:16px;font:11px var(--mono);color:var(--ink-3);--th:16px}
+.ticks{position:relative;height:16px;font:11px var(--mono);color:var(--ink-3);--th:18px}
 .ticks span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
 .grp{display:inline-flex;align-items:center;gap:10px;flex-wrap:nowrap}
 .grp[hidden]{display:none}
@@ -64,6 +79,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 #map .nomap{padding:24px;color:var(--ink-3)}
 @media (min-width:900px){.mapcol{position:sticky;top:16px}}
 .leaflet-container{background:var(--deep);font-family:var(--sans)}
+.osmdark{filter:invert(1) hue-rotate(180deg) saturate(.25) brightness(.62) contrast(1.15)}
 .leaflet-control-attribution{background:rgba(9,17,36,.75)!important;color:var(--ink-3)!important;font-size:10px}
 .leaflet-control-attribution a{color:var(--ink-2)!important}
 .leaflet-tooltip{background:#0f1830;color:var(--ink);border:1px solid var(--line);box-shadow:0 4px 16px rgba(0,0,0,.4);font:13px/1.45 var(--sans)}
@@ -110,6 +126,16 @@ body.nohs #map{height:min(70vh,640px)}
 .hs .v small{display:block;font:500 11px var(--mono);color:var(--ink-3);margin-top:4px}
 .hs .n{display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--hot);color:#111;font:700 12px/22px var(--sans);text-align:center}
 .empty{color:var(--ink-3);font-size:14px;padding:8px}
+.lnum{font-size:14px;margin:0 0 10px;color:var(--ink-2)}.lnum b{color:var(--ink);font-variant-numeric:tabular-nums}
+.lk{font:inherit;font-size:13px;color:var(--acc);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
+.ialist{max-height:520px;overflow:auto;margin:0 -4px}
+label.ia{display:grid;grid-template-columns:18px 14px minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px 4px;border-radius:6px;cursor:pointer;font-size:14px}
+label.ia:hover{background:var(--surface-2)}label.ia .sw{margin:0}label.ia.x .nm,label.ia.x .v{color:var(--ink-3);text-decoration:line-through}
+label.ia .ar{color:var(--ink-3)}label.ia .v{font:600 14px var(--mono);font-variant-numeric:tabular-nums}
+.selbig b{font:700 32px/1 var(--serif);font-variant-numeric:tabular-nums}.selbig span{color:var(--ink-3);font:500 12px var(--mono)}
+.side .meta{font:12px/1.5 var(--mono);color:var(--ink-3);margin-top:4px}
+.selctl{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-top:14px;font-size:13px;color:var(--ink-3)}
+.selctl select{font:inherit;font-size:13px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:5px 6px;max-width:150px}
 section.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:20px}
 .sub{color:var(--ink-3);font-size:13px;margin:0 0 12px;max-width:110ch}
 .axis text{fill:var(--ink-3);font:11px var(--mono)}
@@ -127,6 +153,10 @@ footer{color:var(--ink-3);font-size:12px;padding:28px 0 48px}
 body.mxopen{overflow:hidden}
 .svgwrap{overflow:hidden}
 svg{display:block}
+.mxwrap{display:flex;align-items:flex-start}
+.mxwrap #mx{flex:none;overflow:visible}
+.mxwrap #mxh{flex:none;position:sticky;left:0;z-index:1;background:var(--surface);cursor:pointer}
+#mxcard.full .mxwrap{overflow-x:auto}
 #tip{position:fixed;z-index:3000;pointer-events:none;background:#0f1830;color:var(--ink);border:1px solid var(--line);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.4);font:13px/1.45 var(--sans);padding:6px 9px;max-width:320px;display:none}
 .cal{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
 .cal svg text{fill:var(--ink-3);font:10px var(--mono)}
@@ -134,15 +164,14 @@ svg{display:block}
 .calwrap{overflow-x:auto;max-width:100%}
 .vtag{font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#c9b36a;border:1px solid #6b5d2e;border-radius:4px;padding:1px 5px;white-space:nowrap;margin-left:6px}
 @media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}#map,body.nohs #map{height:440px}.tiles{grid-template-columns:repeat(2,1fr)}.tiles.t3{grid-template-columns:repeat(2,1fr)}.tiles.t3 .tile:last-child{grid-column:1/-1}}
-@media (max-width:600px){.wrap{padding-left:16px;padding-right:16px}header{padding-top:24px}.clock{font-size:24px;min-width:90px}}
+@media (max-width:600px){.wrap{padding-left:16px;padding-right:16px}header{padding-top:24px}.clock{font-size:22px;min-width:0}}
 </style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><pattern id="mshatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><rect width="6" height="6" fill="#18213a"/><rect width="2.4" height="6" fill="#5d6a88"/></pattern><pattern id="mszone" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><rect width="2.4" height="6" fill="#0b1224" fill-opacity=".5"/></pattern></defs></svg>
 <header class="wrap">
-  <div class="top"><div class="kicker" id="kicker"></div><div class="seg" id="langs" role="group" aria-label="Language"></div></div>
-  <h1 id="h1"></h1>
-  <p class="lede" id="lede"></p>
+  <div class="top"><h1 id="h1"></h1><div class="seg" id="langs" role="group" aria-label="Language"></div></div>
+  <p class="per" id="per"></p>
   <div class="tiles" id="tiles"></div>
 </header>
 <main class="wrap">
@@ -150,17 +179,18 @@ svg{display:block}
     <div class="clock" id="clock"></div>
     <button id="play" type="button" aria-pressed="false"></button>
     <div class="slider">
-      <input type="range" id="hour" step="1">
+      <div class="dual" id="dual"><div class="trk"></div><div class="sel" id="hsel"></div><input type="range" id="hA" step="1"><input type="range" id="hB" step="1"></div>
       <div class="ticks" id="hticks"></div>
     </div>
     <div class="row2">
+      <span class="grp"><label id="l_views"></label><div class="seg" id="views"></div></span>
       <span class="grp" id="g_mode" hidden><label id="l_mode"></label><div class="seg" id="modes"></div></span>
       <span class="grp" id="g_days"><label id="l_days"></label><div class="seg" id="days"></div></span>
       <span class="grp"><label id="l_dir"></label><div class="seg" id="dirs"></div></span>
       <span class="grp" id="g_ver" hidden><label id="l_ver"></label><div class="seg" id="vers"></div></span>
       <span class="grp"><label id="l_bands"></label><div class="seg" id="bands"></div></span>
       <span class="grp"><label id="l_metric"></label><div class="seg" id="metric"></div></span>
-      <span class="grp"><label id="l_stops"></label><div class="seg" id="stopsT"></div><span id="stopsQ"></span></span>
+      <span class="grp" id="g_stops"><label id="l_stops"></label><div class="seg" id="stopsT"></div><span id="stopsQ"></span></span>
     </div>
   </div>
   <div class="grid">
@@ -178,7 +208,7 @@ svg{display:block}
     <div class="mxhead"><h2 id="mxtitle"></h2><span class="grp"><div class="seg" id="mxdirs"></div><button id="mxfull" class="btn" type="button" aria-pressed="false"></button></span></div>
     <p class="sub" id="mxsub"></p>
     <div class="legend mxleg" id="mxlegend"></div>
-    <div class="svgwrap"><svg id="mx" width="100%" role="img"></svg></div>
+    <div class="svgwrap mxwrap" id="mxwrap"><svg id="mxh" aria-hidden="true"></svg><svg id="mx" role="img"></svg></div>
   </section>
   <section class="card">
     <h2 id="proftitle"></h2>
@@ -207,7 +237,8 @@ const TICK = P.tick_s || 20;
 const REFH = P.reference_hours || [20, 23];
 const HTH = P.hotspot_theta_s ?? 2;   // hotspot threshold, seconds per vehicle
 const DAYH = D.day_hours || [6, 21];
-const BANDDEF = D.bands || {am: [7, 10], pm: [16, 19], day: [6, 21], evening: [20, 23]};
+// the "Période" buttons, [start, end) hours (an older contract's "day" band is not offered)
+const BANDDEF = Object.fromEntries(Object.entries({am: [7, 10], midday: [10, 16], pm: [16, 19], evening: [20, 23]}).map(([k, v]) => [k, (D.bands || {})[k] || v]));
 const LOC = {fr: 'fr-BE', en: 'en-GB'};
 const LINEH = [6, 23];   // window of the line-level reference
 
@@ -218,195 +249,197 @@ const NOUN = {
 };
 const MODE = {fr: {tram: 'Tram', bus: 'Bus', trolleybus: 'Trolleybus', metro: 'Métro', rail: 'Train', ferry: 'Bateau', _: 'Ligne'},
               en: {tram: 'Tram', bus: 'Bus', trolleybus: 'Trolleybus', metro: 'Metro', rail: 'Train', ferry: 'Ferry', _: 'Line'}};
-const REFL = () => `${REFH[0]}–${REFH[1]} h`;
+// hours are always written as a range, "20:00–22:59" (end hour excluded); see rangeLabel
+const REFL = () => rangeLabel(REFH), DAYL = () => rangeLabel(DAYH);
 const T = {
   fr: {
-    title: (m, l) => `Où les ${m} s'attardent-ils ?`,
-    lede: (L, tk, m1, m) => `Toutes les ${tk} secondes, chaque ${m1} signale sa position. La ligne est découpée en microsegments de ${L} m§ : 1 signalement dans un microsegment ≈ ${tk} secondes passées là. Le temps passé par ${m1} ne dépend pas du nombre de ${m} qui passent. Vert = ça roule, rouge = ça bloque.`,
-    days: 'Jours', dir: 'Sens', ver: 'Version du tracé', bands: 'Moyennes', metric: 'Mesure', stops: 'Zones d\'arrêt',
+    // "Tram 92 direction Fort-Jaco" (the line number is the badge)
+    title: (mode, badge, to) => `${mode} ${badge}${to ? ` direction ${to}` : ''}`,
+    span: (a, b) => `du ${a} au ${b}`,
+    days: 'Jours', dir: 'Sens', ver: 'Version du tracé', bands: 'Période', metric: 'Mesure', stops: 'Zones d\'arrêt',
+    hstart: 'Début', hend: 'Fin',
     dow: ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'], dowl: ['lundis', 'mardis', 'mercredis', 'jeudis', 'vendredis', 'samedis', 'dimanches'],
     dowd: ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'],
     alldays: 'tous les jours retenus', weekdays: 'jours ouvrables',
-    bandl: {am: 'Pointe du matin', pm: 'Pointe du soir', day: 'Journée', evening: 'Soirée'},
+    bandl: {am: 'Pointe du matin', midday: 'Creux du midi', pm: 'Pointe du soir', evening: 'Creux du soir', day: 'Journée'},
     // buttons (short) and full names of the measures; the order is the buttons' order
-    metrics: m1 => ({opp: 'Temps passé', ex: 'Temps perdu (soirée)'}),
-    mname: m1 => ({opp: `Temps passé par ${m1}`, ex: `Temps perdu par rapport à la soirée (${REFL()})`, exl: 'Temps perdu par rapport au rythme habituel de la ligne', oph: 'Signalements par heure'}),
+    metrics: m1 => ({opp: 'Vitesse moyenne', ex: 'Écart avec la soirée'}),
+    mname: m1 => ({opp: 'Vitesse moyenne', ex: `Écart de vitesse avec la soirée (${REFL()})`}),
     view: 'Vue', modes: {one: 'Une période', cmp: 'Comparer deux périodes'},
-    cmetrics: m1 => ({d: 'Temps passé', dx: 'Temps perdu (soirée)'}),
     stopsl: {true: 'Affichées', false: 'Masquées'},
+    views: 'Affichage', viewl: {ms: 'Microsegments', ia: 'Interarrêts', sel: 'Sélection'},
+    ia: {title: 'Interarrêts', note: 'Décochez un interarrêt, ou cliquez-le sur la carte, pour le retirer des totaux de la ligne.', reinc: 'Tout réinclure',
+         excl: 'interarrêt exclu', xtip: 'exclu des totaux de la ligne', on: 'clic : exclure', off: 'clic : réinclure',
+         help: (m1) => `D'un départ d'arrêt au départ suivant : la longueur divisée par le temps moyen d'un ${m1}, arrêt d'arrivée compris.`},
+    line: 'Ligne', nx: n => `${n} ${n > 1 ? 'interarrêts exclus' : 'interarrêt exclu'}`,
+    sel: {title: 'Sélection', hint: 'Cliquez un premier puis un dernier microsegment, sur la carte ou dans le tableau.', hint2: 'Cliquez le dernier microsegment.',
+          all: 'Toute la ligne', clear: 'Effacer', from: 'De', to: 'à', pick: '—', len: 'longueur', tpv: m1 => `par ${m1}`, share: 'du temps de la ligne',
+          skip: m => `${m} non comptés (hors interarrêts retenus)`, none: 'pas assez de données'},
     // stop zone '*' (toggle and legend); stib: the feed is STIB vehicle-distance (its ~36 m blind zone)
-    stopsHelp: (stib) => `${zoneSpan('fr', true)}, montrée comme un seul bloc, montée et descente comprises. ` + (stib
-      ? `Dans cette zone, la STIB signale « distance 0 » : on ne sait pas où le temps se perd.`
-      : `Près de l'arrêt, la position publiée ne dit pas où le temps se perd.`),
-    why30: `Pourquoi 30 m ? À cette taille, le temps perdu sur un microsegment est connu à ± 0,5–1,5 s par véhicule, 2 à 3 fois moins que les écarts visibles sur la carte. Plus court, c'est plus incertain ; plus long, on ne sait plus où est le point lent.`,
+    stopsHelp: (stib) => `${zoneSpan('fr', true)}, montrée comme un seul bloc, arrêt compris. ` + (stib
+      ? `Dans cette zone, la STIB signale « distance 0 » : on ne sait pas où le véhicule ralentit.`
+      : `Près de l'arrêt, la position publiée ne dit pas où le véhicule ralentit.`),
     towards: t => `vers ${t}`,
-    play: '▶ Lecture', pause: '❚❚ Pause', mean: 'moyenne',
+    play: '▶ Lecture', pause: '❚❚ Pause',
     sv: 'Ouvrir dans Street View ↗',
     tiles: {
-      days: (n, x) => `jours retenus${x ? ` ; ${x}` : ''}`,
-      segs: (n, L) => `microsegments de ${L} m (deux sens)`,
+      days: (n, x) => `${n > 1 ? 'jours retenus' : 'jour retenu'}${x ? ` ; ${x}` : ''}`,
+      segs: (n, L) => `microsegments de ${L} m (deux sens)`,
       obs: 'signalements sur la période',
-      hs: (n) => D.hotspots_status === 'not_computed' ? 'points chauds : pas assez de jours pour les repérer' : n ? 'points chauds : des retards répétés d\'un jour à l\'autre' : 'aucun point chaud net sur la période',
+      hs: (n) => D.hotspots_status === 'not_computed' ? 'points chauds : pas assez de jours pour les repérer' : n ? 'points chauds : des ralentissements répétés d\'un jour à l\'autre' : 'aucun point chaud net sur la période',
     },
-    hstitle: 'Points chauds', hsnote: (m1, tk) => `Tronçons où chaque ${m1} perd nettement du temps jour après jour, par rapport à la soirée ou au rythme habituel de la ligne. Valeur : secondes perdues par ${m1} sur le tronçon. Cliquez pour le voir sur la carte.`,
+    hstitle: 'Points chauds', hsnote: (m1, m) => `Tronçons où les ${m} ralentissent nettement jour après jour, par rapport à la soirée ou au rythme habituel de la ligne. Valeur : écart de vitesse sur le tronçon. Cliquez pour le voir sur la carte.`,
     hsnone: 'Aucun point chaud ne ressort dans ce sens : les écarts restent faibles ou varient trop d\'un jour à l\'autre.',
     hsstops: 'Dans ce sens, les points chauds sont aux arrêts : affichez les zones d\'arrêt pour les voir.',
     crit: {peak: 'par rapport à la soirée', persistent: 'par rapport au rythme habituel de la ligne', both: 'par rapport à la soirée et au rythme habituel de la ligne'},
     hsalt: 'Les points chauds sont calculés sur la version principale du tracé.',
-    hsnot: 'Points chauds non calculés : il faut au moins 5 jours pour juger si un retard se répète.',
+    hsnot: 'Points chauds non calculés : il faut au moins 5 jours pour juger si un ralentissement se répète.',
     hsmore: n => `Voir les ${n} points chauds`, hsless: 'N\'afficher que les principaux',
     kind: {infrastructure: 'toute la journée', congestion: 'aux heures de pointe', mixed: 'mixte'},
     zone: {stop: 'à l\'arrêt', running: 'entre les arrêts'},
-    perveh: m1 => `s perdues par ${m1}`, ci: (a, b) => `IC 95 % : ${a} à ${b}`, daysPct: p => `${p} % des jours`, secs: s => `${s} signalements`,
+    kmh: 'km/h', hsv: (a, b) => `${a} au lieu de ${b} km/h`, ci: (a, b) => `IC 95 % : ${a} à ${b} km/h`, ci1: a => `IC 95 % : plus de ${a} km/h`, ciap: 'IC approché (plusieurs heures)', daysPct: p => `${p} % des jours`,
     legend: {
-      lab: {opp: m1 => `Temps passé par ${m1}, s pour 30 m`,
-            ex: m1 => `Temps perdu par rapport à la soirée (${REFL()}), s pour 30 m`,
-            exl: m1 => `Temps perdu par rapport au rythme habituel de la ligne, s pour 30 m`,
-            oph: m1 => 'Signalements par heure, pour 30 m'},
-      freq: (v, m) => `≈ ${v} ${m} par heure à ce moment`, kmhRow: ' ; en bas\u00a0: km/h',
+      lab: {opp: m1 => 'Vitesse moyenne, km/h', ex: m1 => `Écart de vitesse avec la soirée (${REFL()}), %`},
       help: {
-        opp: (m1, m) => `Temps moyen d'un ${m1} sur 30 m. Chaque ${m1} signale sa position toutes les ${TICK} s : 1 signalement ≈ ${TICK} s.`,
-        oph: (m1, m) => `Nombre de signalements par heure sur ces 30 m ; il augmente aussi avec le nombre de ${m}.`,
-        ex: (m1, m) => `Temps passé à cette heure moins celui de la soirée (${REFL()}, trafic fluide), par ${m1}.`,
-        exl: (m1, m) => `Temps passé ici moins le temps habituel de la ligne entre les arrêts (médiane ${LINEH[0]}–${LINEH[1]} h). Fait ressortir les feux et carrefours lents à toute heure.`,
+        opp: (m1, m) => `Microsegments de ${P.segment_m || 30} m : longueur divisée par le temps qu'y passe un ${m1} en moyenne. Vert : fluide ; rouge : lent.`,
+        ex: (m1, m) => `Vitesse aux heures choisies moins celle de la soirée (${REFL()}, trafic fluide), en % de celle-ci. Négatif : plus lent qu'en soirée.`,
       },
+      slower: 'plus lent', faster: 'plus rapide',
       masked: 'zone d\'arrêt masquée', zone: 'zone d\'arrêt', nodata: 'pas assez de données', hot: 'point chaud', evening: ' (la soirée est la référence)',
       what: 'Explication',
     },
     tip: {
       after: (a, b, s) => `${a} à ${b} m après ${s}`, towards: t => `vers ${t}`,
-      opp: (s, k, m1) => `Temps passé par ${m1} : ${s} s pour 30 m (${k} km/h)`,
-      ex: s => `Temps perdu par rapport à la soirée : ${s} s`, same: 'Temps perdu par rapport à la soirée : aucun',
-      exl: s => `Temps perdu par rapport au rythme habituel de la ligne : ${s} s`,
-      oph: v => `Signalements par heure : ${v}`, freq: (v, m) => `${v} ${m} par heure`,
-      stop: 'Zone d\'arrêt', nodata: 'pas assez de données', days: n => `${n} jours`, partial: 'tronçon absent certains jours',
-      zhead: s => `Arrêt ${s}`, zopp: (s, m1) => `Temps passé par ${m1} dans la zone : ${s} s, montée et descente comprises`,
-      zex: (s, m1) => `Temps perdu par rapport à la soirée : ${s} s`, zexl: (s, m1) => `Temps perdu par rapport au rythme habituel de la ligne : ${s} s`,
-      zoph: v => `Signalements par heure : ${v}`, zone: (a, b) => `Zone d'arrêt : ${a} m avant, ${b} m après`,
+      opp: k => `<b>${k} km/h</b>`, ex: k => `Écart avec la soirée : ${k}`,
+      freq: (v, m) => `${v} ${m} par heure`,
+      stop: 'Zone d\'arrêt', nodata: 'pas assez de données', days: n => `${n} ${n > 1 ? 'jours' : 'jour'}`, partial: 'tronçon absent certains jours',
+      zhead: s => `Arrêt ${s}`, zopp: k => `<b>${k} km/h</b> dans la zone, arrêt compris`,
+      uhead: (a, b) => `${a} → ${b}`,
     },
     mxtitle: 'Toute la journée d\'un coup d\'œil',
-    mxsub: (f, t, d, what, stops, hs) => [`De ${f} à ${t}, ${d}.`, `En colonnes, la ligne (traits sombres : arrêts) ; en lignes, les heures. Cliquez sur une heure pour l'afficher sur la carte.`],
+    mxsub: (f, t, d) => [`De ${f} à ${t}, ${d}.`, `En colonnes, la ligne (traits sombres : arrêts) ; en lignes, les heures. Cliquez sur une heure pour l'afficher sur la carte.`],
     full: '⛶ Plein écran', unfull: '✕ Quitter le plein écran',
     proftitle: 'Le long de la ligne, microsegment par microsegment',
-    profsub: (f, t, w, ref, m) => [`De ${f} à ${t}, ${w}.`, `Hauteur : la mesure choisie dans chaque microsegment. Traits verticaux : arrêts.${ref ? ` Trait blanc : la soirée (${REFL()}).` : ''} Pointillés jaunes : ${m} par heure (échelle de droite).`],
+    profsub: (f, t, w, ref, m) => [`De ${f} à ${t}, ${w}.`, `Hauteur : la mesure choisie dans chaque microsegment, en km/h. Traits verticaux : arrêts.${ref ? ` Trait blanc : la soirée (${REFL()}).` : ''} Pointillés jaunes : ${m} par heure (échelle de droite).`],
     perh: m => `${m}/h`,
     covtitle: 'Les jours retenus',
-    covsub: (n, x) => [`${n} jours retenus${x ? ` ; ${x}` : ''}.`, `Une case par jour. Un jour est écarté quand le flux de positions manque ou se fige sur plus d'un quart des heures de ${DAYH[0]} à ${DAYH[1]} h ; une heure est écartée sous 80 % de relevés. Survolez une case pour le détail.`],
-    cal: {inc: 'retenu', exc: 'écarté', off: 'hors sélection', none: 'pas de données'},
-    reasons: {low_coverage: 'flux incomplet', frozen: 'flux figé', line_absent: 'ligne absente du flux', deviation: 'trajets hors itinéraire', vehicle_ratio: 'nombre de véhicules anormal', no_data: 'aucune donnée', excluded: 'écarté à la demande', holiday: 'jour férié', not_selected: 'hors sélection'},
-    // excluded days per reason, short (tiles, calendar caption): [one, several]
-    xsum: (n, parts) => `${n} ${n > 1 ? 'jours écartés' : 'jour écarté'} : ${parts}`,
-    xr: {holiday: ['férié', 'fériés'], feed: ['flux incomplet', 'flux incomplets'], line_absent: ['ligne absente du flux', 'ligne absente du flux'],
-      deviation: ['hors itinéraire', 'hors itinéraire'], vehicle_ratio: ['nombre de véhicules anormal', 'nombre de véhicules anormal'], excluded: ['à la demande', 'à la demande']},
-    covday: (c) => `positions reçues : ${c} % des heures (${DAYH[0]}–${DAYH[1]} h)`,
-    vers: (a, b, n) => `${a} – ${b} · ${n} j`, verMain: 'principale', verNote: (r, a) => `${r} tronçon(s) en moins, ${a} en plus que la version principale`,
+    covsub: (n, x) => [`${n} ${n > 1 ? 'jours retenus' : 'jour retenu'}${x ? ` ; ${x}` : ''}.`, `Une case par jour. Un jour est exclu quand le flux de positions manque ou se fige sur plus d'un quart des heures de ${DAYL()} ; une heure est exclue sous 80 % de relevés. Survolez une case pour le détail.`],
+    cal: {inc: 'retenu', exc: 'exclu', off: 'hors sélection', none: 'pas de données'},
+    reasons: {low_coverage: 'flux incomplet', frozen: 'flux figé', line_absent: 'ligne absente du flux', deviation: 'trajets hors itinéraire', vehicle_ratio: 'nombre de véhicules anormal', no_data: 'aucune donnée', excluded: 'exclu à la demande', holiday: 'jour férié', reduced_service: 'grève', school_holiday: 'vacances scolaires', user_period: 'période exclue', not_selected: 'hors sélection'},
+    // excluded days per reason, short (period line, tiles, calendar caption): [one, several]
+    xsum: (n, parts) => `${n} ${n > 1 ? 'jours exclus' : 'jour exclu'} : ${parts}`,
+    xr: {holiday: ['férié', 'fériés'], reduced_service: ['de grève', 'de grève'], school_holiday: ['en vacances scolaires', 'en vacances scolaires'], user_period: ['en période exclue', 'en période exclue'],
+      feed: ['à flux incomplet', 'à flux incomplet'], line_absent: ['sans la ligne dans le flux', 'sans la ligne dans le flux'],
+      deviation: ['hors itinéraire', 'hors itinéraire'], vehicle_ratio: ['à nombre de véhicules anormal', 'à nombre de véhicules anormal'], excluded: ['à la demande', 'à la demande']},
+    covday: (c) => `positions reçues : ${c} % des heures (${DAYL()})`,
+    vers: (a, b, n) => `${a} – ${b} · ${n} j`, verMain: 'principale', verNote: (r, a) => `${r} ${r > 1 ? 'tronçons' : 'tronçon'} en moins, ${a} en plus que la version principale`,
     mtitle: 'Méthode',
     method: (m, m1) => [
       `<b>Signalements.</b> Chaque position publiée (environ toutes les ${TICK} s) d'un ${m1} sur la ligne compte pour un signalement dans le microsegment où il se trouve. Les ${m} qui attendent au terminus ne comptent pas. Un flux plus dense (GTFS-RT) est ramené à une position par ${m1} toutes les ${TICK} s.`,
       `<b>Microsegments.</b> ${FEEDZ ? 'Entre les zones d\'arrêt, chaque' : 'Chaque'} tronçon entre deux arrêts est coupé en parts égales d'environ ${P.segment_m} m${P.phase_m ? ` (décalage ${P.phase_m} m)` : ''}.`,
-      `<b>Temps passé par ${m1}.</b> Le nombre de signalements divisé par le nombre de ${m} passés, multiplié par ${TICK} s : à peu près le temps que chaque ${m1} passe dans le microsegment, ramené à 30 m. Il ne dépend pas de la fréquence.`,
-      `<b>Temps perdu par rapport à la soirée.</b> Le temps passé par ${m1} à l'heure choisie, moins celui de ${REFH[0]} à ${REFH[1]} h, sur les mêmes jours. La comparaison se fait par ${m1} : qu'il passe moins de ${m} en soirée ne la fausse pas ; seuls restent des effets comme des ${m} moins souvent groupés.`,
-      `<b>Zones d'arrêt.</b> ${zoneSpan('fr')}, montrées comme un seul bloc : le temps total par ${m1} dans la zone, ramené à 30 m pour la couleur. Les masquer fait ressortir les feux et les carrefours.`,
-      `<b>Échelle.</b> Les mêmes couleurs pour toutes les lignes, périodes, jours, heures et options. Chaque mesure est ramenée à 30 m de voie et lue comme une vitesse sur l'échelle de la STIB, du vert (fluide) au rouge (lent) : 30 m en T secondes, c'est 108 / T km/h, soit 3 s = 36 km/h, 6 s = 18 km/h, 12 s = 9 km/h, 24 s ou plus = 4,5 km/h ou moins (rouge foncé). La légende va de 3 à 24 s sur un axe régulier. Le temps perdu par rapport à la soirée partage la même échelle : +x s se lit comme un passage fluide de 3 s rallongé de x s, donc 0 s en vert, +10 s en rouge, +21 s ou plus en rouge foncé. Ces repères viennent des données 2025 de plusieurs lignes de tram et de bus : entre les arrêts, un passage prend en médiane 3 à 4,5 s pour 30 m et, au 98e centile, 12 à 23 s.`,
+      `<b>Vitesse moyenne.</b> La longueur du microsegment divisée par le temps moyen qu'y passe un ${m1} (signalements divisés par passages, fois ${TICK} s). Elle ne dépend pas de la fréquence. Sur plusieurs heures, signalements et passages sont additionnés avant la division.`,
+      `<b>Écart avec la soirée.</b> La vitesse aux heures choisies moins celle de ${REFL()}, sur les mêmes jours, en % de celle-ci. Négatif : plus lent qu'en soirée.`,
+      `<b>Zones d'arrêt.</b> ${zoneSpan('fr')}, montrées comme un seul bloc : la longueur de la zone divisée par le temps total qu'y passe un ${m1}, arrêt compris. Les masquer fait ressortir les feux et les carrefours.`,
+      `<b>Échelle.</b> Les mêmes couleurs pour toutes les lignes, périodes, jours et heures, sur l'échelle de vitesse de la STIB : du vert foncé (36 km/h et plus) au rouge foncé (4,5 km/h et moins). Les écarts (soirée, deux périodes) se lisent en % de la vitesse de référence, du rouge (plus lent) au vert (plus rapide), jusqu'à ± ${100 * SC.CMPR} %. Repères des données 2025 de plusieurs lignes de tram et de bus : entre les arrêts, la vitesse médiane est de 24 à 36 km/h, et de 5 à 9 km/h pour les 2 % de cas les plus lents.`,
       `<b>Jours.</b> Chaque valeur est un rapport de sommes sur les jours choisis. Moins il y a de jours, plus les valeurs sont bruitées.`,
-      `<b>Changements de tracé.</b> Un microsegment n'est compté que les jours où il fait partie de l'itinéraire principal. La carte suit la version la plus fréquente ; les autres versions s'affichent avec le sélecteur.`,
-      `<b>Points chauds.</b> Deux critères. Par rapport à la soirée : à certaines heures (au moins deux de suite, ou toute une pointe), chaque ${m1} est signalé plus souvent qu'entre ${REFH[0]} et ${REFH[1]} h. Par rapport au rythme habituel de la ligne, entre les arrêts seulement : sur toute la journée, soirée comprise, plus de signalements par mètre que ce rythme dans ce sens (la médiane des microsegments entre arrêts) ; c'est ce qui fait ressortir un feu ou un carrefour lent à toute heure, que la comparaison à la soirée efface. Dans les deux cas : au moins ${HTH} s de plus par ${m1} avec 95 % de confiance (en rééchantillonnant les jours), un écart positif au moins 60 % des jours, et une correction pour les tests multiples. Les microsegments voisins forment un tronçon ; les tronçons sont classés par signalements en plus par jour. « Toute la journée » : le retard ne disparaît pas en soirée ; « aux heures de pointe » : il est surtout là aux pointes ; « mixte » : un peu des deux.`,
+      `<b>Changements de tracé.</b> Un microsegment n'est compté que les jours où il fait partie de l'itinéraire principal. La carte montre la version la plus longue (la plus récente à longueur égale) ; les autres s'affichent avec le sélecteur.`,
+      `<b>Points chauds.</b> Deux critères. Par rapport à la soirée : à certaines heures (au moins deux de suite, ou toute une pointe), les ${m} vont nettement moins vite que de ${REFL()}. Par rapport au rythme habituel de la ligne, entre les arrêts seulement : sur toute la journée, soirée comprise, moins vite que la médiane des microsegments entre arrêts de ce sens ; c'est ce qui fait ressortir un feu ou un carrefour lent à toute heure. Dans les deux cas : au moins ${HTH} s de plus par ${m1} sur le tronçon avec 95 % de confiance (en rééchantillonnant les jours), un ralentissement au moins 60 % des jours, et une correction pour les tests multiples. « Toute la journée » : le ralentissement reste en soirée ; « aux heures de pointe » : il est surtout là aux pointes ; « mixte » : un peu des deux.`,
     ],
     footer: s => `${s ? 'Données : ' + s + '. ' : ''}Tracé et arrêts : GTFS. Calculs : microsegments.`,
-    when: h => `${h} h – ${h + 1} h`, nodir: 'Aucune donnée pour cette ligne.',
+    nodir: 'Aucune donnée pour cette ligne.',
     nomap: 'La carte a besoin d\'une connexion internet (Leaflet).',
   },
   en: {
-    title: (m, l) => `Where do ${m} linger?`,
-    lede: (L, tk, m1, m) => `Every ${tk} seconds, each ${m1} reports its position. The line is cut into stretches of about ${L} m§: 1 position report in a stretch ≈ ${tk} seconds spent there. The time per ${m1} does not depend on how many ${m} pass. Green = moving, red = stuck.`,
-    days: 'Days', dir: 'Direction', ver: 'Route version', bands: 'Averages', metric: 'Measure', stops: 'Stop zones',
+    title: (mode, badge, to) => `${mode} ${badge}${to ? ` to ${to}` : ''}`,
+    span: (a, b) => `${a} to ${b}`,
+    days: 'Days', dir: 'Direction', ver: 'Route version', bands: 'Period', metric: 'Measure', stops: 'Stop zones',
+    hstart: 'Start', hend: 'End',
     dow: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'], dowl: ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'],
     dowd: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     alldays: 'all selected days', weekdays: 'weekdays',
-    bandl: {am: 'Morning peak', pm: 'Evening peak', day: 'Daytime', evening: 'Evening'},
-    metrics: m1 => ({opp: 'Time spent', ex: 'Time lost (evening)'}),
-    mname: m1 => ({opp: `Time spent per ${m1}`, ex: `Time lost compared with the evening (${REFL()})`, exl: 'Time lost compared with the line\'s usual rhythm', oph: 'Position reports per hour'}),
+    bandl: {am: 'Morning peak', midday: 'Midday off-peak', pm: 'Evening peak', evening: 'Evening off-peak', day: 'Daytime'},
+    metrics: m1 => ({opp: 'Average speed', ex: 'Gap with the evening'}),
+    mname: m1 => ({opp: 'Average speed', ex: `Speed gap with the evening (${REFL()})`}),
     view: 'View', modes: {one: 'One period', cmp: 'Compare two periods'},
-    cmetrics: m1 => ({d: 'Time spent', dx: 'Time lost (evening)'}),
     stopsl: {true: 'Shown', false: 'Hidden'},
-    stopsHelp: (stib) => `${zoneSpan('en', true)}, shown as one block, boarding included. ` + (stib
-      ? `In this zone, STIB reports "distance 0", so we cannot tell where the time is lost.`
-      : `Near the stop, the published position does not tell where the time is lost.`),
-    why30: `Why 30 m? At this size, the time lost on a microsegment is known to ± 0.5–1.5 s per vehicle, 2 to 3 times less than the differences visible on the map. Shorter is more uncertain; longer, we no longer know where the slow spot is.`,
+    views: 'Display', viewl: {ms: 'Microsegments', ia: 'Stop to stop', sel: 'Selection'},
+    ia: {title: 'Stop to stop', note: 'Untick a stretch, or click it on the map, to leave it out of the line totals.', reinc: 'Include all',
+         excl: 'excluded stretch', xtip: 'left out of the line totals', on: 'click: exclude', off: 'click: include',
+         help: (m1) => `From leaving a stop to leaving the next: the length divided by the average time of a ${m1}, arrival stop included.`},
+    line: 'Line', nx: n => `${n} excluded ${n > 1 ? 'stretches' : 'stretch'}`,
+    sel: {title: 'Selection', hint: 'Click a first then a last microsegment, on the map or in the chart.', hint2: 'Click the last microsegment.',
+          all: 'Whole line', clear: 'Clear', from: 'From', to: 'to', pick: '—', len: 'length', tpv: m1 => `per ${m1}`, share: 'of the line\'s time',
+          skip: m => `${m} not counted (outside the stretches kept)`, none: 'not enough data'},
+    stopsHelp: (stib) => `${zoneSpan('en', true)}, shown as one block, stop included. ` + (stib
+      ? `In this zone, STIB reports "distance 0", so we cannot tell where the vehicle slows down.`
+      : `Near the stop, the published position does not tell where the vehicle slows down.`),
     towards: t => `to ${t}`,
-    play: '▶ Play', pause: '❚❚ Pause', mean: 'average',
+    play: '▶ Play', pause: '❚❚ Pause',
     sv: 'Open in Street View ↗',
     tiles: {
-      days: (n, x) => `days used${x ? `; ${x}` : ''}`,
+      days: (n, x) => `${n > 1 ? 'days' : 'day'} used${x ? `; ${x}` : ''}`,
       segs: (n, L) => `${L} m microsegments (both directions)`,
       obs: 'position reports over the period',
-      hs: (n) => D.hotspots_status === 'not_computed' ? 'hotspots: too few days to find them' : n ? 'hotspots: delays that recur day after day' : 'no clear hotspot over the period',
+      hs: (n) => D.hotspots_status === 'not_computed' ? 'hotspots: too few days to find them' : n ? 'hotspots: slowdowns that recur day after day' : 'no clear hotspot over the period',
     },
-    hstitle: 'Hotspots', hsnote: (m1, tk) => `Stretches where each ${m1} clearly loses time day after day, compared with the evening or with the line's usual rhythm. Value: seconds lost per ${m1} over the stretch. Click one to see it on the map.`,
-    hsnone: 'No hotspot stands out in this direction: the excess stays small or varies too much from day to day.',
+    hstitle: 'Hotspots', hsnote: (m1, m) => `Stretches where ${m} clearly slow down day after day, compared with the evening or with the line's usual rhythm. Value: speed gap over the stretch. Click one to see it on the map.`,
+    hsnone: 'No hotspot stands out in this direction: the gaps stay small or vary too much from day to day.',
     hsstops: 'In this direction the hotspots are at stops: show the stop zones to see them.',
     crit: {peak: 'compared with the evening', persistent: 'compared with the line\'s usual rhythm', both: 'compared with the evening and the line\'s usual rhythm'},
     hsalt: 'Hotspots are computed on the main route version.',
-    hsnot: 'Hotspots not computed: at least 5 days are needed to tell whether a delay recurs.',
+    hsnot: 'Hotspots not computed: at least 5 days are needed to tell whether a slowdown recurs.',
     hsmore: n => `Show all ${n} hotspots`, hsless: 'Show the main ones only',
     kind: {infrastructure: 'all day', congestion: 'at peak hours', mixed: 'mixed'},
     zone: {stop: 'at a stop', running: 'between stops'},
-    perveh: m1 => `s lost per ${m1}`, ci: (a, b) => `95 % CI: ${a} to ${b}`, daysPct: p => `${p} % of days`, secs: s => `${s} position reports`,
+    kmh: 'km/h', hsv: (a, b) => `${a} instead of ${b} km/h`, ci: (a, b) => `95 % CI: ${a} to ${b} km/h`, ci1: a => `95 % CI: above ${a} km/h`, ciap: 'approximate CI (several hours)', daysPct: p => `${p} % of days`,
     legend: {
-      lab: {opp: m1 => `Time spent per ${m1}, s per 30 m`,
-            ex: m1 => `Time lost compared with the evening (${REFL()}), s per 30 m`,
-            exl: m1 => `Time lost compared with the line's usual rhythm, s per 30 m`,
-            oph: m1 => 'Position reports per hour, per 30 m'},
-      freq: (v, m) => `≈ ${v} ${m} per hour at this time`, kmhRow: '; below: km/h',
+      lab: {opp: m1 => 'Average speed, km/h', ex: m1 => `Speed gap with the evening (${REFL()}), %`},
       help: {
-        opp: (m1, m) => `Average time of a ${m1} on 30 m. Each ${m1} reports its position every ${TICK} s: 1 report ≈ ${TICK} s.`,
-        oph: (m1, m) => `Position reports per hour on these 30 m; it also grows with the number of ${m}.`,
-        ex: (m1, m) => `Time spent at this hour minus that of the evening (${REFL()}, free-flowing), per ${m1}.`,
-        exl: (m1, m) => `Time spent here minus the line's usual time between stops (median ${LINEH[0]}–${LINEH[1]} h). Brings out signals and junctions that are slow at every hour.`,
+        opp: (m1, m) => `${P.segment_m || 30} m microsegments: length divided by the average time a ${m1} spends there. Green: fluid; red: slow.`,
+        ex: (m1, m) => `Speed at the chosen hours minus that of the evening (${REFL()}, free-flowing), as a % of it. Negative: slower than in the evening.`,
       },
+      slower: 'slower', faster: 'faster',
       masked: 'stop zone hidden', zone: 'stop zone', nodata: 'not enough data', hot: 'hotspot', evening: ' (the evening is the reference)',
       what: 'Explanation',
     },
     tip: {
       after: (a, b, s) => `${a} to ${b} m after ${s}`, towards: t => `to ${t}`,
-      opp: (s, k, m1) => `Time spent per ${m1}: ${s} s per 30 m (${k} km/h)`,
-      ex: s => `Time lost compared with the evening: ${s} s`, same: 'Time lost compared with the evening: none',
-      exl: s => `Time lost compared with the line's usual rhythm: ${s} s`,
-      oph: v => `Position reports per hour: ${v}`, freq: (v, m) => `${v} ${m} per hour`,
-      stop: 'Stop zone', nodata: 'not enough data', days: n => `${n} days`, partial: 'stretch missing on some days',
-      zhead: s => `Stop ${s}`, zopp: (s, m1) => `Time spent per ${m1} in the zone: ${s} s, boarding included`,
-      zex: (s, m1) => `Time lost compared with the evening: ${s} s`, zexl: (s, m1) => `Time lost compared with the line's usual rhythm: ${s} s`,
-      zoph: v => `Position reports per hour: ${v}`, zone: (a, b) => `Stop zone: ${a} m before, ${b} m after`,
+      opp: k => `<b>${k} km/h</b>`, ex: k => `Gap with the evening: ${k}`,
+      freq: (v, m) => `${v} ${m} per hour`,
+      stop: 'Stop zone', nodata: 'not enough data', days: n => `${n} ${n > 1 ? 'days' : 'day'}`, partial: 'stretch missing on some days',
+      zhead: s => `Stop ${s}`, zopp: k => `<b>${k} km/h</b> in the zone, stop included`,
+      uhead: (a, b) => `${a} → ${b}`,
     },
     mxtitle: 'The whole day at a glance',
-    mxsub: (f, t, d, what, stops, hs) => [`From ${f} to ${t}, ${d}.`, `Columns: the line (dark lines: stops); rows: hours. Click an hour to show it on the map.`],
+    mxsub: (f, t, d) => [`From ${f} to ${t}, ${d}.`, `Columns: the line (dark lines: stops); rows: hours. Click an hour to show it on the map.`],
     full: '⛶ Full screen', unfull: '✕ Exit full screen',
-    proftitle: 'Along the line, micro-segment by micro-segment',
-    profsub: (f, t, w, ref, m) => [`From ${f} to ${t}, ${w}.`, `Height: the chosen measure in each micro-segment. Vertical lines: stops.${ref ? ` White line: the evening (${REFL()}).` : ''} Yellow dots: ${m} per hour (right scale).`],
+    proftitle: 'Along the line, microsegment by microsegment',
+    profsub: (f, t, w, ref, m) => [`From ${f} to ${t}, ${w}.`, `Height: the chosen measure in each microsegment, in km/h. Vertical lines: stops.${ref ? ` White line: the evening (${REFL()}).` : ''} Yellow dots: ${m} per hour (right scale).`],
     perh: m => `${m}/h`,
     covtitle: 'Days used',
-    covsub: (n, x) => [`${n} days used${x ? `; ${x}` : ''}.`, `One square per day. A day is dropped when the position feed is missing or frozen for more than a quarter of the hours from ${DAYH[0]} to ${DAYH[1]} h; an hour is dropped below 80 % of polls. Hover a square for details.`],
-    cal: {inc: 'used', exc: 'dropped', off: 'not selected', none: 'no data'},
-    reasons: {low_coverage: 'incomplete feed', frozen: 'frozen feed', line_absent: 'line missing from the feed', deviation: 'off-route trips', vehicle_ratio: 'abnormal vehicle count', no_data: 'no data', excluded: 'excluded on request', holiday: 'public holiday', not_selected: 'not selected'},
-    xsum: (n, parts) => `${n} ${n > 1 ? 'days' : 'day'} dropped: ${parts}`,
-    xr: {holiday: ['public holiday', 'public holidays'], feed: ['incomplete feed', 'incomplete feed'], line_absent: ['line missing from the feed', 'line missing from the feed'],
-      deviation: ['off-route trips', 'off-route trips'], vehicle_ratio: ['abnormal vehicle count', 'abnormal vehicle count'], excluded: ['on request', 'on request']},
-    covday: (c) => `positions received: ${c} % of hours (${DAYH[0]}–${DAYH[1]} h)`,
-    vers: (a, b, n) => `${a} – ${b} · ${n} d`, verMain: 'main', verNote: (r, a) => `${r} stretch(es) fewer, ${a} more than the main version`,
+    covsub: (n, x) => [`${n} ${n > 1 ? 'days' : 'day'} used${x ? `; ${x}` : ''}.`, `One square per day. A day is excluded when the position feed is missing or frozen for more than a quarter of the hours ${DAYL()}; an hour is excluded below 80 % of polls. Hover a square for details.`],
+    cal: {inc: 'used', exc: 'excluded', off: 'not selected', none: 'no data'},
+    reasons: {low_coverage: 'incomplete feed', frozen: 'frozen feed', line_absent: 'line missing from the feed', deviation: 'off-route trips', vehicle_ratio: 'abnormal vehicle count', no_data: 'no data', excluded: 'excluded on request', holiday: 'public holiday', reduced_service: 'strike', school_holiday: 'school holidays', user_period: 'excluded period', not_selected: 'not selected'},
+    xsum: (n, parts) => `${n} ${n > 1 ? 'days' : 'day'} excluded: ${parts}`,
+    xr: {holiday: ['public holiday', 'public holidays'], reduced_service: ['strike day', 'strike days'], school_holiday: ['in school holidays', 'in school holidays'], user_period: ['in an excluded period', 'in excluded periods'],
+      feed: ['with an incomplete feed', 'with an incomplete feed'], line_absent: ['with the line missing from the feed', 'with the line missing from the feed'],
+      deviation: ['with off-route trips', 'with off-route trips'], vehicle_ratio: ['with an abnormal vehicle count', 'with an abnormal vehicle count'], excluded: ['on request', 'on request']},
+    covday: (c) => `positions received: ${c} % of hours (${DAYL()})`,
+    vers: (a, b, n) => `${a} – ${b} · ${n} d`, verMain: 'main', verNote: (r, a) => `${r} ${r > 1 ? 'stretches' : 'stretch'} fewer, ${a} more than the main version`,
     mtitle: 'Method',
     method: (m, m1) => [
-      `<b>Position reports.</b> Every position fix (about every ${TICK} s) of a ${m1} on the line counts as one report in the micro-segment it falls in. ${m[0].toUpperCase() + m.slice(1)} waiting at the terminus are not counted. Denser feeds (GTFS-RT) are thinned to one position per ${m1} every ${TICK} s.`,
-      `<b>Micro-segments.</b> ${FEEDZ ? 'Between the stop zones, each' : 'Each'} stretch between two stops is split into equal parts of about ${P.segment_m} m${P.phase_m ? ` (offset ${P.phase_m} m)` : ''}.`,
-      `<b>Time spent per ${m1}.</b> The number of position reports divided by the number of ${m} that went through, times ${TICK} s: roughly the time each ${m1} spends in the micro-segment, brought to 30 m. It does not depend on the frequency.`,
-      `<b>Time lost compared with the evening.</b> The time spent per ${m1} at the chosen hour minus that from ${REFH[0]} to ${REFH[1]} h, on the same days. The comparison is per ${m1}, so fewer ${m} in the evening do not bias it; only effects such as fewer bunched ${m} remain.`,
-      `<b>Stop zones.</b> ${zoneSpan('en')}, shown as one block: the total time per ${m1} in the zone, brought to 30 m for the colour. Hiding them brings out signals and junctions.`,
-      `<b>Scale.</b> The same colours for every line, period, day, hour and option. Each measure is brought to 30 m of track and read as a speed on the STIB scale, from green (fluid) to red (slow): 30 m in T seconds is 108 / T km/h, so 3 s = 36 km/h, 6 s = 18 km/h, 12 s = 9 km/h, 24 s or more = 4.5 km/h or less (dark red). The legend runs from 3 to 24 s on an even axis. The time lost compared with the evening shares that scale: +x s reads as a fluid 3 s passage made x s longer, so 0 s is green, +10 s red, +21 s or more dark red. These marks come from 2025 data of several tram and bus lines: between stops a passage takes a median 3 to 4.5 s per 30 m and, at the 98th percentile, 12 to 23 s.`,
+      `<b>Position reports.</b> Every position fix (about every ${TICK} s) of a ${m1} on the line counts as one report in the microsegment it falls in. ${m[0].toUpperCase() + m.slice(1)} waiting at the terminus are not counted. Denser feeds (GTFS-RT) are thinned to one position per ${m1} every ${TICK} s.`,
+      `<b>Microsegments.</b> ${FEEDZ ? 'Between the stop zones, each' : 'Each'} stretch between two stops is split into equal parts of about ${P.segment_m} m${P.phase_m ? ` (offset ${P.phase_m} m)` : ''}.`,
+      `<b>Average speed.</b> The length of the microsegment divided by the average time a ${m1} spends there (position reports divided by passages, times ${TICK} s). It does not depend on the frequency. Over several hours, reports and passages are summed before dividing.`,
+      `<b>Gap with the evening.</b> The speed at the chosen hours minus that of ${REFL()}, on the same days, as a % of it. Negative: slower than in the evening.`,
+      `<b>Stop zones.</b> ${zoneSpan('en')}, shown as one block: the length of the zone divided by the total time a ${m1} spends there, stop included. Hiding them brings out signals and junctions.`,
+      `<b>Scale.</b> The same colours for every line, period, day and hour, on the STIB speed scale: from dark green (36 km/h and more) to dark red (4.5 km/h and less). Gaps (evening, two periods) are read as a % of the reference speed, from red (slower) to green (faster), up to ± ${100 * SC.CMPR} %. Marks from 2025 data of several tram and bus lines: between stops the median speed is 24 to 36 km/h, and 5 to 9 km/h for the slowest 2 % of cases.`,
       `<b>Days.</b> Each value is a ratio of sums over the chosen days. Fewer days means noisier values.`,
-      `<b>Route changes.</b> A micro-segment only counts on days when it is part of the main route. The map follows the most frequent version; the others can be picked with the selector.`,
-      `<b>Hotspots.</b> Two criteria. Compared with the evening: at some hours (at least two in a row, or a whole peak), each ${m1} is reported more often than from ${REFH[0]} to ${REFH[1]} h. Compared with the line's usual rhythm, between stops only: over the whole day, evening included, more reports per metre than that rhythm in that direction (the median of the micro-segments between stops); this brings out a signal or a slow junction present at every hour, which the evening comparison cancels. Both need at least ${HTH} s more per ${m1} with 95 % confidence (resampling days), a positive excess on at least 60 % of days, and a multiple-testing correction. Neighbouring micro-segments form a stretch; stretches are ranked by extra reports per day. "All day": the delay does not go away in the evening; "at peak hours": it is mostly there at peaks; "mixed": a bit of both.`,
+      `<b>Route changes.</b> A microsegment only counts on days when it is part of the main route. The map shows the longest version (the most recent at equal length); the others can be picked with the selector.`,
+      `<b>Hotspots.</b> Two criteria. Compared with the evening: at some hours (at least two in a row, or a whole peak), ${m} are clearly slower than at ${REFL()}. Compared with the line's usual rhythm, between stops only: over the whole day, evening included, slower than the median of the microsegments between stops in that direction; this brings out a signal or a junction that is slow at every hour. Both need at least ${HTH} s more per ${m1} over the stretch with 95 % confidence (resampling days), a slowdown on at least 60 % of days, and a multiple-testing correction. "All day": the slowdown stays in the evening; "at peak hours": it is mostly there at peaks; "mixed": a bit of both.`,
     ],
     footer: s => `${s ? 'Data: ' + s + '. ' : ''}Route and stops: GTFS. Computed with microsegments.`,
-    when: h => `${h} h – ${h + 1} h`, nodir: 'No data for this line.',
+    nodir: 'No data for this line.',
     nomap: 'The map needs an internet connection (Leaflet).',
   },
 };
@@ -414,60 +447,48 @@ const T = {
 // ---------------------------------------------------------------- two-period comparison: words
 const CT = {
   fr: {
-    title: m => `Qu'est-ce qui a changé pour les ${m} ?`,
     more: n => `Voir les ${n} changements`,
     stops: 'Dans ce sens, les changements nets sont aux arrêts : affichez les zones d\'arrêt pour les voir.',
-    lede: (a, b, m1, m) => `Différence de temps passé par ${m1} entre les deux périodes, microsegment par microsegment (30 m§). Vert : plus rapide qu'avant ; rouge : plus lent.`,
-    tiles: {a: 'jours avant', b: 'jours après', slower: 'tronçons plus lents', faster: 'tronçons plus rapides'},
+    per: (a, b) => `avant : ${a} · après : ${b}`,
+    tiles: {a: n => n > 1 ? 'jours avant' : 'jour avant', b: n => n > 1 ? 'jours après' : 'jour après', slower: n => n > 1 ? 'tronçons plus lents' : 'tronçon plus lent', faster: n => n > 1 ? 'tronçons plus rapides' : 'tronçon plus rapide'},
     title2: 'Ce qui a changé',
-    note: (m1, m) => `Tronçons où chaque ${m1} gagne ou perd nettement du temps (au moins ${HTH} s, 95 % de confiance), classés par temps gagné ou perdu par jour. Cliquez pour le voir sur la carte.`,
+    note: (m1, m) => `Tronçons où les ${m} vont nettement plus vite ou moins vite qu'avant (95 % de confiance), les plus marqués d'abord. Cliquez pour le voir sur la carte.`,
     none: 'Aucun changement net dans ce sens.',
     few: 'Pas assez de jours dans une des périodes pour conclure (au moins 5).',
     sign: {'-1': 'plus rapide', '1': 'plus lent'},
-    perveh: m1 => `s par ${m1}`, per30: m1 => `s par ${m1} pour 30 m`, perday: v => `${v} min par jour au total`,
+    ab: (a, b) => `${a} → ${b} km/h`,
     freq: (a, b, m) => `${a} → ${b} ${m}/h`, freqflag: 'fréquence modifiée : une partie de l\'écart peut venir de l\'horaire',
-    ci: (a, b) => `IC 95 % : ${a} à ${b} s`,
-    legend: {d: m1 => `Différence de temps passé par ${m1}, s pour 30 m`,
-             dx: m1 => `Différence de temps perdu par rapport à la soirée (${REFL()}), s pour 30 m`,
-             help: {d: m1 => `Le temps passé par ${m1} après, moins avant. Pâle : différence incertaine.`,
-                    dx: m1 => `La même différence, sur le temps perdu par rapport à la soirée (${REFL()}) : un changement de la soirée elle-même n'est pas compté.`},
-             faster: 'plus rapide', slower: 'plus lent', pale: 'pâle : différence incertaine', absent: 'absent avant', chg: 'changement retenu'},
-    tip: {a: (s, m1) => `avant : ${s} s par ${m1} pour 30 m`, b: (s, m1) => `après : ${s} s par ${m1} pour 30 m`,
-          d: (v, m1) => `Différence : <b>${v} s</b> par ${m1} pour 30 m`, unsure: 'différence incertaine', absent: 'absent de la première période',
-          freq: (a, b, m) => `${a} → ${b} ${m} par heure`,
-          zd: (v, m1) => `Différence : <b>${v} s</b> par ${m1} dans la zone`, za: (s, m1) => `avant : ${s} s par ${m1}`, zb: (s, m1) => `après : ${s} s par ${m1}`},
-    mxsub: (f, t, a, b, m1, stops, hs) => [`De ${f} à ${t}.`, `En colonnes, la ligne (traits sombres : arrêts) ; en lignes, les heures. Cliquez sur une heure pour l'afficher sur la carte.`],
-    profsub: (f, t, w, m1, m) => [`De ${f} à ${t}, ${w}.`, `Au-dessus de zéro, chaque ${m1} met plus de temps qu'avant ; en dessous, moins. Pointillés jaunes : ${m} par heure après (échelle de droite).`],
+    legend: {d: m1 => 'Écart de vitesse (après − avant), %', help: {d: m1 => 'La vitesse après moins avant, en % de la vitesse avant. Pâle : différence incertaine.'},
+             pale: 'pâle : différence incertaine', absent: 'absent avant', chg: 'changement retenu'},
+    tip: {a: k => `avant : ${k} km/h`, b: k => `après : ${k} km/h`,
+          d: k => `Différence : <b>${k}</b>`, zd: k => `Différence dans la zone : <b>${k}</b>`,
+          unsure: 'différence incertaine', absent: 'absent de la première période',
+          freq: (a, b, m) => `${a} → ${b} ${m} par heure`},
+    profsub: (f, t, w, m1, m) => [`De ${f} à ${t}, ${w}.`, `Au-dessus de zéro, les ${m} vont plus vite qu'avant ; en dessous, moins vite. Pointillés jaunes : ${m} par heure après (échelle de droite).`],
     days: 'mêmes jours dans les deux périodes',
-    method: (m1, m, a, b) => `<b>Comparaison de deux périodes.</b> ${a} (avant) et ${b} (après), chacune sur ses propres jours et avec sa propre référence. Les microsegments sont appariés d'une période à l'autre ; ceux qui n'existent que dans une période sont écartés. La différence porte sur le temps passé par ${m1} (signalements divisés par passages), ce qui la rend indépendante de la fréquence. L'incertitude vient d'un rééchantillonnage des jours de chaque période. Quand la fréquence change de plus de 20 %, le tronçon est signalé : un horaire différent (plus de ${m}, plus de files) peut expliquer une partie de l'écart.`,
+    method: (m1, m, a, b) => `<b>Comparaison de deux périodes.</b> ${a} (avant) et ${b} (après), chacune sur ses propres jours. Les microsegments sont appariés d'une période à l'autre ; ceux qui n'existent que dans une période sont écartés. La différence porte sur la vitesse (longueur divisée par le temps moyen par ${m1}), indépendante de la fréquence. L'incertitude vient d'un rééchantillonnage des jours de chaque période ; pour une plage d'heures autre qu'une heure ou une période prédéfinie, elle est approchée à partir des heures. Quand la fréquence change de plus de 20 %, le tronçon est signalé : un horaire différent (plus de ${m}, plus de files) peut expliquer une partie de l'écart.`,
   },
   en: {
-    title: m => `What changed for the ${m}?`,
     more: n => `Show all ${n} changes`,
     stops: 'In this direction the clear changes are at stops: show the stop zones to see them.',
-    lede: (a, b, m1, m) => `Difference in time spent per ${m1} between the two periods, microsegment by microsegment (30 m§). Green: faster than before; red: slower.`,
-    tiles: {a: 'days before', b: 'days after', slower: 'slower stretches', faster: 'faster stretches'},
+    per: (a, b) => `before: ${a} · after: ${b}`,
+    tiles: {a: n => n > 1 ? 'days before' : 'day before', b: n => n > 1 ? 'days after' : 'day after', slower: n => n > 1 ? 'slower stretches' : 'slower stretch', faster: n => n > 1 ? 'faster stretches' : 'faster stretch'},
     title2: 'What changed',
-    note: (m1, m) => `Stretches where each ${m1} clearly gains or loses time (at least ${HTH} s, 95 % confidence), ranked by time gained or lost per day. Click one to see it on the map.`,
+    note: (m1, m) => `Stretches where ${m} are clearly faster or slower than before (95 % confidence), the largest first. Click one to see it on the map.`,
     none: 'No clear change in this direction.',
     few: 'Too few days in one of the periods to conclude (at least 5).',
     sign: {'-1': 'faster', '1': 'slower'},
-    perveh: m1 => `s per ${m1}`, per30: m1 => `s per ${m1} per 30 m`, perday: v => `${v} min per day in total`,
+    ab: (a, b) => `${a} → ${b} km/h`,
     freq: (a, b, m) => `${a} → ${b} ${m}/h`, freqflag: 'frequency changed: part of the difference may come from the timetable',
-    ci: (a, b) => `95 % CI: ${a} to ${b} s`,
-    legend: {d: m1 => `Difference in time spent per ${m1}, s per 30 m`,
-             dx: m1 => `Difference in time lost compared with the evening (${REFL()}), s per 30 m`,
-             help: {d: m1 => `The time spent per ${m1} after, minus before. Pale: uncertain difference.`,
-                    dx: m1 => `The same difference, on the time lost compared with the evening (${REFL()}): a change of the evening itself is left out.`},
-             faster: 'faster', slower: 'slower', pale: 'pale: uncertain difference', absent: 'absent before', chg: 'retained change'},
-    tip: {a: (s, m1) => `before: ${s} s per ${m1} per 30 m`, b: (s, m1) => `after: ${s} s per ${m1} per 30 m`,
-          d: (v, m1) => `Difference: <b>${v} s</b> per ${m1} per 30 m`, unsure: 'uncertain difference', absent: 'absent from the first period',
-          freq: (a, b, m) => `${a} → ${b} ${m} per hour`,
-          zd: (v, m1) => `Difference: <b>${v} s</b> per ${m1} in the zone`, za: (s, m1) => `before: ${s} s per ${m1}`, zb: (s, m1) => `after: ${s} s per ${m1}`},
-    mxsub: (f, t, a, b, m1, stops, hs) => [`From ${f} to ${t}.`, `Columns: the line (dark lines: stops); rows: hours. Click an hour to show it on the map.`],
-    profsub: (f, t, w, m1, m) => [`From ${f} to ${t}, ${w}.`, `Above zero, each ${m1} takes longer than before; below, less. Yellow dots: ${m} per hour after (right scale).`],
+    legend: {d: m1 => 'Speed gap (after − before), %', help: {d: m1 => 'The speed after minus before, as a % of the speed before. Pale: uncertain difference.'},
+             pale: 'pale: uncertain difference', absent: 'absent before', chg: 'retained change'},
+    tip: {a: k => `before: ${k} km/h`, b: k => `after: ${k} km/h`,
+          d: k => `Difference: <b>${k}</b>`, zd: k => `Difference in the zone: <b>${k}</b>`,
+          unsure: 'uncertain difference', absent: 'absent from the first period',
+          freq: (a, b, m) => `${a} → ${b} ${m} per hour`},
+    profsub: (f, t, w, m1, m) => [`From ${f} to ${t}, ${w}.`, `Above zero, ${m} are faster than before; below, slower. Yellow dots: ${m} per hour after (right scale).`],
     days: 'same days in both periods',
-    method: (m1, m, a, b) => `<b>Comparing two periods.</b> ${a} (before) and ${b} (after), each on its own days and with its own reference. Micro-segments are matched from one period to the other; those that exist in one period only are left out. The difference is in time spent per ${m1} (position reports divided by passages), which makes it independent of the frequency. The uncertainty comes from resampling the days of each period. When the frequency changes by more than 20 %, the stretch is flagged: a different timetable (more ${m}, more queues) may explain part of the difference.`,
+    method: (m1, m, a, b) => `<b>Comparing two periods.</b> ${a} (before) and ${b} (after), each on its own days. Microsegments are matched from one period to the other; those that exist in one period only are left out. The difference is in speed (length divided by the average time per ${m1}), independent of the frequency. The uncertainty comes from resampling the days of each period; for an hour range other than one hour or a preset period, it is approximated from the hours. When the frequency changes by more than 20 %, the stretch is flagged: a different timetable (more ${m}, more queues) may explain part of the difference.`,
   },
 };
 
@@ -498,15 +519,12 @@ function colorOf(v) {
 // ---------------------------------------------------------------- one fixed colour scale for the whole site
 // Same constants as microsegments/scale.py (kept in sync by a test). Colour is a fixed function of the value,
 // never computed from the data (no percentile): every line, period, day, hour, band and stop-zone toggle
-// shares it. Each measure is first brought to T = seconds per passage for 30 m of track (the page always shows 30 m):
-//   obs per passage: T = opp x tick x 30 / len; excesses (vs evening, vs line): T = BASE + excess (s per 30 m);
-//   obs per hour: T = OPH x obs per hour per 30 m.
-// T is read on the STIB speed ramp: 30 m in T s = K / T km/h (4 s = 27 km/h dark green, 14.4 s = 7.5 km/h red,
-// >= 24 s = 4.5 km/h dark red). The legend bar is LINEAR in T (3 to 24 s, ticks every 3 s, km/h under them);
-// only its axis is linear, the colour is still the km/h ramp at K / T. Why these constants (tram and bus lines, weekdays 2025): between stops the median
-// is 3-4.4 s per 30 m, p90 6.5-10 s, p98 12-23 s; stop zones p98 33-46 s; positive excess over the evening:
-// median ~1 s, p98 5-17 s. So typical values stay green and hotspots (10 s and more per 30 m) turn red.
-const SC = {L: 30, T0: 3, T1: 24, TICKS: [3, 6, 9, 12, 15, 18, 21, 24], BASE: 3, OPH: 2, CMP: 10, CTICKS: [-10, -5, 0, 5, 10], K: 108};
+// shares it. The page shows speeds: v km/h = K / T, T = seconds per passage for 30 m (obs per passage x tick x 30 / len),
+// coloured on the STIB speed ramp (4.5 km/h dark red .. 27 km/h dark green). The legend bar keeps a LINEAR axis in T
+// (3 to 24 s, i.e. >= 36 to <= 4.5 km/h), labelled in km/h at KTICKS. Speed gaps (evening, two periods): +-CMPR, relative to the reference speed.
+// Why these constants (tram and bus lines, weekdays 2025): between stops the median is 24-36 km/h, the slowest 2 %
+// 5-9 km/h. TICKS, BASE, OPH, CMP, CTICKS: the seconds scales of scale.py (matplotlib figures), unused here.
+const SC = {L: 30, T0: 3, T1: 24, TICKS: [3, 6, 9, 12, 15, 18, 21, 24], BASE: 3, OPH: 2, CMP: 10, CTICKS: [-10, -5, 0, 5, 10], K: 108, KTICKS: [36, 18, 12, 9, 6, 4.5], CMPK: 10, CKTICKS: [-10, -5, 0, 5, 10], CMPR: 0.5, CRTICKS: [-50, -25, 0, 25, 50]};
 // no data: flat discreet grey; masked stop zone: grey hatching (SVG pattern #mshatch, legend swatch .sw.hatch)
 const NULLC = '#3a4560', MASKC = 'url(#mshatch)';
 function timeColor(T) {
@@ -515,29 +533,64 @@ function timeColor(T) {
 }
 // position on the legend bar: linear in T
 const tPos = T => (Math.min(SC.T1, Math.max(SC.T0, T)) - SC.T0) / (SC.T1 - SC.T0);
-// Diverging ramp for the comparison: green (faster) - grey - red (slower), fixed +-SC.CMP s per passage per 30 m.
-// The colour eases in with the square root of the difference (a few seconds already show); the legend axis is linear.
+// The page shows speeds only: a value is a speed (km/h = K / T), read on the ramp above (colorOf). Speed gaps (vs the
+// evening, between two periods) use a diverging ramp: green (faster) - grey - red (slower), fixed +-SC.CMPR of the reference speed.
+// The colour eases in with the square root of the gap (a few km/h already show); the legend axis is linear.
 const DIV = [[-1, '#11683e'], [-.45, '#3fb950'], [0, '#4a5470'], [.45, '#f0a13a'], [1, '#e5484d']];
 const DIV_LAB = DIV.map(([v, h]) => [v, toLab(hex2(h))]);
 const FASTC = '#3fb950', SLOWC = '#e5484d';
-function divColor(v, pale) {
+// v > 0: slower (red); M: the saturating value
+function divColor(v, pale, M = SC.CMP) {
   if (v == null || !isFinite(v)) return NULLC;
-  let t = Math.sign(v) * Math.min(1, Math.sqrt(Math.abs(v) / SC.CMP));
+  let t = Math.sign(v) * Math.min(1, Math.sqrt(Math.abs(v) / M));
   if (pale) t *= .35;
   let i = 0; while (i < DIV_LAB.length - 2 && t > DIV_LAB[i + 1][0]) i++;
   const [a, A] = DIV_LAB[i], [b, Bc] = DIV_LAB[i + 1], f = Math.min(1, Math.max(0, (t - a) / (b - a)));
   return `rgb(${fromLab(A.map((c, k) => c + f * (Bc[k] - c))).join(',')})`;
 }
+// a speed gap in km/h (negative = slower = red)
+// Gaps are coloured RELATIVELY (r = gap / reference speed, +-SC.CMPR): -3 km/h is a lot at 10 km/h, noise at 40.
+const relColor = (r, pale) => divColor(r == null ? null : -r, pale, SC.CMPR);
+const kmhColor = k => k == null || !isFinite(k) ? NULLC : colorOf(k);
+// km/h of o observations per passage over len metres (time per vehicle = o x TICK s); capped at KMAX (no report at all
+// in a short stretch is not an infinite speed)
+const KMAX = 80;
+// n: the position reports behind o; under MINO the speed is unknown (a fast stretch with 1-2 reports reads 80 km/h)
+const MINO = 3;
+const kmhOf = (o, len, n) => o == null || !(len > 0) || n != null && n < MINO ? null : Math.min(KMAX, 3.6 * len / Math.max(o * TICK, 1e-9));
+// a speed gap b - a and its share of a; never from a missing or capped speed
+const gapOf = (a, b) => a != null && b != null && a < KMAX && b < KMAX ? b - a : null;
+const relOf = (a, b) => { const g = gapOf(a, b); return g == null || !(a > 0) ? null : g / a; };
+const pc = r => r == null ? '–' : signed(100 * r, 0) + ' %';
+const kmhT = k => SC.K / k;   // the T (s per 30 m) of a speed, for the legend bar
 
 // ---------------------------------------------------------------- state
 const qs = new URLSearchParams(location.search);
 const st = {lang: T[qs.get('lang')] ? qs.get('lang') : (T[document.documentElement.lang] ? document.documentElement.lang : 'fr'),
-            dir: null, ver: null, band: null, hour: null, metric: 'opp', stops: qs.get('stops') !== 'false', days: [], hot: null,
-            mode: D.compare ? 'cmp' : 'one', cmetric: 'd', chg: null};
+            dir: null, ver: null, h0: null, h1: null, metric: 'opp', stops: qs.get('stops') !== 'false', days: [], hot: null,
+            mode: D.compare ? 'cmp' : 'one', chg: null, view: 'ms', xia: new Set(), sel: null};
+// URL parameters of the display modes (query, or the hash on a page opened from disk):
+//   view=ia|sel   opens "Interarrêts" / "Sélection" (default: microsegments);
+//   xia=A>B,...   the interarrêts left out of the line totals, by their stop ids ("A>B": dirs[].stops[].id of A then B).
+// The page keeps both in its own URL (replaceState); embedded, it also posts {ms: 'xia', xia: [ids], view} to the host
+// on every change so the host can put them in the URL it builds, and follows the host's {ms: 'xia', xia: [ids]}.
+const hq = new URLSearchParams(location.hash.slice(1)), uq = k => hq.get(k) ?? qs.get(k);
+if (['ms', 'ia', 'sel'].includes(uq('view'))) st.view = uq('view');
+for (const x of (uq('xia') || '').split(',')) if (x) st.xia.add(x);
+function saveUrl() {
+  const xs = [...st.xia].join(','), set = q => { xs ? q.set('xia', xs) : q.delete('xia'); st.view !== 'ms' ? q.set('view', st.view) : q.delete('view'); return q; };
+  const h = hq.has('xia') || hq.has('view') || location.protocol === 'file:' ? String(set(hq)) : null;
+  const q = h == null ? String(set(new URLSearchParams(location.search))) : location.search.slice(1);
+  try { history.replaceState(history.state, '', location.pathname + (q ? '?' + q : '') + (h == null ? location.hash : h ? '#' + h : '')); }
+  catch (e) { if (h != null) location.hash = h; }
+  if (window.parent !== window) try { parent.postMessage({ms: 'xia', xia: [...st.xia], view: st.view}, '*'); } catch (e) {}
+}
 const tx = () => T[st.lang];
 const noun = (pl) => { const n = NOUN[st.lang][D.mode] || NOUN[st.lang]._; return pl ? n[1] : n[0]; };
 const nf = (v, d = 1) => v.toLocaleString(LOC[st.lang], {minimumFractionDigits: d, maximumFractionDigits: d});
 const nfa = v => nf(v, Math.abs(v) >= 10 ? 0 : 1);
+// a speed in km/h: 1 decimal under 10 km/h
+const kf = k => k == null ? '–' : k >= KMAX ? '≥ ' + KMAX : nfa(k);
 // big counts in words: 845 000; 1,2 million / 12 millions (en: 1.2 million). Grouped by hand: some browsers
 // do not group 6-digit numbers in fr-BE. From 10 000, rounded to the thousand.
 const grp = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, st.lang === 'fr' ? '\u202f' : ',');
@@ -568,13 +621,21 @@ const DIR_CONTROL = D.dir_control !== false, METHOD = D.method !== false;
 // host_controls true: the host page already has the days, period mode, language, coverage and footer, so
 // the page drops its own (weekday buttons, one/two-period switch, FR/EN, coverage calendar, footer)
 const HOST = D.host_controls === true;
-st.hour = D.hours.includes(8) ? 8 : D.hours[0];
+// the hours shown: [h0, h1), end excluded; the morning peak by default
+const HMIN = D.hours[0], HMAX = D.hours[D.hours.length - 1] + 1;
+const setRange = (a, b) => { st.h0 = Math.max(HMIN, Math.min(a, HMAX - 1)); st.h1 = Math.max(st.h0 + 1, Math.min(b, HMAX)); };
+if (BANDDEF.am) setRange(...BANDDEF.am); else setRange(HMIN, HMIN + 1);
 const dirOf = () => DIRS.find(x => x.dir === st.dir);
 // the entry shown: the display version of the direction, or one of its other versions
 const entry = () => { const d = dirOf(); if (!d) return null; if (!st.ver || st.ver === d.pattern_uid) return d; return (d.alt || []).find(a => a.pattern_uid === st.ver) || d; };
 const isMain = () => { const d = dirOf(); return !st.ver || (d && st.ver === d.pattern_uid); };
-const key = () => st.band || String(st.hour);
-const nHours = k => BANDDEF[k] ? D.hours.filter(h => h >= BANDDEF[k][0] && h < BANDDEF[k][1]).length : 1;
+const range = () => [st.h0, st.h1];
+const hoursIn = ([a, b]) => D.hours.filter(h => h >= a && h < b);
+// the band whose hours are exactly the range shown (null otherwise)
+const bandOf = ([a, b] = range()) => Object.keys(BANDDEF).find(k => BANDDEF[k][0] === a && BANDDEF[k][1] === b) || null;
+const hh = h => String(h % 24).padStart(2, '0');
+// "08:00–09:59": the end hour excluded, written as its last minute
+const rangeLabel = ([a, b] = range()) => `${hh(a)}:00–${hh(b - 1)}:59`;
 
 // ---------------------------------------------------------------- sums over the chosen weekdays
 // Totals are per weekday in the data (wk); every view sums the chosen weekdays, then divides.
@@ -593,10 +654,6 @@ function agg(E, days = st.days) {
     o[h] = a; c[h] = b; p[h] = q; n[h] = r;
   });
   const sumH = (src, n, hs) => { const r = new Float64Array(n); for (const h of hs) if (src[h]) src[h].forEach((v, i) => r[i] += v); return r; };
-  for (const [k, [h0, h1]] of Object.entries(BANDDEF)) {
-    const hs = D.hours.filter(h => h >= h0 && h < h1);
-    o[k] = sumH(o, ns, hs); c[k] = sumH(c, nl, hs); p[k] = sumH(p, nl, hs); n[k] = sumH(n, nl, hs);
-  }
   const rh = D.hours.filter(h => h >= REFH[0] && h < REFH[1]);
   const ro = sumH(o, ns, rh), rp = sumH(p, nl, rh);
   const nd = new Float64Array(nl);
@@ -607,45 +664,48 @@ function agg(E, days = st.days) {
   const per = E.seg.key.map((_, i) => !isStop(E, i) && lp[E.seg.link[i]] > 0 ? lo[i] / lp[E.seg.link[i]] / E.seg.len[i] : null).filter(v => v != null).sort((a, b) => a - b);
   const lvl = per.length ? (per.length % 2 ? per[(per.length - 1) / 2] : (per[per.length / 2 - 1] + per[per.length / 2]) / 2) : null;
   const refl = E.seg.len.map(len => lvl == null ? null : lvl * len);
-  const A = {o, c, p, n, ref, refl, lvl, nd};
+  // any hour range [a, b): sums over its hours, cached
+  const R = new Map();
+  const rng = ([a, b]) => { const k = a + '-' + b; if (!R.has(k)) { const hs = hoursIn([a, b]);
+    R.set(k, {o: sumH(o, ns, hs), c: sumH(c, nl, hs), p: sumH(p, nl, hs), n: sumH(n, nl, hs), nh: hs.length}); } return R.get(k); };
+  const A = {o, c, p, n, ref, refo: ro, refl, lvl, nd, rng};
   AGG.set(ck, A);
   return A;
 }
 function isStop(E, i) { return E.seg.zone[i] === 'stop'; }
 const shown = v => st.stops || !v.stop;
-// Per micro-segment values for a key (hour or band).
-function vals(E, k = key(), days = st.days) {
-  const A = agg(E, days), o = A.o[k], c = A.c[k], p = A.p[k], nh = nHours(k);
+// Per microsegment values for an hour range [a, b): obs per passage (opp, its evening ref), and the speeds
+// (kmh, evening kmh ek, gap dv = kmh - ek, km/h).
+// memo of the per microsegment values (the slider and the matrix ask for the same ranges again and again)
+const VMEMO = new Map();
+const memo = (k, f) => { if (VMEMO.has(k)) return VMEMO.get(k); if (VMEMO.size > 120) VMEMO.clear(); const r = f(); VMEMO.set(k, r); return r; };
+function vals(E, R = range(), days = st.days) {
+  return memo(`v|${E.pattern_uid}|${E.dir}|${R}|${days}`, () => vals0(E, R, days));
+}
+function vals0(E, R, days) {
+  const A = agg(E, days), S = A.rng(R), o = S.o, p = S.p, nn = S.n;
   return E.seg.key.map((_, i) => {
     const l = E.seg.link[i], len = E.seg.len[i];
-    const oph = c && c[l] > 0 ? o[i] / c[l] : null;
-    const opp = p && p[l] >= 0.5 * Math.max(1, A.nd[l]) * nh ? o[i] / p[l] : null;
-    const ref = A.ref[i], refl = A.refl[i], nn = A.n[k], k30 = SC.L / len, ex = opp != null && ref != null ? opp - ref : null,
-          exl = opp != null && refl != null ? opp - refl : null;
-    // s30: the shown measures per 30 m of track (seconds per passage, or observations per hour for oph)
-    const s30 = {oph: oph == null ? null : oph * k30, opp: opp == null ? null : opp * TICK * k30,
-                 ex: ex == null ? null : ex * TICK * k30, exl: exl == null ? null : exl * TICK * k30};
-    return {i, l, x0: E.seg.x0[i], len, stop: isStop(E, i), flags: E.seg.flags[i] || 0, obs: o ? o[i] : 0,
-            oph, opp, ref, ex, exl, s30, pph: nn && nn[l] > 0 ? p[l] / nn[l] : null, nd: A.nd[l]};
+    const opp = p[l] >= 0.5 * Math.max(1, A.nd[l]) * S.nh ? o[i] / p[l] : null, ref = A.ref[i];
+    const kmh = kmhOf(opp, len, o[i]), ek = kmhOf(ref, len, A.refo[i]);
+    return {i, l, x0: E.seg.x0[i], len, stop: isStop(E, i), flags: E.seg.flags[i] || 0, obs: o[i], robs: A.refo[i],
+            opp, ref, kmh, ek, dv: gapOf(ek, kmh), dr: relOf(ek, kmh), pph: nn[l] > 0 ? p[l] / nn[l] : null, nd: A.nd[l]};
   });
 }
-// Value of a measure per 30 m (excesses: positive part), and its T (seconds per passage per 30 m) for the colour.
-const isEx = m => m === 'ex' || m === 'exl';
-function metricVal(v, m = st.metric) { const x = v.s30 ? v.s30[m] : null; return x == null ? null : isEx(m) ? Math.max(0, x) : x; }
-const toT = (x, m = st.metric) => x == null ? null : m === 'oph' ? x * SC.OPH : isEx(m) ? SC.BASE + x : x;
-// value of a measure (per 30 m) shown at T on the legend
-const tickVal = (T, m = st.metric) => m === 'oph' ? T / SC.OPH : isEx(m) ? T - SC.BASE : T;
-const colorFor = v => !shown(v) ? MASKC : timeColor(toT(metricVal(v)));
+// the value of the chosen measure (km/h) and its colour
+const metricVal = (v, m = st.metric) => m === 'ex' ? v.dv : v.kmh;
+// an excluded interarrêt: flat grey (XC)
+const XC = '#2a3350';
+const colorFor = v => v.x ? XC : !shown(v) ? MASKC : st.metric === 'ex' ? relColor(v.dr, false) : kmhColor(v.kmh);
 
 // ---------------------------------------------------------------- stop zones drawn as one block
 // <zones> (pure: no DOM; a test runs this block in node)
 // Near a stop the feed cannot place the vehicle (STIB: "distance 0" from ~36 m before to ~36 m after the
-// stop point, then a zone-exit fix at ~34-46 m), so the 3-5 micro-segments of a stop zone show an
+// stop point, then a zone-exit fix at ~34-46 m), so the 3-5 microsegments of a stop zone show an
 // artefactual brown / green / red pattern. When zones are shown, each one is ONE block: the sum over its
-// micro-segments of obs / passages (each on its own link), i.e. the total time per vehicle in the zone.
-// Colour: that total brought to 30 m of the zone's nominal length (before + after, at most the drawn
-// length: a terminus zone is one-sided). ~30 s per tram over 90 m reads as 10 s per 30 m (10.8 km/h,
-// orange) on the same fixed scale, not as a saturated dark red; a long dwell (> 60 s) still turns dark red.
+// microsegments of obs / passages (each on its own link), i.e. the total time per vehicle in the zone, and
+// its speed = the zone's drawn length / that time. ~30 s per tram over 90 m reads 10.8 km/h (orange) on the
+// same fixed scale, not a saturated dark red; a long dwell (> 60 s) still turns dark red.
 const ZONE = P.stop_zone || [30, 60];
 // grid "stops": the zones follow the feed (from where it switches to the stop to its exit mark, set per stop)
 const FEEDZ = P.grid === 'stops';
@@ -663,50 +723,59 @@ function zonesOf(E) {
   E.seg.key.forEach((_, i) => {
     if (E.seg.zone[i] !== 'stop') return;
     let z = Z[Z.length - 1];
-    // a new block unless this micro-segment continues the previous one (same zone run, no gap)
+    // a new block unless this microsegment continues the previous one (same zone run, no gap)
     if (!z || z.idx[z.idx.length - 1] !== i - 1 || Math.abs(E.seg.x0[i] - z.x1) > 1) { z = {idx: [], x0: E.seg.x0[i], x1: E.seg.x0[i]}; Z.push(z); }
     z.idx.push(i); z.x1 = E.seg.x0[i] + E.seg.len[i]; zi[i] = Z.length - 1;
   });
   for (const z of Z) {
     const at = E.stops.filter(t => t.x >= z.x0 - .5 && t.x <= z.x1 + .5);
     z.name = at.length ? at.map(t => t.name).join(' / ') : (stopBefore(E, z.x0) || {}).name || '';
-    // the totals cover every drawn micro-segment (the grid does not stop exactly at 30 m / 60 m), so the colour is
+    // the totals cover every drawn microsegment (the grid does not stop exactly at 30 m / 60 m), so the colour is
     // the total brought to 30 m of the drawn run
     z.len = z.x1 - z.x0;
     z.nom = z.len;
   }
   return (E._zones = {Z, zi});
 }
-// sum of a field over the zone's micro-segments; null as soon as one of them has no value
+// sum of a field over the zone's microsegments; null as soon as one of them has no value
 const zsum = (bs, f) => bs.every(b => b[f] != null) ? bs.reduce((t, b) => t + b[f], 0) : null;
 const zfirst = (bs, f) => { const b = bs.find(x => x[f] != null); return b ? b[f] : null; };
-// one-period values of each zone, from the micro-segment values v (vals)
+// one-period values of each zone, from the microsegment values v (vals)
 function zvals(E, v) {
   return zonesOf(E).Z.map((z, n) => {
-    const bs = z.idx.map(i => v[i]), k = SC.L / z.nom;
+    const bs = z.idx.map(i => v[i]);
     // no position report at all in the zone (e.g. a metro terminus): no data, not 0 s
     const none = !bs.some(b => b.obs > 0), zs = f => none ? null : zsum(bs, f);
-    const opp = zs('opp'), ex = zs('ex'), exl = zs('exl'), oph = zs('oph');
+    const opp = zs('opp'), ref = zs('ref'), kmh = kmhOf(opp, z.nom, zsum(bs, 'obs')), ek = kmhOf(ref, z.nom, zsum(bs, 'robs'));
     return {z, zone: n, i: z.idx[0], l: bs[bs.length - 1].l, x0: z.x0, len: z.len, nom: z.nom, stop: true,
             flags: bs.reduce((f, b) => f | b.flags, 0), nd: Math.min(...bs.map(b => b.nd)), obs: bs.reduce((t, b) => t + b.obs, 0),
-            opp, ex, exl, oph, pph: zfirst(bs, 'pph'),
-            tot: {opp: opp == null ? null : opp * TICK, ex: ex == null ? null : ex * TICK, exl: exl == null ? null : exl * TICK},
-            s30: {opp: opp == null ? null : opp * TICK * k, ex: ex == null ? null : ex * TICK * k,
-                  exl: exl == null ? null : exl * TICK * k, oph: oph == null ? null : oph * k}};
+            opp, ref, kmh, ek, dv: gapOf(ek, kmh), dr: relOf(ek, kmh), pph: zfirst(bs, 'pph'),
+            tot: opp == null ? null : opp * TICK};
   });
 }
-// two-period values of each zone, from the micro-segment values v (cvals). The zone is "sure" when the sum
+// two-period speeds over len metres from obs per passage oa / ob and the CI [lo, hi] of ob - oa (obs per passage):
+// va, vb, dk = vb - va (dr: relative) and its CI [klo, khi] (oa held fixed; more time = less speed, so the bounds swap).
+// When the time CI reaches near zero (oa + lo < oa / 4) the speed has no upper bound: khi is null (one-sided "> klo").
+function cKmh(b, len) {
+  const va = kmhOf(b.oa, len), vb = kmhOf(b.ob, len), ok = b.oa != null && va != null && va < KMAX, dk = gapOf(va, vb);
+  const k = o => { const x = kmhOf(o, len); return x == null || x >= KMAX ? null : x - va; };
+  return {...b, va, vb, dk, dr: relOf(va, vb),
+          klo: ok && dk != null && b.hi != null ? k(b.oa + b.hi) : null, khi: ok && dk != null && b.lo != null && b.oa + b.lo >= .25 * b.oa ? k(b.oa + b.lo) : null};
+}
+// "IC 95 % : a à b km/h", one-sided when the upper bound is open
+const ciText = v => v.klo == null ? '' : v.khi == null ? tx().ci1(ks(v.klo)) : tx().ci(ks(v.klo), ks(v.khi));
+// two-period values of each zone, from the microsegment values v (cvals). The zone is "sure" when the sum
 // of the lower (upper) bounds is above (below) zero: wider than the true interval of the sum, so conservative.
 function czvals(E, v) {
   return zonesOf(E).Z.map((z, n) => {
     const bs = z.idx.map(i => v[i]), absent = bs.some(b => b.absent), s = f => absent ? null : zsum(bs, f);
     const lo = s('lo'), hi = s('hi');
-    return {z, zone: n, i: z.idx[0], l: bs[bs.length - 1].l, x0: z.x0, len: z.len, nom: z.nom, stop: true, nd: 0, flags: 0, absent,
-            d: s('d'), dx: s('dx'), lo, hi, sig: lo != null && hi != null && (lo > 0 || hi < 0),
-            oa: s('oa'), ob: s('ob'), fa: zfirst(bs, 'fa'), fb: zfirst(bs, 'fb')};
+    return cKmh({z, zone: n, i: z.idx[0], l: bs[bs.length - 1].l, x0: z.x0, len: z.len, nom: z.nom, stop: true, nd: 0, flags: 0, absent,
+            d: s('d'), lo, hi, sig: lo != null && hi != null && (lo > 0 || hi < 0),
+            oa: s('oa'), ob: s('ob'), fa: zfirst(bs, 'fa'), fb: zfirst(bs, 'fb'), ap: bs.some(b => b.ap)}, z.nom);
   });
 }
-// what is drawn: running micro-segments one by one and, when zones are shown, each stop zone as one block
+// what is drawn: running microsegments one by one and, when zones are shown, each stop zone as one block
 function items(v, E, zv, stops) {
   if (!stops) return v;
   const zi = zonesOf(E).zi, out = [];
@@ -714,7 +783,64 @@ function items(v, E, zv, stops) {
   return out;
 }
 // </zones>
-const drawn = (E, v, cm = isCmp()) => items(v, E, st.stops ? (cm ? czvals : zvals)(E, v) : null, st.stops);
+// <units> (pure: no DOM; a test runs this block in node)
+// Interarrêt A→B: from leaving A's stop zone to leaving B's, i.e. the running bins of link A→B, its tail (B's zone
+// upstream of B) and the head of B→C (B's zone downstream). A's own zone is in the unit before; the first stop's
+// head is in none. Head = the leading stop microsegments of a link (a link without running bins: those whose
+// centre is in its first half). Id "A>B" (stop ids), the key of ?xia=.
+function unitsOf(E) {
+  if (E._units) return E._units;
+  const nl = E.stops.length - 1, fr = new Array(Math.max(0, nl)).fill(-1), ui = E.seg.key.map(() => -1), U = [];
+  E.seg.link.forEach((l, i) => { if (l >= 0 && fr[l] < 0 && E.seg.zone[i] !== 'stop') fr[l] = i; });
+  for (let n = 0; n < nl; n++) U.push({n, idx: [], id: `${E.stops[n].id}>${E.stops[n + 1].id}`, from: E.stops[n].name, to: E.stops[n + 1].name});
+  E.seg.link.forEach((l, i) => {
+    if (l < 0 || l >= nl) return;
+    const head = E.seg.zone[i] === 'stop' && (fr[l] >= 0 ? i < fr[l] : E.seg.x0[i] + E.seg.len[i] / 2 < (E.stops[l].x + E.stops[l + 1].x) / 2);
+    const n = head ? l - 1 : l;
+    if (n >= 0) { U[n].idx.push(i); ui[i] = n; }
+  });
+  for (const u of U) { u.idx.sort((a, b) => a - b); const a = u.idx[0], b = u.idx[u.idx.length - 1];
+    u.x0 = a == null ? E.stops[u.n].x : E.seg.x0[a]; u.x1 = b == null ? u.x0 : E.seg.x0[b] + E.seg.len[b]; u.len = u.idx.reduce((t, i) => t + E.seg.len[i], 0); }
+  return (E._units = {U: U.filter(u => u.idx.length), all: U, ui});
+}
+// One-period values of each unit from the microsegment values v. Time per vehicle = the sum of each part's obs /
+// passages, each part over the passages of its OWN link (running bins and tail: A→B's, head: B→C's), as the stop-zone
+// blocks do: a single count (A→B's) would charge B→C's head with vehicles that end at B, or cross an hour boundary
+// in between. Each part is itself a ratio of sums over hours and days. xs: the excluded ids.
+function uvals(E, v, xs) {
+  return unitsOf(E).U.map((u, n) => {
+    const bs = u.idx.map(i => v[i]), none = !bs.some(b => b.obs > 0), s = f => none ? null : zsum(bs, f);
+    const opp = s('opp'), ref = s('ref'), kmh = kmhOf(opp, u.len, zsum(bs, 'obs')), ek = kmhOf(ref, u.len, zsum(bs, 'robs'));
+    return {u, unit: n, i: u.idx[0], l: u.n, x0: u.x0, len: u.len, stop: false, x: xs.has(u.id),
+            flags: bs.reduce((f, b) => f | b.flags, 0), nd: Math.min(...bs.map(b => b.nd)), obs: bs.reduce((t, b) => t + b.obs, 0),
+            opp, ref, kmh, ek, dv: gapOf(ek, kmh), dr: relOf(ek, kmh), pph: zfirst(bs, 'pph')};
+  });
+}
+// two-period values of each unit (cvals), as czvals
+function cuvals(E, v, xs) {
+  return unitsOf(E).U.map((u, n) => {
+    const bs = u.idx.map(i => v[i]), absent = bs.some(b => b.absent), s = f => absent ? null : zsum(bs, f), lo = s('lo'), hi = s('hi');
+    return cKmh({u, unit: n, i: u.idx[0], l: u.n, x0: u.x0, len: u.len, stop: false, x: xs.has(u.id), nd: 0, flags: 0, absent,
+                 d: s('d'), lo, hi, sig: lo != null && hi != null && (lo > 0 || hi < 0), oa: s('oa'), ob: s('ob'), fa: zfirst(bs, 'fa'), fb: zfirst(bs, 'fb'), ap: bs.some(b => b.ap)}, u.len);
+  });
+}
+// Totals over microsegments idx (a stretch, the line), skipping those outside a counted unit (excluded, or the first
+// stop's zone): length, obs per passage (both periods when cm), null as soon as one counted part has no value.
+function stretch(E, v, idx, xs, cm) {
+  const {all, ui} = unitsOf(E); let len = 0, n = 0, skip = 0; const t = cm ? {oa: 0, ob: 0} : {opp: 0};
+  for (const i of idx) {
+    const u = ui[i] >= 0 ? all[ui[i]] : null;
+    if (!u || xs.has(u.id)) { skip += E.seg.len[i]; continue; }
+    len += E.seg.len[i]; n++;
+    for (const f in t) t[f] = t[f] == null || v[i][f] == null || v[i].absent ? null : t[f] + v[i][f];
+  }
+  if (!n) for (const f in t) t[f] = null;
+  return {len, skip, ...t, ...(cm ? {va: kmhOf(t.oa, len), vb: kmhOf(t.ob, len)} : {kmh: kmhOf(t.opp, len)})};
+}
+// </units>
+const isIA = () => st.view === 'ia', isSel = () => st.view === 'sel';
+// interarrêts: one item per unit; otherwise running microsegments and, when shown, the stop-zone blocks
+const drawn = (E, v, cm = isCmp()) => isIA() ? (cm ? cuvals : uvals)(E, v, st.xia) : items(v, E, st.stops ? (cm ? czvals : zvals)(E, v) : null, st.stops);
 // light hatch over a zone block (matrix, profile)
 const zoneHatch = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#mszone)" pointer-events="none"/>`;
 
@@ -725,38 +851,48 @@ function hourRuns(hs) {
   for (const h of a) { const r = out[out.length - 1]; if (r && h === r[1]) r[1] = h + 1; else out.push([h, h + 1]); }
   return out;
 }
-const runsLabel = hs => hourRuns(hs).map(([a, b]) => `${a}–${b} h`).join(', ');
+const runsLabel = hs => hourRuns(hs).map(r => rangeLabel(r)).join(', ');
 function daysLabel() {
   if (st.days.length === PRESENT.length) return tx().alldays;
   if (st.days.join() === '0,1,2,3,4') return tx().weekdays;
   return st.days.map(w => tx().dowl[w]).join(', ');
 }
-const whenLabel = () => st.band ? `${tx().bandl[st.band].toLowerCase()} (${BANDDEF[st.band][0]}–${BANDDEF[st.band][1]} h)` : tx().when(st.hour);
-function zTipHtml(E, v) {
-  const t = tx().tip, lk = E.links[v.l], z = v.tot, m1 = noun(false);
-  let h = `<b>${t.zhead(esc(v.z.name))}</b> (${t.towards(esc(lk ? lk.to : E.to))})<br>`;
-  if (z.opp == null) h += t.nodata;
-  else {
-    h += `<b>${t.zopp(nfa(z.opp), m1)}</b>`;
-    if (z.ex != null) h += '<br>' + t.zex(signed(z.ex, 0), m1);
-  }
+const whenLabel = () => { const b = bandOf(); return b ? `${tx().bandl[b].toLowerCase()} (${rangeLabel()})` : rangeLabel(); };
+// a speed gap in km/h, signed
+const ks = v => v == null ? '–' : signed(v, Math.abs(v) < 10 ? 1 : 0);
+// a gap in km/h and in % of the reference speed
+const gapTxt = (g, r) => g == null ? '–' : `${ks(g)} km/h (${pc(r)})`;
+function tipTail(t, v) {
+  let h = '';
   if (v.pph != null) h += '<br>' + t.freq(nf(v.pph, 1), noun(true));
   if (v.flags & 32) h += `<br><span style="color:var(--ink-3)">${t.days(Math.round(v.nd))} · ${t.partial}</span>`;
   return h;
 }
-function tipHtml(E, v) {
+function zTipHtml(E, v) {
+  const t = tx().tip, lk = E.links[v.l];
+  let h = `<b>${t.zhead(esc(v.z.name))}</b> (${t.towards(esc(lk ? lk.to : E.to))})<br>`;
+  if (v.kmh == null) h += t.nodata;
+  else { h += t.zopp(kf(v.kmh)); if (v.dv != null) h += '<br>' + t.ex(gapTxt(v.dv, v.dr)); }
+  return h + tipTail(t, v);
+}
+// an interarrêt: its name, excluded or not, and what a map click does
+const uHead = v => `<b>${tx().tip.uhead(esc(v.u.from), esc(v.u.to))}</b><br>`;
+const uTail = (v, map) => (v.x ? `<br><span style="color:var(--ink-3)">${tx().ia.xtip}</span>` : '') + (map ? `<br><span style="color:var(--ink-3)">${v.x ? tx().ia.off : tx().ia.on}</span>` : '');
+function uTipHtml(E, v, map) {
+  const t = tx().tip;
+  let h = uHead(v);
+  if (v.kmh == null) h += t.nodata;
+  else { h += t.opp(kf(v.kmh)); if (v.dv != null) h += '<br>' + t.ex(gapTxt(v.dv, v.dr)); }
+  return h + tipTail(t, v) + uTail(v, map);
+}
+function tipHtml(E, v, map) {
+  if (v.u) return uTipHtml(E, v, map);
   if (v.z) return zTipHtml(E, v);
   const t = tx().tip, s = stopBefore(E, v.x0), lk = E.links[v.l];
   let h = `<b>${t.after(Math.round(v.x0 - s.x), Math.round(v.x0 - s.x + v.len), esc(s.name))}</b> (${t.towards(esc(lk ? lk.to : E.to))})<br>`;
-  // every value per 30 m of track, as on the legend
-  const z = v.s30;
-  if (v.oph == null) h += t.nodata;
-  else {
-    if (z.opp != null) h += t.opp(nfa(z.opp), (z.opp < SC.T0 ? '≥ ' + nf(SC.K / SC.T0, 0) : nf(SC.K / z.opp, z.opp > 12 ? 1 : 0)), noun(false));
-    if (z.ex != null) h += '<br>' + t.ex(signed(z.ex, 0));
-  }
-  if (v.pph != null) h += '<br>' + t.freq(nf(v.pph, 1), noun(true));
-  if (v.flags & 32) h += `<br><span style="color:var(--ink-3)">${t.days(Math.round(v.nd))} · ${t.partial}</span>`;
+  if (v.kmh == null) h += t.nodata;
+  else { h += t.opp(kf(v.kmh)); if (v.dv != null) h += '<br>' + t.ex(gapTxt(v.dv, v.dr)); }
+  h += tipTail(t, v);
   if (v.stop) h += `<br><i>${t.stop}</i>`;
   return h;
 }
@@ -823,7 +959,7 @@ function agreeText(lang) {
   const hs = nh && D.show_hotspots !== false ? (lang === 'fr' ? ` ${nb} des ${nh} points chauds ressortent avec les deux références.` : ` ${nb} of the ${nh} hotspots stand out against both references.`) : '';
   return lang === 'fr'
     ? ` En journée, entre les arrêts, les deux écarts classent les microsegments avec une corrélation de rang de ${rho}${ag.length > 1 ? ' selon le sens' : ''} (1 : même classement).${hs}`
-    : ` In the daytime, between stops, the two excesses rank the micro-segments with a rank correlation of ${rho}${ag.length > 1 ? ' by direction' : ''} (1: same ranking).${hs}`;
+    : ` In the daytime, between stops, the two excesses rank the microsegments with a rank correlation of ${rho}${ag.length > 1 ? ' by direction' : ''} (1: same ranking).${hs}`;
 }
 
 // ---------------------------------------------------------------- two-period comparison (D.compare)
@@ -833,64 +969,75 @@ const ctx = () => CT[st.lang];
 const cdirOf = () => CMP ? CMP.dirs.find(d => d.dir === st.dir) : null;
 const CCOLS = CMP ? CMP.cols.map(String) : [];
 const perLabel = P => P && P.first ? `${fmtShort(P.first)} – ${fmtShort(P.last)}` : '';
-// Per micro-segment comparison values for a key (hour or band) of the display entry E.
-function cvals(E, k = key()) {
-  const C = CMP.dirs.find(d => d.dir === E.dir) || cdirOf(), ci = CCOLS.indexOf(String(k));
-  const pos = C ? (C._pos || (C._pos = Object.fromEntries(C.seg_key.map((x, i) => [x, i])))) : {};
+// Comparison values of segment j over an hour range: its own column when the range is one hour or a computed
+// band; otherwise pooled from the hours valid in BOTH periods (obs per passage weighted by passages per hour, as a
+// ratio of sums over hours with the same day count; CI bounds averaged, wider than the true one, so conservative:
+// ap marks this approximate CI).
+function cpick(C, R) {
+  const b = bandOf(R), one = R[1] - R[0] === 1 ? CCOLS.indexOf(String(R[0])) : -1, bc = b ? CCOLS.indexOf(b) : -1;
+  const ci = one >= 0 ? one : bc;
+  if (ci >= 0) return j => { const g = a => a[ci][j]; return {d: g(C.d), lo: g(C.lo), hi: g(C.hi), sig: g(C.sig), oa: g(C.oa), ob: g(C.ob), fa: g(C.fa), fb: g(C.fb)}; };
+  const cols = hoursIn(R).map(h => CCOLS.indexOf(String(h))).filter(c => c >= 0);
+  return j => {
+    let sa = 0, wa = 0, sb = 0, wb = 0, sl = 0, sh = 0, w = 0, fa = 0, fb = 0, n = 0;
+    for (const c of cols) {
+      const oa = C.oa[c][j], ob = C.ob[c][j], a = C.fa[c][j], b = C.fb[c][j];
+      if (oa == null || ob == null || !(a > 0) || !(b > 0)) continue;
+      sa += oa * a; wa += a; sb += ob * b; wb += b; fa += a; fb += b; n++;
+      if (C.lo[c][j] != null && C.hi[c][j] != null) { const u = (a + b) / 2; sl += C.lo[c][j] * u; sh += C.hi[c][j] * u; w += u; }
+    }
+    if (!n) return {d: null};
+    const oa = sa / wa, ob = sb / wb, lo = w ? sl / w : null, hi = w ? sh / w : null;
+    return {d: ob - oa, lo, hi, sig: lo != null && (lo > 0 || hi < 0), oa, ob, fa: fa / n, fb: fb / n, ap: n > 1};
+  };
+}
+// Per microsegment comparison values for an hour range of the display entry E (speeds: cKmh).
+function cvals(E, R = range()) { return memo(`c|${E.pattern_uid}|${E.dir}|${R}`, () => cvals0(E, R)); }
+function cvals0(E, R) {
+  const C = CMP.dirs.find(d => d.dir === E.dir) || cdirOf();
+  const pos = C ? (C._pos || (C._pos = Object.fromEntries(C.seg_key.map((x, i) => [x, i])))) : {}, pick = C ? cpick(C, R) : null;
   return E.seg.key.map((sk, i) => {
     const j = pos[sk], b = {i, l: E.seg.link[i], x0: E.seg.x0[i], len: E.seg.len[i], stop: isStop(E, i), nd: 0, flags: 0};
-    if (j == null || ci < 0 || !C.matched[j]) return {...b, absent: true, d: null, dx: null};
-    const g = a => a[ci][j], xa = g(C.xa), xb = g(C.xb);
-    return {...b, d: g(C.d), dx: xa != null && xb != null ? xb - xa : null, lo: g(C.lo), hi: g(C.hi), sig: g(C.sig),
-            oa: g(C.oa), ob: g(C.ob), fa: g(C.fa), fb: g(C.fb)};
+    if (j == null || !C.matched[j]) return {...b, absent: true, d: null, dk: null};
+    return cKmh({...b, ...pick(j)}, b.len);
   });
 }
-// comparison: the difference in seconds per passage per 30 m (fixed scale +-SC.CMP)
-const cSec = v => { const x = v[st.cmetric]; return x == null ? null : x * TICK * SC.L / (v.nom || v.len); };
-const cColor = v => !shown(v) ? MASKC : v.absent ? NULLC : divColor(cSec(v), !v.sig);
-function czTipHtml(E, v) {
-  const t = ctx().tip, lk = E.links[v.l], l = tx().tip, m1 = noun(false);
-  let h = `<b>${l.zhead(esc(v.z.name))}</b> (${l.towards(esc(lk ? lk.to : E.to))})<br>`;
-  if (v.absent) return h + t.absent;
-  const d = v[st.cmetric];
-  if (d == null) return h + l.nodata;
-  h += t.zd(signed(d * TICK, 0), m1) + (v.sig || st.cmetric !== 'd' ? '' : ` · <span style="color:var(--ink-3)">${t.unsure}</span>`);
-  if (st.cmetric === 'd' && v.oa != null) h += '<br>' + t.za(nf(v.oa * TICK, 0), m1);
-  if (st.cmetric === 'd' && v.ob != null) h += '<br>' + t.zb(nf(v.ob * TICK, 0), m1);
+const cColor = v => v.x ? XC : !shown(v) ? MASKC : v.absent ? NULLC : relColor(v.dr, !v.sig);
+function cTipHtml(E, v, map) {
+  const t = ctx().tip, l = tx().tip, lk = E.links[v.l], s = stopBefore(E, v.x0);
+  let h = v.u ? uHead(v) : (v.z ? `<b>${l.zhead(esc(v.z.name))}</b>` : `<b>${l.after(Math.round(v.x0 - s.x), Math.round(v.x0 - s.x + v.len), esc(s.name))}</b>`)
+    + ` (${l.towards(esc(lk ? lk.to : E.to))})<br>`;
+  const ut = v.u ? uTail(v, map) : '';
+  if (v.absent) return h + t.absent + ut;
+  if (v.dk == null) return h + l.nodata + ut;
+  h += (v.z ? t.zd : t.d)(gapTxt(v.dk, v.dr)) + (v.sig ? '' : ` · <span style="color:var(--ink-3)">${t.unsure}</span>`);
+  if (v.klo != null) h += `<br><span style="color:var(--ink-3)">${ciText(v)}${v.ap ? ` · ${tx().ciap}` : ''}</span>`;
+  h += '<br>' + t.a(kf(v.va)) + '<br>' + t.b(kf(v.vb));
   if (v.fa != null || v.fb != null) h += '<br>' + t.freq(v.fa == null ? '–' : nf(v.fa, 1), v.fb == null ? '–' : nf(v.fb, 1), noun(true));
-  return h;
-}
-function cTipHtml(E, v) {
-  if (v.z) return czTipHtml(E, v);
-  const t = ctx().tip, s = stopBefore(E, v.x0), lk = E.links[v.l], l = tx().tip;
-  let h = `<b>${l.after(Math.round(v.x0 - s.x), Math.round(v.x0 - s.x + v.len), esc(s.name))}</b> (${l.towards(esc(lk ? lk.to : E.to))})<br>`;
-  if (v.absent) return h + t.absent;
-  const dd = v[st.cmetric], isd = st.cmetric === 'd';
-  if (dd == null) return h + l.nodata;
-  h += t.d(signed(dd * TICK * SC.L / v.len, 0), noun(false)) + (v.sig || !isd ? '' : ` · <span style="color:var(--ink-3)">${t.unsure}</span>`);
-  if (isd && v.lo != null && v.hi != null) h += `<br><span style="color:var(--ink-3)">${ctx().ci(signed(v.lo * TICK * SC.L / v.len, 0), signed(v.hi * TICK * SC.L / v.len, 0))}</span>`;
-  if (isd && v.oa != null) h += '<br>' + t.a(nf(v.oa * TICK * SC.L / v.len, 0), noun(false));
-  if (isd && v.ob != null) h += '<br>' + t.b(nf(v.ob * TICK * SC.L / v.len, 0), noun(false));
-  if (v.fa != null || v.fb != null) h += '<br>' + t.freq(v.fa == null ? '–' : nf(v.fa, 1), v.fb == null ? '–' : nf(v.fb, 1), noun(true));
-  if (v.stop) h += `<br><i>${l.stop}</i>`;
-  return h;
+  if (v.stop && !v.z) h += `<br><i>${l.stop}</i>`;
+  return h + ut;
 }
 const chgAll = () => CMP && hsOn() ? (CMP.changes || []).filter(c => c.dir === st.dir && (!c.pattern_uid || c.pattern_uid === (dirOf() || {}).pattern_uid)).sort((a, b) => a.rank - b.rank) : [];
 const chgShown = () => chgAll().filter(c => st.stops || c.zone !== 'stop');
 const chgDir = () => st.hotAll ? chgShown() : chgShown().slice(0, HOT_TOP);
 const signCol = s => s < 0 ? FASTC : SLOWC;
+// the diverging km/h bar: slower (red) on the left, faster (green) on the right
+function gapBar(pale) {
+  const M = 100 * SC.CMPR, pos = v => (Math.min(M, Math.max(-M, v)) / M + 1) * 50;
+  const bar = Array.from({length: 41}, (_, i) => relColor(SC.CMPR * (i - 20) / 20, pale)).join(',');
+  const tk = SC.CRTICKS.map(v => `<span style="left:${pos(v)}%">${v === M ? '≥ ' : v === -M ? '≤ ' : ''}${v ? signed(v, 0) : '0'} %</span>`).join('');
+  return `<div class="ramp"><div class="bar" style="background:linear-gradient(90deg,${bar})"></div><div class="tk">${tk}</div></div>`;
+}
 function cmpLegend() {
-  const c = ctx().legend, mm = st.cmetric, M = SC.CMP;
-  const pos = v => (Math.min(M, Math.max(-M, v)) / M + 1) * 50;   // linear axis
-  const bar = Array.from({length: 41}, (_, i) => divColor(M * (i - 20) / 20, false)).join(',');
-  const tk = SC.CTICKS.map(v => `<span style="left:${pos(v)}%">${v === M ? '≥ ' : v === -M ? '≤ ' : ''}${v ? signed(v, 0) + ' s' : '0'}</span>`).join('');
-  const html = `<div class="ramp"><div class="bar" style="background:linear-gradient(90deg,${bar})"></div><div class="tk">${tk}</div></div>` +
-    `<span class="txt">${esc(c[mm](noun(false)))}${helpBtn(c.help[mm](noun(false)))}</span>` +
+  const c = ctx().legend;
+  const html = gapBar(false) + `<span class="txt">${esc(c.d(noun(false)))}${helpBtn(c.help.d(noun(false)))}</span>` +
     `<span><i class="sw" style="background:${NULLC}"></i>${c.absent}</span>` +
-    (st.stops ? zoneSw() : `<span><i class="sw hatch"></i>${tx().legend.masked}</span>`) +
+    zoneOrX() +
     (chgDir().length ? `<span><i class="hk"></i>${c.chg}</span>` : '');
   $('legend').innerHTML = html; $('mxlegend').innerHTML = html;
 }
+// speeds of a stretch (obs per passage summed over it, over its length); CI of the change in km/h
+function stretchKmh(h, len) { return cKmh({oa: h.obs_per_passage_a, ob: h.obs_per_passage_b, lo: h.ci_lo, hi: h.ci_hi}, len); }
 function cmpList() {
   const c = ctx(), hs = chgDir();
   $('hstitle').textContent = c.title2;
@@ -898,14 +1045,15 @@ function cmpList() {
   if ((CMP.params || {}).status && CMP.params.status !== 'computed') { $('hslist').innerHTML = `<p class="empty">${c.few}</p>`; return; }
   if (!hs.length) { $('hslist').innerHTML = `<p class="empty">${chgAll().length ? c.stops : c.none}</p>`; return; }
   $('hslist').innerHTML = hs.map((h, i) => {
+    const k = stretchKmh(h, h.x1_m - h.x0_m);
     const fr = h.passages_per_h_a != null && h.passages_per_h_b != null ? c.freq(nf(h.passages_per_h_a, 1), nf(h.passages_per_h_b, 1), noun(true)) : '';
     const meta = [c.sign[String(h.sign)], tx().zone[h.zone] || h.zone, runsLabel(h.hours || []), fr].filter(Boolean).join(' · ');
-    const ci = h.ci_lo != null && h.ci_hi != null ? c.ci(signed(h.ci_lo * TICK, 0), signed(h.ci_hi * TICK, 0)) : '';
+    const ci = ciText(k);
     const flag = h.frequency_changed ? `<div class="meta" style="color:var(--acc)">${esc(c.freqflag)}</div>` : '';
     return `<button type="button" class="hs${st.chg === h.rank ? ' on' : ''}" data-r="${h.rank}"><span class="n" style="background:${signCol(h.sign)};color:#111">${i + 1}</span>
       <div><div class="nm">${esc(h.from_stop_name)} <span class="ar">→</span> ${esc(h.to_stop_name)}</div>
       <div class="meta">${esc(meta)}</div><div class="meta">${esc(ci)}</div>${flag}</div>
-      <div class="v">${h.delta_s == null ? '—' : signed(h.delta_s, 0)}<small>${c.perveh(noun(false))}</small><small>${h.veh_time_s_per_day == null ? '' : esc(c.perday(signed(h.veh_time_s_per_day / 60, 0)))}</small></div></button>`;
+      <div class="v">${ks(k.dk)}<small>${tx().kmh} (${pc(k.dr)})</small><small>${k.va == null ? '' : esc(c.ab(kf(k.va), kf(k.vb)))}</small></div></button>`;
   }).join('');
   const n = chgShown().length;
   if (n > HOT_TOP) $('hslist').innerHTML += `<button type="button" class="btn" id="hsmore" style="margin:8px 0 4px">${st.hotAll ? tx().hsless : c.more(n)}</button>`;
@@ -915,7 +1063,7 @@ function cmpList() {
 function selectChg(r) {
   st.chg = st.chg === r ? null : r;
   const h = chgDir().find(x => x.rank === st.chg);
-  if (h && h.peak_hour != null && h.peak_hour >= 0 && D.hours.includes(h.peak_hour)) { stop(); st.band = null; st.hour = h.peak_hour; }
+  if (h && h.peak_hour != null && h.peak_hour >= 0 && D.hours.includes(h.peak_hour)) { stop(); setRange(h.peak_hour, h.peak_hour + 1); }
   render();
   if (h && map) { const E = entry(), idx = hotSegIdx(E, h); const pts = idx.flatMap(i => E.seg.c[i].map(([x, y]) => [y, x])); if (pts.length) map.fitBounds(window.L.latLngBounds(pts), {maxZoom: 16, padding: [80, 80]}); }
 }
@@ -931,51 +1079,72 @@ function cmpHotMap() {
       .on('click', () => selectChg(h.rank)).addTo(hotLayer);
   });
 }
-function cmpProfile() {
-  const E = entry(), svg = $('prof'), c = ctx();
-  const W = svg.clientWidth || 800, H = 300, m = {l: 48, r: 12, t: 18, b: 74};
-  const Ltot = E.stops.length ? E.stops[E.stops.length - 1].x : 1, v = drawn(E, cvals(E), true), YM = SC.CMP;
+// profile of a signed km/h value (two periods, gap with the evening): bars from 0, +-YM km/h
+function gapProfile(E, v, val, col, tip, YM) {
+  const svg = $('prof'), W = svg.clientWidth || 800, H = 300, m = {l: 48, r: 12, t: 18, b: 74};
+  const Ltot = E.stops.length ? E.stops[E.stops.length - 1].x : 1;
   const x = u => m.l + u / Ltot * (W - m.l - m.r), y = u => m.t + (1 - (Math.min(Math.max(u, -YM), YM) + YM) / (2 * YM)) * (H - m.t - m.b);
   let s = '<g class="axis">';
-  const e10 = Math.pow(10, Math.floor(Math.log10(YM / 3))), step = [1, 2, 2.5, 5, 10].map(f => f * e10).find(q => YM / q <= 3) || YM;
-  for (let k = -Math.floor(YM / step) * step; k <= YM + 1e-9; k += step)
+  const step = YM / 2;
+  for (let k = -YM; k <= YM + 1e-9; k += step)
     s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(k)}" y2="${y(k)}" stroke-dasharray="${Math.abs(k) < 1e-9 ? '' : '2 4'}"/><text x="${m.l - 6}" y="${y(k) + 4}" text-anchor="end">${Math.abs(k) < 1e-9 ? '0' : signed(k, 0)}</text>`;
-  s += '</g>';
-  let last = -1e9;
+  s += '</g>' + selBand(E, x, H, m) + stopTicks(E, x, H, m);
+  v.forEach(b => { if (!shown(b)) s += maskBar(x, b, m, H); });
+  v.forEach(b => { const u = val(b); if (u == null || !shown(b)) return; const ys = y(u), y0 = y(0);
+    const r = [x(b.x0).toFixed(1), Math.min(ys, y0).toFixed(1), Math.max(1, x(b.x0 + b.len) - x(b.x0) - .5).toFixed(1), Math.max(.5, Math.abs(y0 - ys)).toFixed(1)];
+    s += `<rect x="${r[0]}" y="${r[1]}" width="${r[2]}" height="${r[3]}" fill="${col(b)}"/>` + (b.z ? zoneHatch(...r) : ''); });
+  s += freqLine(v.map(b => b.fb !== undefined ? b.fb : b.pph), v, x, H, m, W);
+  s += `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">%</text>`;
+  svg.innerHTML = s;
+  svg.onmousemove = e => { const r = svg.getBoundingClientRect(), u = (e.clientX - r.left - m.l) / (W - m.l - m.r) * Ltot; if (u < 0 || u > Ltot) return hideTip();
+    let i = v.findIndex(b => u >= b.x0 && u < b.x0 + b.len); if (i < 0) i = v.length - 1; showTip(e, tip(E, v[i])); };
+  svg.onmouseleave = hideTip;
+}
+function cmpProfile() {
+  const E = entry();
+  gapProfile(E, drawn(E, cvals(E), true), b => b.dr == null ? null : 100 * b.dr, b => b.x ? XC : relColor(b.dr, !b.sig), cTipHtml, 200 * SC.CMPR);
+  setSub($('profsub'), ctx().profsub(E.from, E.to, whenLabel(), noun(false), noun(true)));
+}
+// the selection behind a profile
+function selBand(E, x, H, m) {
+  const S = isSel() && selRange(); if (!S) return '';
+  const a = x(E.seg.x0[S[0]]), b = x(E.seg.x0[S[1]] + E.seg.len[S[1]]);
+  return `<rect x="${a.toFixed(1)}" y="${m.t}" width="${Math.max(2, b - a).toFixed(1)}" height="${H - m.t - m.b}" fill="#eef1f6" fill-opacity=".08" stroke="#eef1f6" stroke-opacity=".5" stroke-dasharray="4 3"/>`;
+}
+// stop lines and thinned names under a profile
+function stopTicks(E, x, H, m) {
+  let s = '', last = -1e9;
   for (const t of E.stops) {
     const xx = x(t.x);
     s += `<line x1="${xx}" x2="${xx}" y1="${m.t}" y2="${H - m.b}" stroke="#eef1f6" stroke-opacity=".15"/>`;
     if (xx - last >= 13) { last = xx; s += `<text x="${xx}" y="${H - m.b + 14}" transform="rotate(-40 ${xx} ${H - m.b + 14})" text-anchor="end" fill="var(--ink-3)" font-size="10" font-family="var(--sans)">${esc(t.name)}</text>`; }
   }
-  v.forEach(b => { if (!shown(b)) s += maskBar(x, b, m, H); });
-  v.forEach(b => { const u = cSec(b); if (u == null || !shown(b)) return; const ys = y(u), y0 = y(0);
-    const r = [x(b.x0).toFixed(1), Math.min(ys, y0).toFixed(1), Math.max(1, x(b.x0 + b.len) - x(b.x0) - .5).toFixed(1), Math.max(.5, Math.abs(y0 - ys)).toFixed(1)];
-    s += `<rect x="${r[0]}" y="${r[1]}" width="${r[2]}" height="${r[3]}" fill="${divColor(u, !b.sig)}"/>` + (b.z ? zoneHatch(...r) : ''); });
-  s += freqLine(v.map(b => b.fb == null ? null : b.fb), v, x, H, m, W);
-  s += `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${esc(c.per30(noun(false)))}</text>`;
-  svg.innerHTML = s;
-  svg.onmousemove = e => { const r = svg.getBoundingClientRect(), u = (e.clientX - r.left - m.l) / (W - m.l - m.r) * Ltot; if (u < 0 || u > Ltot) return hideTip();
-    let i = v.findIndex(b => u >= b.x0 && u < b.x0 + b.len); if (i < 0) i = v.length - 1; showTip(e, cTipHtml(E, v[i])); };
-  svg.onmouseleave = hideTip;
-  setSub($('profsub'), c.profsub(E.from, E.to, whenLabel(), noun(false), noun(true)));
+  return s;
 }
 
 // ---------------------------------------------------------------- static texts
+// "du 2 janvier au 30 mars 2026" / "2 January to 30 March 2026" (year, month written once when shared)
+function spanLabel(a, b) {
+  if (!a) return '';
+  const da = new Date(a + 'T12:00:00'), db = new Date(b + 'T12:00:00'), y = da.getFullYear() === db.getFullYear(), mo = y && da.getMonth() === db.getMonth();
+  const first = mo ? (st.lang === 'fr' && da.getDate() === 1 ? '1er' : String(da.getDate())) : fmtDate(a, y ? {day: 'numeric', month: 'long'} : undefined);
+  return tx().span(first, fmtDate(b));
+}
+// one title, "Tram 92 direction Fort-Jaco" (terminus of the shown direction and version), and one period line
+function head() {
+  const l = tx(), mode = (MODE[st.lang][D.mode] || MODE[st.lang]._), E = entry();
+  const badge = D.line ? `<span class="badge">${esc(D.line)}</span>` : '';
+  $('h1').innerHTML = DIRS.length || D.line ? l.title(esc(mode), badge, E ? esc(E.to) : '') : esc(D.title || '');
+  const x = s => s ? ` <span class="x">· ${esc(s)}</span>` : '';
+  $('per').innerHTML = isCmp() ? esc(ctx().per(spanLabel(CMP.a.first, CMP.a.last), spanLabel(CMP.b.first, CMP.b.last)))
+    : esc(spanLabel(D.period.first, D.period.last)) + x(exclSummary(D.period.excluded));
+}
 function texts() {
-  const l = tx(), mode = (MODE[st.lang][D.mode] || MODE[st.lang]._);
+  const l = tx();
   document.documentElement.lang = st.lang;
-  const d0 = DIRS[0];
-  const ends = d0 ? `${d0.from} ↔ ${d0.to}` : '';
-  const per = D.period.first ? `${fmtDate(D.period.first)} – ${fmtDate(D.period.last)}` : '';
-  document.getElementById('kicker').textContent = [`${mode} ${D.line || ''}`.trim(), ends, per].filter(Boolean).join(' · ').replace(/\b1er\b/g, '1ᵉʳ');   // uppercase kicker: not "1ER"
-  const cm = isCmp();
-  if (cm) document.getElementById('kicker').textContent = [`${mode} ${D.line || ''}`.trim(), ends, `${perLabel(CMP.a)} → ${perLabel(CMP.b)}`].filter(Boolean).join(' · ').replace(/\b1er\b/g, '1ᵉʳ');
-  document.getElementById('h1').innerHTML = (D.line ? `<span class="badge">${esc(D.line)}</span>` : '') + esc(D.title || (cm ? ctx().title(noun(true)) : l.title(noun(true), D.line)));
-  document.getElementById('lede').innerHTML = esc(cm ? ctx().lede(`${fmtDate(CMP.a.first)} – ${fmtDate(CMP.a.last)}`, `${fmtDate(CMP.b.first)} – ${fmtDate(CMP.b.last)}`, noun(false), noun(true))
-    : l.lede(nf(P.segment_m || 30, 0), nf(TICK, 0), noun(false), noun(true))).replace('§', helpBtn(l.why30));
   $('stopsQ').innerHTML = helpBtn(stopsHelpText());
   document.getElementById('l_mode').textContent = l.view;
-  for (const [id, k] of [['l_days', 'days'], ['l_dir', 'dir'], ['l_ver', 'ver'], ['l_bands', 'bands'], ['l_metric', 'metric'], ['l_stops', 'stops']])
+  for (const [id, k] of [['l_views', 'views'], ['l_days', 'days'], ['l_dir', 'dir'], ['l_ver', 'ver'], ['l_bands', 'bands'], ['l_metric', 'metric'], ['l_stops', 'stops']])
     document.getElementById(id).textContent = l[k];
   document.getElementById('stopsT').title = '';
   document.getElementById('hstitle').textContent = l.hstitle;
@@ -988,13 +1157,12 @@ function texts() {
   document.getElementById('play').textContent = timer ? l.pause : l.play;
   document.getElementById('mxfull').textContent = mxCard.classList.contains('full') ? l.unfull : l.full;
   document.getElementById('map').setAttribute('aria-label', l.mname(noun(false))[st.metric]);
-  // hour ticks at the thumb's true position for that hour (they used to be spread evenly, so the thumb
-  // looked off from the hour shown in the clock)
-  const hs = D.hours, H0 = +hourEl.min, H1 = +hourEl.max, tk = [hs[0], 8, 12, 17, hs[hs.length - 1]].filter((h, i, a) => hs.includes(h) && a.indexOf(h) === i);
-  document.getElementById('hticks').innerHTML = tk.map(h => { const f = H1 > H0 ? (h - H0) / (H1 - H0) : 0;
-    return `<span style="left:calc(var(--th) / 2 + ${f.toFixed(4)} * (100% - var(--th)))">${h} h</span>`; }).join('');
+  hAEl.setAttribute('aria-label', l.hstart); hBEl.setAttribute('aria-label', l.hend);
+  // hour ticks at the thumbs' true position for that hour
+  const tk = [HMIN, 8, 12, 16, 20, HMAX].filter((h, i, a) => h >= HMIN && h <= HMAX && a.indexOf(h) === i);
+  document.getElementById('hticks').innerHTML = tk.map(h => `<span style="left:${hPos(h)}">${h} h</span>`).join('');
 }
-// "4 jours écartés : 2 fériés, 2 flux incomplets" (missing, frozen and empty feed hours count as one reason)
+// "4 jours exclus : 2 fériés, 2 flux incomplets" (missing, frozen and empty feed hours count as one reason)
 const FEED_REASONS = ['low_coverage', 'frozen', 'no_data'];
 function exclSummary(excluded) {
   const l = tx(), ex = excluded || [];
@@ -1009,23 +1177,31 @@ function exclSummary(excluded) {
 }
 function tiles() {
   const l = tx();
-  const nseg = DIRS.reduce((a, d) => a + d.seg.key.length, 0);
-  let tot = 0;
-  for (const d of DIRS) for (const w of PRESENT) for (const row of d.wk.obs[w]) for (const v of row) tot += v;
+  // line totals: without the microsegments of excluded interarrêts
+  let tot = 0, nseg = 0;
+  for (const d of DIRS) {
+    const {all, ui} = unitsOf(d), keep = d.seg.key.map((_, i) => !(ui[i] >= 0 && st.xia.has(all[ui[i]].id)));
+    nseg += keep.filter(Boolean).length;
+    for (const w of PRESENT) for (const row of d.wk.obs[w]) row.forEach((v, i) => { if (keep[i]) tot += v; });
+  }
   const nh = (D.hotspots || []).length;
+  // on the platform the data-quality block has these numbers
+  $('tiles').hidden = HOST;
+  if (HOST) return;
   if (isCmp()) {
     const c = ctx().tiles, ch = CMP.changes || [];
     document.getElementById('tiles').classList.remove('t3');
     document.getElementById('tiles').classList.toggle('t2', !hsOn());
-    document.getElementById('tiles').innerHTML = [[nf(CMP.a.days, 0), `${c.a} (${perLabel(CMP.a)})`], [nf(CMP.b.days, 0), `${c.b} (${perLabel(CMP.b)})`],
-      ...(hsOn() ? [[nf(ch.filter(x => x.sign > 0).length, 0), c.slower], [nf(ch.filter(x => x.sign < 0).length, 0), c.faster]] : [])]
+    const ns = ch.filter(x => x.sign > 0).length, nq = ch.filter(x => x.sign < 0).length;
+    document.getElementById('tiles').innerHTML = [[nf(CMP.a.days, 0), `${c.a(CMP.a.days)} (${perLabel(CMP.a)})`], [nf(CMP.b.days, 0), `${c.b(CMP.b.days)} (${perLabel(CMP.b)})`],
+      ...(hsOn() ? [[nf(ns, 0), c.slower(ns)], [nf(nq, 0), c.faster(nq)]] : [])]
       .map(([b, s]) => `<div class="tile"><b>${b}</b><span>${esc(s)}</span></div>`).join('');
     return;
   }
   document.getElementById('tiles').classList.remove('t2');
   document.getElementById('tiles').classList.toggle('t3', !hsOn());
   document.getElementById('tiles').innerHTML = [
-    [nf(D.period.days, 0), esc(l.tiles.days(D.period.days, exclSummary(D.period.excluded)))],
+    [nf(D.period.days, 0), esc(l.tiles.days(D.period.days, ''))],
     [nf(nseg, 0), l.tiles.segs(nseg, nf(P.segment_m || 30, 0))],
     [bigNum(tot), l.tiles.obs],
     ...(hsOn() ? [[nf(nh, 0), l.tiles.hs(nh)]] : []),
@@ -1051,17 +1227,20 @@ function buildControls() {
   });
   $('days').querySelectorAll('button').forEach(b => { if (!PRESENT.includes(+b.dataset.k)) b.disabled = true; });
   const dirItems = DIRS.map(d => [d.dir, l.towards(d.to)]);
-  const setDir = k => { st.dir = +k; st.ver = null; st.hot = null; st.chg = null; drawAll(); };
+  const setDir = k => { st.dir = +k; st.ver = null; st.hot = null; st.chg = null; st.sel = null; drawAll(); };
   buttons($('dirs'), dirItems, setDir);
   buttons($('mxdirs'), dirItems, setDir);
   $('dirs').closest('.grp').style.display = DIR_CONTROL ? '' : 'none'; $('mxdirs').style.display = DIR_CONTROL ? '' : 'none';
   SETDIR = setDir;
-  buttons($('bands'), Object.keys(BANDDEF).map(k => [k, l.bandl[k], `${BANDDEF[k][0]}–${BANDDEF[k][1]} h`]), k => { stop(); st.band = st.band === k ? null : k; render(); });
+  // a band moves both handles to its hours
+  buttons($('bands'), Object.keys(BANDDEF).map(k => [k, l.bandl[k], rangeLabel(BANDDEF[k])]), k => { stop(); setRange(...BANDDEF[k]); renderRange(); });
   $('g_mode').hidden = !CMP || HOST;
-  if (CMP) buttons($('modes'), [['one', l.modes.one], ['cmp', l.modes.cmp]], k => { st.mode = k; st.ver = null; st.hot = null; st.chg = null; buildControls(); texts(); tiles(); drawAll(); });
-  if (isCmp()) buttons($('metric'), Object.entries(l.cmetrics(noun(false))), k => { st.cmetric = k; render(); });
-  else buttons($('metric'), Object.entries(l.metrics(noun(false))).map(([k, t]) => [k, t, l.mname(noun(false))[k]]), k => { st.metric = k; render(); });
+  if (CMP) buttons($('modes'), [['one', l.modes.one], ['cmp', l.modes.cmp]], k => { st.mode = k; st.ver = null; st.hot = null; st.chg = null; st.sel = null; buildControls(); texts(); tiles(); drawAll(); });
+  // two periods: one measure (the speed difference), no buttons
+  $('metric').closest('.grp').hidden = isCmp();
+  buttons($('metric'), Object.entries(l.metrics(noun(false))).map(([k, t]) => [k, t, l.mname(noun(false))[k]]), k => { st.metric = k; render(); });
   buttons($('stopsT'), [['true', l.stopsl.true], ['false', l.stopsl.false]], k => { st.stops = k === 'true'; render(); });
+  buttons($('views'), Object.entries(l.viewl), k => { if (k === st.view) return; st.view = k; st.hot = null; st.chg = null; saveUrl(); drawAll(); });
   buildVersions();
 }
 function buildVersions() {
@@ -1070,11 +1249,12 @@ function buildVersions() {
   $('g_ver').hidden = isCmp() || !(d && d.alt && d.alt.length);
   if ($('g_ver').hidden) return;
   buttons($('vers'), vs.map(v => [v.pattern_uid, l.vers(fmtShort(v.first), fmtShort(v.last), v.n_days) + (v.display ? ` (${l.verMain})` : ''),
-    v.display ? '' : l.verNote(v.links_removed.length, v.links_added.length)]), k => { st.ver = k === d.pattern_uid ? null : k; st.hot = null; drawAll(); });
+    v.display ? '' : l.verNote(v.links_removed.length, v.links_added.length)]), k => { st.ver = k === d.pattern_uid ? null : k; st.hot = null; st.sel = null; drawAll(); });
 }
-const hourEl = $('hour');
-hourEl.min = D.hours[0]; hourEl.max = D.hours[D.hours.length - 1];
-hourEl.setAttribute('aria-label', 'Heure');
+// the two handles: start hour hA in [HMIN, HMAX - 1], end hour hB in [HMIN + 1, HMAX] (end excluded)
+const hAEl = $('hA'), hBEl = $('hB');
+for (const el of [hAEl, hBEl]) { el.min = HMIN; el.max = HMAX; }
+const hPos = h => `calc(var(--th) / 2 + ${(HMAX > HMIN ? (h - HMIN) / (HMAX - HMIN) : 0).toFixed(4)} * (100% - var(--th)))`;
 
 // ---------------------------------------------------------------- map
 let map = null, renderer = null, baseLayer, segLayer, zoneLayer, stopLayer, hotLayer, segs = [];
@@ -1084,8 +1264,10 @@ function initMap() {
   const Lf = window.L;
   map = Lf.map('map', {scrollWheelZoom: false, zoomSnap: .25});
   map.attributionControl.setPrefix(false);
-  if (D.tiles !== false) Lf.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-    {maxZoom: 16, opacity: .6, attribution: 'Esri, HERE, Garmin, © OpenStreetMap'}).addTo(map);
+  // basemap: OpenStreetMap tiles, darkened by a CSS filter (.osmdark); D.tile_url / D.tile_attr: a host's own tiles
+  // (e.g. a keyed dark provider), drawn as they are
+  if (D.tiles !== false) Lf.tileLayer(D.tile_url || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19,
+    className: D.tile_url ? '' : 'osmdark', attribution: D.tile_url ? (D.tile_attr || '') : '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
   if (D.source) map.attributionControl.addAttribution(esc(D.source));
   renderer = Lf.svg({padding: .5});
   for (const c of (D.ctx || [])) Lf.polyline(c.map(([x, y]) => [y, x]), {renderer, color: '#1f2b47', weight: 1.5, interactive: false}).addTo(map);
@@ -1109,7 +1291,7 @@ function declutter() {
     if (ok) placed.push(p);
   });
 }
-// Street View at the clicked point, looking along the direction of travel of the micro-segment
+// Street View at the clicked point, looking along the direction of travel of the microsegment
 function svPopup(c, ll) {
   const [x0, y0] = c[0], [x1, y1] = c[c.length - 1];
   const hd = ((Math.atan2((x1 - x0) * Math.cos(y0 * Math.PI / 180), y1 - y0) * 180 / Math.PI) + 360) % 360;
@@ -1126,13 +1308,20 @@ function drawMap() {
   baseLayer.clearLayers(); segLayer.clearLayers(); zoneLayer.clearLayers(); stopLayer.clearLayers(); segs = [];
   if (!E) return;
   E.seg.c.forEach(c => { if (c.length > 1) Lf.polyline(c.map(([x, y]) => [y, x]), {renderer, color: '#05090f', weight: 14, interactive: false}).addTo(baseLayer); });
-  E.seg.c.forEach((c, i) => {
+  // interarrêts: one polyline per unit; a click excludes it from the line totals (or brings it back)
+  if (isIA()) unitsOf(E).U.forEach((u, n) => {
+    const p = Lf.polyline(u.idx.flatMap(i => E.seg.c[i].map(([x, y]) => [y, x])), {renderer, weight: 10, lineCap: 'butt'}).addTo(segLayer);
+    p.bindTooltip(() => { const cm = isCmp(), b = (cm ? cuvals : uvals)(E, cm ? cvals(E) : vals(E), st.xia)[n]; return (cm ? cTipHtml : tipHtml)(E, b, true); }, {sticky: true});
+    p.on('click', e => { toggleXia(u.id); p.closeTooltip(); p.openTooltip(e.latlng); });
+    segs.push(p);
+  });
+  else E.seg.c.forEach((c, i) => {
     const p = Lf.polyline(c.map(([x, y]) => [y, x]), {renderer, weight: 10, lineCap: 'butt'}).addTo(segLayer);
     p.bindTooltip(() => { const cm = isCmp(), v = cm ? cvals(E) : vals(E), n = zonesOf(E).zi[i];
-      // in a shown stop zone, every micro-segment carries the zone's tooltip
+      // in a shown stop zone, every microsegment carries the zone's tooltip
       const b = st.stops && n >= 0 ? (cm ? czvals : zvals)(E, v)[n] : v[i];
       return cm ? cTipHtml(E, b) : tipHtml(E, b); }, {sticky: true});
-    p.on('click', e => { p.closeTooltip(); svPopup(c, e.latlng); });
+    p.on('click', e => { p.closeTooltip(); if (isSel()) pickSel(i); else svPopup(c, e.latlng); });
     segs.push(p);
   });
   E.stops.forEach((s, k) => {
@@ -1172,98 +1361,199 @@ function drawHotMap() {
 function recolor() {
   const cm = isCmp(), E = entry();
   if (!E) return;
-  const v = cm ? cvals(E) : vals(E), {Z, zi} = zonesOf(E), zv = st.stops ? (cm ? czvals : zvals)(E, v) : null;
-  // a shown stop zone: all its micro-segments in the zone's colour, under one hatched line
-  segs.forEach((p, i) => { const b = zv && zi[i] >= 0 ? zv[zi[i]] : v[i]; p.setStyle({color: cm ? cColor(b) : colorFor(b), weight: shown(b) ? 10 : 4}); });
+  const v = cm ? cvals(E) : vals(E), {Z, zi} = zonesOf(E), zv = st.stops && !isIA() ? (cm ? czvals : zvals)(E, v) : null;
   zoneLayer.clearLayers();
+  // excluded interarrêts: thin and dashed, in grey
+  if (isIA()) return drawn(E, v, cm).forEach((b, n) => segs[n] && segs[n].setStyle({color: cm ? cColor(b) : colorFor(b), weight: b.x ? 5 : 10, dashArray: b.x ? '3 6' : null}));
+  // a shown stop zone: all its microsegments in the zone's colour, under one hatched line; outside a selection: faded
+  const S = isSel() ? selRange() : null, op = i => S && (i < S[0] || i > S[1]) ? .25 : 1;
+  segs.forEach((p, i) => { const b = zv && zi[i] >= 0 ? zv[zi[i]] : v[i]; p.setStyle({color: cm ? cColor(b) : colorFor(b), weight: shown(b) ? 10 : 4, opacity: op(i)}); });
   if (zv) for (const z of Z) {
     const ll = z.idx.flatMap(i => E.seg.c[i].map(([x, y]) => [y, x]));
-    if (ll.length > 1) window.L.polyline(ll, {renderer, color: 'url(#mszone)', weight: 10, opacity: 1, lineCap: 'butt', interactive: false}).addTo(zoneLayer);
+    if (ll.length > 1) window.L.polyline(ll, {renderer, color: 'url(#mszone)', weight: 10, opacity: op(z.idx[0]), lineCap: 'butt', interactive: false}).addTo(zoneLayer);
   }
 }
 
 // ---------------------------------------------------------------- legend
 const isStib = () => /STIB|vehicle-distance/i.test(D.source || '');
 const stopsHelpText = () => tx().stopsHelp(isStib());
-const zoneSw = () => `<span><i class="sw zone"${isCmp() ? ` style="background-color:${DIV[2][1]}"` : ''}></i>${esc(tx().legend.zone)}${helpBtn(stopsHelpText())}</span>`;
-// The same bar and tick positions for every measure; only the labels say which measure and unit.
+const zoneSw = () => `<span><i class="sw zone"${isCmp() || st.metric === 'ex' ? ` style="background-color:${DIV[2][1]}"` : ''}></i>${esc(tx().legend.zone)}${helpBtn(stopsHelpText())}</span>`;
+// stop zones (shown or hidden); interarrêts: the excluded swatch
+const zoneOrX = () => isIA() ? `<span><i class="sw" style="background:${XC}"></i>${esc(tx().ia.excl)}</span>` : st.stops ? zoneSw() : `<span><i class="sw hatch"></i>${esc(tx().legend.masked)}</span>`;
+// The speed bar keeps the fixed T-linear layout (tPos), labelled in km/h; the gap with the evening uses the km/h gap bar.
 function legend() {
   if (isCmp()) return cmpLegend();
-  const l = tx().legend, m = st.metric, n = SC.TICKS.length;
-  // linear axis in T: colour stops at evenly spaced T
-  const bar = Array.from({length: 29}, (_, i) => timeColor(SC.T0 + (SC.T1 - SC.T0) * i / 28)).join(',');
-  const lab = (T, i) => { const x = tickVal(T, m), d = Math.abs(x - Math.round(x)) < 1e-9 ? 0 : 1;
-    return (i === n - 1 ? '≥ ' : i === 0 && !isEx(m) ? '≤ ' : '') + (isEx(m) && x ? '+' : '') + nf(x, d) + (m === 'oph' || i ? '' : ' s'); };   // unit on the first tick only (room at the right end)
-  const ticks = SC.TICKS.map((T, i) => `<span style="left:${tPos(T) * 100}%">${lab(T, i)}</span>`).join('');
-  // time per vehicle is a speed: 30 m in T s = K / T km/h, shown under each tick
-  const kmh = m !== 'opp' ? '' : `<div class="tk kmh">${SC.TICKS.map((T, i) => { const k = SC.K / T;
-    return `<span style="left:${tPos(T) * 100}%">${i === n - 1 ? '≤ ' : i === 0 ? '≥ ' : ''}${nf(k, k < 5 ? 1 : 0)}</span>`; }).join('')}</div>`;
-  // position reports per hour also count the frequency: say how many vehicles pass at that time
-  let freq = '';
-  if (m === 'oph' && entry()) { const f = vals(entry()).map(b => b.pph).filter(x => x != null).sort((a, b) => a - b);
-    if (f.length) freq = l.freq(nf(f[Math.floor(f.length / 2)], 1), noun(true)); }
-  const txt = esc(l.lab[m](noun(false)) + (m === 'ex' && (st.band === 'evening' || (!st.band && st.hour >= REFH[0] && st.hour < REFH[1])) ? l.evening : ''))
-    + (kmh ? esc(l.kmhRow) : '') + helpBtn(l.help[m](noun(false), noun(true))) + (freq ? `<br><b>${esc(freq)}</b>` : '');
-  $('legend').innerHTML = `<div class="ramp"><div class="bar" style="background:linear-gradient(90deg,${bar})"></div><div class="tk">${ticks}</div>${kmh}</div>` +
-    `<span class="txt">${txt}</span><span><i class="sw" style="background:${NULLC}"></i>${l.nodata}</span>` +
-    (st.stops ? zoneSw() : `<span><i class="sw hatch"></i>${l.masked}</span>`) +
+  const l = tx().legend, m = st.metric, n = SC.KTICKS.length;
+  let ramp;
+  if (m === 'ex') ramp = gapBar(false);
+  else {
+    const bar = Array.from({length: 29}, (_, i) => timeColor(SC.T0 + (SC.T1 - SC.T0) * i / 28)).join(',');
+    const ticks = SC.KTICKS.map((k, i) => `<span style="left:${tPos(kmhT(k)) * 100}%">${i === 0 ? '≥ ' : i === n - 1 ? '≤ ' : ''}${nf(k, k % 1 ? 1 : 0)}</span>`).join('');
+    ramp = `<div class="ramp"><div class="bar" style="background:linear-gradient(90deg,${bar})"></div><div class="tk">${ticks}</div></div>`;
+  }
+  const evening = m === 'ex' && st.h0 >= REFH[0] && st.h1 <= REFH[1];
+  const txt = esc(l.lab[m](noun(false)) + (evening ? l.evening : '')) + helpBtn(isIA() && m === 'opp' ? tx().ia.help(noun(false)) : l.help[m](noun(false), noun(true)));
+  $('legend').innerHTML = ramp + `<span class="txt">${txt}</span><span><i class="sw" style="background:${NULLC}"></i>${l.nodata}</span>` + zoneOrX() +
     (hotOfDir().length && isMain() ? `<span><i class="hk"></i>${l.hot}</span>` : '');
   $('mxlegend').innerHTML = $('legend').innerHTML;
 }
 
 // ---------------------------------------------------------------- hotspots list
+// Speed over a hotspot stretch (all days): its reference (evening, or the line's rhythm for "persistent") and
+// the reference slowed by the hotspot's excess (obs per passage summed over the stretch); CI in km/h.
+function hotKmh(E, h) {
+  // only the "peak" criterion is against the evening; "persistent" and "both" are against the line level
+  const A = agg(E, PRESENT), idx = hotSegIdx(E, h), ref = h.criterion === 'peak' ? A.ref : A.refl;
+  if (!idx.length || h.excess_per_passage == null || idx.some(i => ref[i] == null)) return null;
+  const len = idx.reduce((t, i) => t + E.seg.len[i], 0), r = idx.reduce((t, i) => t + ref[i], 0), x = h.excess_per_passage;
+  const vr = kmhOf(r, len), v = kmhOf(r + x, len);
+  return {v, vr, dv: gapOf(vr, v), dr: relOf(vr, v), lo: h.ci_hi == null ? null : kmhOf(r + h.ci_hi, len) - vr, hi: h.ci_lo == null ? null : kmhOf(r + h.ci_lo, len) - vr};
+}
 function drawHotList() {
+  if (isIA()) return iaList();
+  if (isSel()) return selPanel();
   if (isCmp()) return cmpList();
   $('hstitle').textContent = tx().hstitle;
   const l = tx(), E = entry(), hs = hotOfDir();
-  $('hsnote').textContent = l.hsnote(noun(false), nf(TICK, 0));
+  $('hsnote').textContent = l.hsnote(noun(false), noun(true));
   if (!isMain()) { $('hslist').innerHTML = `<p class="empty">${l.hsalt}</p>`; return; }
   if (!hs.length) { $('hslist').innerHTML = `<p class="empty">${D.hotspots_status === 'not_computed' ? l.hsnot : hotDir().length ? l.hsstops : l.hsnone}</p>`; return; }
   $('hslist').innerHTML = hs.map((h, i) => {
-    const v = h.excess_per_passage, lo = h.ci_lo, hi = h.ci_hi;
+    const k = hotKmh(E, h);
     const meta = [l.zone[h.zone] || h.zone, l.kind[h.kind] || h.kind, h.criterion ? l.crit[h.criterion] : '', h.criterion === 'persistent' ? '' : runsLabel((h.criterion === 'both' ? h.peak_hours : h.hours) || h.hours || [])].filter(Boolean).join(' · ');
-    const ci = lo != null && hi != null ? l.ci(signed(lo * TICK, 0) + ' s', signed(hi * TICK, 0) + ' s') : '';
+    const ci = k && k.lo != null && k.hi != null ? l.ci(ks(k.lo), ks(k.hi)) : '';
     const per = h.persistence != null ? l.daysPct(nf(h.persistence * 100, 0)) : '';
     return `<button type="button" class="hs${st.hot === h.rank ? ' on' : ''}" data-r="${h.rank}"><span class="n">${i + 1}</span>
       <div><div class="nm">${esc(h.from_stop_name)} <span class="ar">→</span> ${esc(h.to_stop_name)}</div>
-      <div class="meta">${esc(meta)}</div><div class="meta">${[ci, per].filter(Boolean).join(' · ')}</div></div>
-      <div class="v">${v == null ? '—' : signed(v * TICK, 0)}<small>${l.perveh(noun(false))}</small><small>${v == null ? '' : l.secs(signed(v, 1))}</small></div></button>`;
+      <div class="meta">${esc(meta)}</div><div class="meta">${esc([ci, per].filter(Boolean).join(' · '))}</div></div>
+      <div class="v">${k ? ks(k.dv) : '—'}<small>${l.kmh}${k ? ` (${pc(k.dr)})` : ''}</small><small>${k ? esc(l.hsv(kf(k.v), kf(k.vr))) : ''}</small></div></button>`;
   }).join('');
   const n = hotAll().length;
   if (n > HOT_TOP) $('hslist').innerHTML += `<button type="button" class="btn" id="hsmore" style="margin:8px 0 4px">${st.hotAll ? l.hsless : l.hsmore(n)}</button>`;
   $('hslist').querySelectorAll('.hs').forEach(b => b.onclick = () => selectHot(+b.dataset.r));
   const mb = $('hsmore'); if (mb) mb.onclick = () => { st.hotAll = !st.hotAll; render(); };
 }
+// ---------------------------------------------------------------- interarrêts and selection panels
+const allIdx = E => E._all || (E._all = E.seg.key.map((_, i) => i));
+const lenLabel = m => m < 1000 ? `${nf(m, 0)} m` : `${nf(m / 1000, 1)} km`;
+const durLabel = s => s == null ? '–' : s < 60 ? `${nf(s, 0)} s` : `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, '0')} s`;
+const kmhPair = (S, cm) => cm ? `${kf(S.va)} → ${kf(S.vb)} km/h` : `${kf(S.kmh)} km/h`;
+function toggleXia(id, on) {
+  if (on ?? !st.xia.has(id)) st.xia.add(id); else st.xia.delete(id);
+  saveUrl(); tiles(); render();
+}
+function iaList() {
+  const l = tx(), E = entry(), cm = isCmp(), el = $('hslist');
+  $('hstitle').textContent = l.ia.title; $('hsnote').textContent = l.ia.note;
+  if (!E) { el.innerHTML = ''; return; }
+  const v = cm ? cvals(E) : vals(E), uv = (cm ? cuvals : uvals)(E, v, st.xia), L = stretch(E, v, allIdx(E), st.xia, cm), nx = uv.filter(b => b.x).length;
+  const fid = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.id : null;
+  el.innerHTML = `<p class="lnum"><b>${esc(l.line)} : ${kmhPair(L, cm)}</b> · ${lenLabel(L.len)}${nx ? ` · ${esc(l.nx(nx))} <button type="button" class="lk" id="iareinc">${esc(l.ia.reinc)}</button>` : ''}</p><div class="ialist">` +
+    uv.map(b => { const val = cm ? b.dk : metricVal(b), sg = cm || st.metric === 'ex';
+      return `<label class="ia${b.x ? ' x' : ''}"><input type="checkbox" data-id="${esc(b.u.id)}"${b.x ? '' : ' checked'}><i class="sw" style="background:${cm ? cColor(b) : colorFor(b)}"></i>` +
+        `<span class="nm">${esc(b.u.from)} <span class="ar">→</span> ${esc(b.u.to)}</span><span class="v">${val == null ? '–' : sg ? pc(b.dr) : kf(val)}</span></label>`; }).join('') + '</div>';
+  if (fid) { const f = el.querySelector(`input[data-id="${CSS.escape(fid)}"]`); if (f) f.focus(); }
+}
+// st.sel = {a, b, open}: first and last microsegment (indices of the entry shown); open while the last one is awaited
+const selRange = () => st.sel ? [Math.min(st.sel.a, st.sel.b), Math.max(st.sel.a, st.sel.b)] : null;
+// a click inside a shown stop zone takes the whole block
+function zoneEnds(E, i) { const n = st.stops ? zonesOf(E).zi[i] : -1; if (n < 0) return [i, i]; const z = zonesOf(E).Z[n]; return [z.idx[0], z.idx[z.idx.length - 1]]; }
+function pickSel(i) {
+  const E = entry(); if (!E || i < 0) return;
+  const [a, b] = zoneEnds(E, i);
+  st.sel = !st.sel || !st.sel.open ? {a, b, open: true} : {a: Math.min(st.sel.a, st.sel.b, a), b: Math.max(st.sel.a, st.sel.b, b), open: false};
+  render();
+}
+// from leaving stop a's zone to leaving stop b's (the interarrêts a .. b - 1); the whole line: all of them
+function selStops(a, b) {
+  const U = unitsOf(entry()).U.filter(u => u.n >= a && u.n < b);
+  st.sel = U.length ? {a: U[0].idx[0], b: U[U.length - 1].idx[U[U.length - 1].idx.length - 1], open: false} : null;
+  render();
+}
+function selPanel() {
+  const l = tx(), s = l.sel, E = entry(), cm = isCmp(), el = $('hslist');
+  $('hstitle').textContent = s.title; $('hsnote').textContent = st.sel && st.sel.open ? s.hint2 : s.hint;
+  if (!E) { el.innerHTML = ''; return; }
+  // the controls are built once per entry and language (so a select keeps its focus), the numbers on every render
+  const key = `${E.pattern_uid}|${st.lang}`;
+  if (el.dataset.k !== key || !$('selnum')) {
+    el.dataset.k = key;
+    const o = (k0, k1) => `<option value="">${s.pick}</option>` + E.stops.slice(k0, E.stops.length - k1).map((t, k) => `<option value="${k + k0}">${esc(t.name)}</option>`).join('');
+    el.innerHTML = `<div id="selnum"></div><div class="selctl"><button type="button" class="btn" id="selall">${esc(s.all)}</button>` +
+      `<label>${esc(s.from)} <select id="selA">${o(0, 1)}</select></label><label>${esc(s.to)} <select id="selB">${o(1, 0)}</select></label>` +
+      `<button type="button" class="btn" id="selclr">${esc(s.clear)}</button></div>`;
+    $('selall').onclick = () => selStops(0, E.stops.length - 1);
+    $('selclr').onclick = () => { st.sel = null; render(); };
+    const go = () => { const a = $('selA').value, b = $('selB').value; if (a !== '' && b !== '' && +b > +a) selStops(+a, +b); };
+    $('selA').onchange = go; $('selB').onchange = go;
+  }
+  const v = cm ? cvals(E) : vals(E), L = stretch(E, v, allIdx(E), st.xia, cm), R = selRange();
+  const X = R ? stretch(E, v, allIdx(E).slice(R[0], R[1] + 1), st.xia, cm) : null;
+  let h = `<p class="lnum"><b>${esc(l.line)} : ${kmhPair(L, cm)}</b>${X ? ` · ${esc(s.title)} : ${kmhPair(X, cm)}` : ''}</p>`;
+  if (X) {
+    const big = cm ? (X.va != null && X.vb != null ? ks(X.vb - X.va) : '–') : kf(X.kmh), f = cm ? ['oa', 'ob'] : ['opp'];
+    const pair = g => f.map(g).join(' → ');
+    const share = pair(k => X[k] != null && L[k] > 0 ? nf(100 * X[k] / L[k], 1) + ' %' : '–');
+    h += `<div class="selbig"><b>${big}</b> <span>${tx().kmh}</span></div><div class="meta">${esc([`${s.len} ${lenLabel(X.len)}`,
+      `${pair(k => durLabel(X[k] == null ? null : X[k] * TICK))} ${s.tpv(noun(false))}`, `${share} ${s.share}`].join(' · '))}</div>` +
+      (X.skip > .5 ? `<div class="meta">${esc(s.skip(lenLabel(X.skip)))}</div>` : '') + (f.some(k => X[k] == null) ? `<div class="meta">${esc(s.none)}</div>` : '');
+  }
+  $('selnum').innerHTML = h;
+  // the selects show the stops when the selection runs exactly from one stop's zone exit to another's
+  const U = unitsOf(E).U, ua = R && U.find(u => u.idx[0] === R[0]), ub = R && U.find(u => u.idx[u.idx.length - 1] === R[1]);
+  if (document.activeElement !== $('selA')) $('selA').value = ua && ub ? ua.n : '';
+  if (document.activeElement !== $('selB')) $('selB').value = ua && ub ? ub.n + 1 : '';
+}
+// Esc clears the selection (before the other Esc handlers: not while a popover or the full-screen matrix is open)
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && isSel() && st.sel && !popBtn && !mxCard.classList.contains('full')) { st.sel = null; render(); } }, true);
+$('hslist').addEventListener('change', e => { const id = e.target.dataset && e.target.dataset.id; if (id != null && e.target.type === 'checkbox') toggleXia(id, !e.target.checked); });
+$('hslist').addEventListener('click', e => { if (e.target.id === 'iareinc') { st.xia.clear(); saveUrl(); tiles(); render(); } });
 function selectHot(r) {
   st.hot = st.hot === r ? null : r;
   const h = hotOfDir().find(x => x.rank === st.hot);
-  if (h && h.peak_hour != null && h.peak_hour >= 0 && D.hours.includes(h.peak_hour)) { stop(); st.band = null; st.hour = h.peak_hour; }
+  if (h && h.peak_hour != null && h.peak_hour >= 0 && D.hours.includes(h.peak_hour)) { stop(); setRange(h.peak_hour, h.peak_hour + 1); }
   render();
   if (h && map) { const E = entry(), idx = hotSegIdx(E, h); const pts = idx.flatMap(i => E.seg.c[i].map(([x, y]) => [y, x])); if (pts.length) map.fitBounds(window.L.latLngBounds(pts), {maxZoom: 16, padding: [80, 80]}); }
 }
 
-// ---------------------------------------------------------------- matrix (hours x micro-segments)
+// ---------------------------------------------------------------- matrix (hours x microsegments)
+// Fit to width; in full screen every link (stop to stop) gets MXCW px and the matrix scrolls sideways, the hour
+// labels (#mxh) staying at the left.
+const MXCW = 56;
 let MX = null;
+function mxScale(E, full, avail, m) {
+  const xs = E.stops.map(t => t.x), Ltot = xs.length ? xs[xs.length - 1] : 1, nl = Math.max(1, xs.length - 1);
+  if (!full || xs.length < 2 || nl * MXCW + m.l + m.r <= avail) {
+    const k = (avail - m.l - m.r) / Ltot;
+    return {W: avail, Ltot, x: u => m.l + u * k, inv: px => (px - m.l) / k};
+  }
+  const seg = u => { let i = 0; while (i < nl - 1 && u >= xs[i + 1]) i++; return i; };
+  const x = u => { const i = seg(u); return m.l + (i + (u - xs[i]) / Math.max(1e-9, xs[i + 1] - xs[i])) * MXCW; };
+  const inv = px => { const f = (px - m.l) / MXCW, i = Math.max(0, Math.min(nl - 1, Math.floor(f))); return xs[i] + (f - i) * (xs[i + 1] - xs[i]); };
+  return {W: m.l + nl * MXCW + m.r, Ltot, x, inv};
+}
 function drawMatrix() {
-  const E = entry(), svg = $('mx'), l = tx();
-  if (!E) { svg.innerHTML = ''; return; }
-  const W = svg.clientWidth || 800, m = {l: 44, r: 8, t: 8, b: 90};
+  const E = entry(), svg = $('mx'), sh = $('mxh'), l = tx();
+  if (!E) { svg.innerHTML = ''; sh.innerHTML = ''; return; }
+  const m = {l: 2, r: 8, t: 8, b: 90}, LW = 44;
   const card = $('mxcard'), full = card.classList.contains('full');
   const RH = full ? Math.max(18, Math.floor((window.innerHeight - 220) / D.hours.length)) : 22;
   const cm = isCmp(), VALS = cm ? cvals : vals, COL = cm ? cColor : colorFor;
-  const H = m.t + D.hours.length * RH + m.b, Ltot = E.stops.length ? E.stops[E.stops.length - 1].x : 1;
-  const x = u => m.l + u / Ltot * (W - m.l - m.r);
-  svg.setAttribute('height', H);
-  let s = '';
+  const H = m.t + D.hours.length * RH + m.b;
+  const {W, Ltot, x, inv} = mxScale(E, full, Math.max(200, $('mxwrap').clientWidth - LW), m);
+  svg.style.width = W + 'px'; svg.setAttribute('height', H);
+  sh.setAttribute('width', LW); sh.setAttribute('height', m.t + D.hours.length * RH);
+  let s = '', lab = '';
   const rows = [];
   D.hours.forEach((h, r) => {
-    const v = drawn(E, VALS(E, String(h)), cm), y = m.t + r * RH; rows.push(v);
+    const v = drawn(E, VALS(E, [h, h + 1]), cm), y = m.t + r * RH; rows.push(v);
     s += `<rect class="mxrow" data-h="${h}" x="${m.l}" y="${y}" width="${W - m.l - m.r}" height="${RH}" fill="#0b1224"/>`;
     v.forEach(b => { const xw = [x(b.x0).toFixed(1), Math.max(.6, x(b.x0 + b.len) - x(b.x0) - .3).toFixed(1)];
       s += `<rect x="${xw[0]}" y="${y + .5}" width="${xw[1]}" height="${RH - 1}" fill="${COL(b)}" pointer-events="none"/>` + (b.z ? zoneHatch(xw[0], y + .5, xw[1], RH - 1) : ''); });
-    s += `<text x="${m.l - 6}" y="${y + RH / 2 + 4}" text-anchor="end" fill="var(--ink-2)" font-size="12" font-family="var(--mono)">${h} h</text>`;
+    lab += `<text class="mxrow" data-h="${h}" x="${LW - 6}" y="${y + RH / 2 + 4}" text-anchor="end" fill="var(--ink-2)" font-size="12" font-family="var(--mono)">${h} h</text>`;
   });
-  for (const t of E.stops) s += `<line x1="${x(t.x)}" x2="${x(t.x)}" y1="${m.t}" y2="${m.t + D.hours.length * RH}" stroke="#0b1224" stroke-width="1.5" pointer-events="none"/>`;
+  // dark lines: the stops, or the interarrêt bounds (zone exits)
+  for (const u of isIA() ? unitsOf(E).U.map(w => w.x0) : E.stops.map(t => t.x)) s += `<line x1="${x(u)}" x2="${x(u)}" y1="${m.t}" y2="${m.t + D.hours.length * RH}" stroke="#0b1224" stroke-width="1.5" pointer-events="none"/>`;
   // stop names, thinned so they do not overlap
   let last = -1e9;
   for (const t of E.stops) { const xx = x(t.x); if (xx - last < 13) continue; last = xx;
@@ -1273,46 +1563,53 @@ function drawMatrix() {
     const on = cm ? st.chg === h.rank : st.hot === h.rank;
     s += `<rect x="${x(h.x0_m) - 1}" y="${m.t + r0 * RH}" width="${Math.max(3, x(h.x1_m) - x(h.x0_m) + 2)}" height="${(r1 - r0 + 1) * RH}" fill="none" stroke="#ffe600" stroke-opacity="${on ? 1 : .8}" stroke-width="${on ? 2.5 : 1.25}" pointer-events="none"/>`;
   }
-  if (!st.band && D.hours.includes(st.hour)) s += `<rect x="${m.l - 1}" y="${m.t + D.hours.indexOf(st.hour) * RH}" width="${W - m.l - m.r + 2}" height="${RH}" fill="none" stroke="#b4bdd0" stroke-width="1.5" pointer-events="none"/>`;
-  else if (st.band) { const hs = D.hours.filter(h => h >= BANDDEF[st.band][0] && h < BANDDEF[st.band][1]); if (hs.length) s += `<rect x="${m.l - 1}" y="${m.t + D.hours.indexOf(hs[0]) * RH}" width="${W - m.l - m.r + 2}" height="${hs.length * RH}" fill="none" stroke="#b4bdd0" stroke-width="1.5" stroke-dasharray="4 3" pointer-events="none"/>`; }
-  svg.innerHTML = s;
-  MX = {E, rows, m, RH, W, Ltot, tip: cm ? cTipHtml : tipHtml};
-  const what = l.mname(noun(false))[st.metric].toLowerCase() + ' (30 m)';
-  setSub($('mxsub'), cm ? ctx().mxsub(E.from, E.to, perLabel(CMP.a), perLabel(CMP.b), noun(false), st.stops, chgDir().length > 0) : l.mxsub(E.from, E.to, daysLabel(), what, st.stops, hsOn() && hotOfDir().length > 0));
+  // the selection, over every hour
+  const S = isSel() && selRange();
+  if (S) { const a = E.seg.x0[S[0]], b = E.seg.x0[S[1]] + E.seg.len[S[1]];
+    s += `<rect x="${x(a) - 1}" y="${m.t - 4}" width="${Math.max(3, x(b) - x(a) + 2)}" height="${D.hours.length * RH + 8}" fill="none" stroke="#eef1f6" stroke-width="2" stroke-dasharray="4 3" pointer-events="none"/>`; }
+  // the hours shown
+  const hs = hoursIn(range());
+  if (hs.length) s += `<rect id="mxhr" x="${m.l - 1}" y="${m.t + D.hours.indexOf(hs[0]) * RH}" width="${W - m.l - m.r + 2}" height="${hs.length * RH}" fill="none" stroke="#b4bdd0" stroke-width="1.5" pointer-events="none"/>`;
+  svg.innerHTML = s; sh.innerHTML = lab;
+  MX = {E, rows, m, RH, inv, Ltot, tip: cm ? cTipHtml : tipHtml};
+  setSub($('mxsub'), l.mxsub(E.from, E.to, cm ? ctx().days : daysLabel()));
 }
 $('mx').addEventListener('mousemove', e => {
   if (!MX) return;
-  const r = $('mx').getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, {m, RH, W, Ltot, E, rows} = MX;
-  const row = Math.floor((py - m.t) / RH), u = (px - m.l) / (W - m.l - m.r) * Ltot;
+  const r = $('mx').getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, {m, RH, inv, Ltot, E, rows} = MX;
+  const row = Math.floor((py - m.t) / RH), u = inv(px);
   if (row < 0 || row >= rows.length || u < 0 || u > Ltot) return hideTip();
   const v = rows[row]; let i = v.findIndex(b => u >= b.x0 && u < b.x0 + b.len); if (i < 0) i = v.length - 1;
-  showTip(e, `<span style="font-family:var(--mono)">${D.hours[row]} h</span> · ` + MX.tip(E, v[i]));
+  showTip(e, `<span style="font-family:var(--mono)">${rangeLabel([D.hours[row], D.hours[row] + 1])}</span> · ` + MX.tip(E, v[i]));
 });
 $('mx').addEventListener('mouseleave', hideTip);
-$('mx').addEventListener('click', e => { const g = e.target.closest('.mxrow'); if (g) { stop(); st.band = null; st.hour = +g.dataset.h; render(); } });
+// a row (or its hour label) selects that hour
+// in Sélection, a click in the matrix itself picks the microsegment under it
+for (const id of ['mx', 'mxh']) $(id).addEventListener('click', e => {
+  if (id === 'mx' && isSel() && MX) { const u = MX.inv(e.clientX - $('mx').getBoundingClientRect().left), E = MX.E;
+    return pickSel(E.seg.x0.findIndex((x0, i) => u >= x0 && u < x0 + E.seg.len[i])); }
+  const g = e.target.closest('.mxrow'); if (g) { stop(); setRange(+g.dataset.h, +g.dataset.h + 1); renderRange(); } });
 
 // ---------------------------------------------------------------- profile along the line
+const PROF_KMH = 60;   // fixed height of the speed profile, km/h (higher speeds are clipped)
 function drawProfile() {
   const E = entry(), svg = $('prof'), l = tx();
   if (!E) { svg.innerHTML = ''; return; }
   if (isCmp()) return cmpProfile();
+  if (st.metric === 'ex') {
+    gapProfile(E, drawn(E, vals(E), false), b => b.dr == null ? null : 100 * b.dr, colorFor, tipHtml, 200 * SC.CMPR);
+    return setSub($('profsub'), l.profsub(E.from, E.to, whenLabel(), false, noun(true)));
+  }
   const W = svg.clientWidth || 800, H = 300, m = {l: 48, r: 12, t: 18, b: 74};
   const Ltot = E.stops.length ? E.stops[E.stops.length - 1].x : 1, v = drawn(E, vals(E), false);
-  const evening = st.band !== 'evening' && st.metric !== 'ex' ? drawn(E, vals(E, 'evening'), false) : null;
-  // fixed height: the top of the colour scale in the shown unit, whatever the line, hour or days
-  const YM = tickVal(SC.T1), pv = metricVal;
+  const evening = !(st.h0 >= REFH[0] && st.h1 <= REFH[1]) ? drawn(E, vals(E, REFH), false) : null;
+  // fixed height, whatever the line, hour or days
+  const YM = PROF_KMH, pv = b => b.kmh;
   const x = u => m.l + u / Ltot * (W - m.l - m.r), y = u => m.t + (1 - Math.min(Math.max(u, 0), YM) / YM) * (H - m.t - m.b);
   let s = '<g class="axis">';
-  const e10 = Math.pow(10, Math.floor(Math.log10(YM / 5))), step = [1, 2, 2.5, 5, 10].map(f => f * e10).find(v => YM / v <= 6);
-  for (let k = 0; k <= YM + 1e-9; k += step)
-    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(k)}" y2="${y(k)}" stroke-dasharray="${k ? '2 4' : ''}"/><text x="${m.l - 6}" y="${y(k) + 4}" text-anchor="end">${k ? nf(k, k < 1 || k % 1 ? 1 : 0) : '0'}</text>`;
-  s += '</g>';
-  let last = -1e9;
-  for (const t of E.stops) {
-    const xx = x(t.x);
-    s += `<line x1="${xx}" x2="${xx}" y1="${m.t}" y2="${H - m.b}" stroke="#eef1f6" stroke-opacity=".15"/>`;
-    if (xx - last >= 13) { last = xx; s += `<text x="${xx}" y="${H - m.b + 14}" transform="rotate(-40 ${xx} ${H - m.b + 14})" text-anchor="end" fill="var(--ink-3)" font-size="10" font-family="var(--sans)">${esc(t.name)}</text>`; }
-  }
+  for (let k = 0; k <= YM + 1e-9; k += 10)
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(k)}" y2="${y(k)}" stroke-dasharray="${k ? '2 4' : ''}"/><text x="${m.l - 6}" y="${y(k) + 4}" text-anchor="end">${nf(k, 0)}</text>`;
+  s += '</g>' + selBand(E, x, H, m) + stopTicks(E, x, H, m);
   v.forEach(b => { if (!shown(b)) s += maskBar(x, b, m, H); });
   v.forEach(b => { const u = pv(b); if (u == null || !shown(b)) return;
     const r = [x(b.x0).toFixed(1), y(u).toFixed(1), Math.max(1, x(b.x0 + b.len) - x(b.x0) - .5).toFixed(1), (y(0) - y(u)).toFixed(1)];
@@ -1320,7 +1617,7 @@ function drawProfile() {
   if (evening) { let pth = ''; evening.forEach(b => { const u = pv(b); if (u != null && shown(b)) pth += `M${x(b.x0).toFixed(1)},${y(u).toFixed(1)}H${x(b.x0 + b.len).toFixed(1)}`; });
     s += `<path d="${pth}" stroke="#eef1f6" stroke-width="1.5" fill="none" opacity=".7"/>`; }
   s += freqLine(v.map(b => b.pph), v, x, H, m, W);
-  s += `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${W < 560 ? '' : esc(l.mname(noun(false))[st.metric].toLowerCase()) + ' '}(${st.metric === 'oph' ? '' : 's, '}30 m)</text>`;
+  s += `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${W < 560 ? '' : esc(l.mname(noun(false))[st.metric].toLowerCase()) + ', '}km/h</text>`;
   svg.innerHTML = s;
   svg.onmousemove = e => { const r = svg.getBoundingClientRect(), u = (e.clientX - r.left - m.l) / (W - m.l - m.r) * Ltot; if (u < 0 || u > Ltot) return hideTip();
     let i = v.findIndex(b => u >= b.x0 && u < b.x0 + b.len); if (i < 0) i = v.length - 1; showTip(e, tipHtml(E, v[i])); };
@@ -1371,31 +1668,67 @@ function render() {
   pressed($('langs'), k => k === st.lang);
   pressed($('days'), k => st.days.includes(+k));
   pressed($('dirs'), k => +k === st.dir); pressed($('mxdirs'), k => +k === st.dir);
-  pressed($('bands'), k => k === st.band);
-  pressed($('metric'), k => k === (isCmp() ? st.cmetric : st.metric));
+  pressed($('bands'), k => k === bandOf());
+  pressed($('metric'), k => k === st.metric);
   if (CMP) pressed($('modes'), k => k === st.mode);
   $('g_days').hidden = isCmp() || HOST;
   pressed($('stopsT'), k => k === String(st.stops));
+  pressed($('views'), k => k === st.view); $('g_stops').hidden = isIA();
   const d = dirOf(); if (!$('g_ver').hidden && d) pressed($('vers'), k => k === (st.ver || d.pattern_uid));
-  const dl = isCmp() ? ctx().days : daysLabel();
-  $('clock').innerHTML = st.band ? `${BANDDEF[st.band][0]}–${BANDDEF[st.band][1]} h<small>${tx().mean}, ${esc(dl)}</small>` : `${String(st.hour).padStart(2, '0')}:00<small>${esc(dl)}</small>`;
-  hourEl.value = st.hour;
-  const nohs = !hsOn();
+  rangeUi();
+  // the side panel: hotspots (when shown), interarrêts or the selection
+  const nohs = !hsOn() && st.view === 'ms';
   if (document.body.classList.contains('nohs') !== nohs) { document.body.classList.toggle('nohs', nohs); if (map) setTimeout(() => map.invalidateSize(), 0); }
   if (popBtn) closePop();
   recolor(); legend(); drawHotMap(); drawHotList(); drawMatrix(); drawProfile(); drawCalendar();
 }
-function drawAll() { buildVersions(); drawMap(); render(); }
+// the hour-range controls
+function rangeUi() {
+  pressed($('bands'), k => k === bandOf());
+  const bn = bandOf(), dl = isCmp() ? ctx().days : daysLabel();
+  $('clock').innerHTML = `${rangeLabel()}<small>${esc((bn ? tx().bandl[bn] + ', ' : '') + dl)}</small>`;
+  hAEl.value = st.h0; hBEl.value = st.h1;
+  $('hsel').style.left = hPos(st.h0); $('hsel').style.width = `calc(${(st.h1 - st.h0) / Math.max(1, HMAX - HMIN)} * (100% - var(--th)))`;
+}
+// A new hour range only: the matrix (all hours) and the calendar stay; its outline moves; the rest is redrawn
+// once per frame.
+let rafR = 0;
+function renderRange() {
+  rangeUi();
+  if (rafR) return;
+  rafR = requestAnimationFrame(() => {
+    rafR = 0; if (popBtn) closePop();
+    recolor(); legend(); if (st.view !== 'ms') drawHotList(); drawProfile();
+    const r = $('mxhr'), hs = hoursIn(range());
+    if (r && MX && hs.length) { r.setAttribute('y', MX.m.t + D.hours.indexOf(hs[0]) * MX.RH); r.setAttribute('height', hs.length * MX.RH); }
+  });
+}
+// embedded: any direction change (a version from ?ver= or the host, the matrix buttons) is posted so the host's control follows
+let postedDir = null;
+function drawAll() {
+  buildVersions(); head(); drawMap(); render();
+  if (window.parent !== window && postedDir !== null && st.dir !== postedDir) try { parent.postMessage({ms: 'dir', dir: st.dir}, '*'); } catch (x) {}
+  postedDir = st.dir;
+}
 let timer = null;
 function stop() { clearInterval(timer); timer = null; const b = $('play'); b.textContent = tx().play; b.setAttribute('aria-pressed', 'false'); }
-hourEl.addEventListener('input', e => { stop(); st.band = null; st.hour = +e.target.value; render(); });
+// a handle pushes the other one (at least one hour shown)
+hAEl.addEventListener('input', () => { stop(); const a = Math.min(+hAEl.value, HMAX - 1); setRange(a, Math.max(st.h1, a + 1)); renderRange(); });
+// close handles: the one nearest the pointer goes on top, so either can be grabbed
+function nearTop(e) {
+  const r = $('dual').getBoundingClientRect(), th = parseFloat(getComputedStyle($('dual')).getPropertyValue('--th')) || 18;
+  const h = HMIN + (e.clientX - r.left - th / 2) / Math.max(1, r.width - th) * (HMAX - HMIN), b = h > (st.h0 + st.h1) / 2;
+  hAEl.classList.toggle('top', !b); hBEl.classList.toggle('top', b);
+}
+$('dual').addEventListener('pointermove', e => { if (!e.buttons) nearTop(e); });
+$('dual').addEventListener('pointerdown', nearTop, true);
+hBEl.addEventListener('input', () => { stop(); const b = Math.max(+hBEl.value, HMIN + 1); setRange(Math.min(st.h0, b - 1), b); renderRange(); });
+// play: a one-hour window stepping through the day (from the current hour when one hour is shown)
 $('play').addEventListener('click', () => {
   if (timer) return stop();
   const b = $('play'); b.textContent = tx().pause; b.setAttribute('aria-pressed', 'true');
-  const H0 = D.hours[0], H1 = D.hours[D.hours.length - 1];
-  if (st.band || st.hour >= H1) st.hour = H0;
-  st.band = null; render();
-  timer = setInterval(() => { st.hour = st.hour >= H1 ? H0 : st.hour + 1; render(); }, 900);
+  setRange(st.h1 - st.h0 === 1 && st.h1 < HMAX ? st.h0 : HMIN, 0); renderRange();
+  timer = setInterval(() => { const h = st.h0 + 1 >= HMAX ? HMIN : st.h0 + 1; setRange(h, h + 1); renderRange(); }, 900);
 });
 window.addEventListener('resize', () => { if (map) map.invalidateSize(); drawProfile(); drawMatrix(); });
 // Full screen: the card becomes a fixed overlay (works everywhere), plus the browser's full screen when available.
@@ -1411,15 +1744,34 @@ mxBtn.onclick = () => setFull(!mxCard.classList.contains('full'));
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && mxCard.classList.contains('full')) setFull(false); else drawMatrix(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && mxCard.classList.contains('full')) setFull(false); });
 
+// show a route version by pattern_uid (its direction too); false if unknown. Host: postMessage({ms: 'ver', uid}),
+// or ?ver=<pattern_uid> on load
+function selectVer(uid) {
+  const d = DIRS.find(x => x.pattern_uid === uid || (x.alt || []).some(a => a.pattern_uid === uid));
+  if (!d || isCmp()) return false;
+  st.dir = d.dir; st.ver = uid === d.pattern_uid ? null : uid; st.hot = null; st.chg = null; st.sel = null;
+  return true;
+}
+if (qs.get('ver')) selectVer(qs.get('ver'));
 buildControls(); texts(); tiles(); initMap(); drawAll();
+window.addEventListener('message', e => {
+  const m = e.data || {};
+  if (m.ms === 'ver' && selectVer(String(m.uid))) { buildControls(); drawAll(); }
+  // the host's excluded interarrêts and display mode (see saveUrl); not echoed back
+  if (m.ms === 'xia' && e.source !== window && Array.isArray(m.xia)) {
+    st.xia = new Set(m.xia.map(String));
+    if (['ms', 'ia', 'sel'].includes(m.view) && m.view !== st.view) { st.view = m.view; st.sel = null; tiles(); drawAll(); } else { tiles(); render(); }
+  }
+});
 document.querySelector('section.method').hidden = !METHOD;
 if (HOST) for (const el of [$('langs'), $('footer'), $('covtitle').closest('section')]) el.style.display = 'none';
 // embedded: tell the host the directions, follow its direction control
 if (window.parent !== window) {
+  postedDir = st.dir;
   try { parent.postMessage({ms: 'dirs', dir: st.dir, dirs: DIRS.map(d => ({dir: d.dir, from: d.from, to: d.to}))}, '*'); } catch (x) {}
   window.addEventListener('message', e => {
     const m = e.data || {};
-    if (m.ms === 'dir' && SETDIR && DIRS.some(d => d.dir === +m.dir) && +m.dir !== st.dir) SETDIR(m.dir);
+    if (m.ms === 'dir' && SETDIR && DIRS.some(d => d.dir === +m.dir) && +m.dir !== st.dir) { postedDir = +m.dir; SETDIR(m.dir); }
   });
 }
 </script>

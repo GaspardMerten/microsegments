@@ -1,6 +1,6 @@
 """Standalone HTML report: ``template.html`` filled with the JSON contract (``report.to_contract``).
 
-The page needs Leaflet JS from cdnjs (and, if ``tiles``, CARTO base-map tiles) for the map; the
+The page needs Leaflet JS from cdnjs (and, if ``tiles``, OpenStreetMap base-map tiles, or the contract's ``tile_url``) for the map; the
 matrix, profile, hotspots and coverage calendar work offline. Leaflet's CSS is inlined.
 """
 from __future__ import annotations

@@ -45,7 +45,7 @@ def test_contract_keys(an_hs):
         # every observation of the display pattern is in wk
         tot = an.result.filter((pl.col("direction_id") == d["dir"]) & (pl.col("pattern_uid") == d["pattern_uid"])
                                & (pl.col("hour").is_in(c["hours"])))["obs"].sum()
-        assert sum(sum(sum(r) for r in w) for w in d["wk"]["obs"]) == tot
+        assert sum(sum(sum(r) for r in w) for w in d["wk"]["obs"]) == pytest.approx(tot, abs=0.05 * len(c["hours"]) * n * 7)
     # the cut version is offered on its own
     assert c["versions"] and any(not v["display"] for v in c["versions"])
     alt = c["dirs"][0]["alt"]
@@ -216,43 +216,46 @@ def _run_js(code: str):
 
 def test_page_stop_zone_is_one_block(an_hs):
     """A shown stop zone is one block: its micro-segments are summed (total time per vehicle, each on its own
-    link's passages) and coloured by that total brought to 30 m of the zone's nominal length; running
-    micro-segments stay one by one; the zone's tooltip gives the total seconds."""
+    link's passages); its speed is the zone's length over that time (gap with the evening and two-period
+    speeds likewise); running micro-segments stay one by one."""
     an, hs = an_hs
     p = render(to_contract(an, hotspots=hs))
     script = p[p.index('<script>\n"use strict"'):]
     block = script[script.index("// <zones>"):script.index("// </zones>")]
-    # stop zone, 30 m explanation, legend swatch, tooltips: FR and EN
-    for s in ("stopsHelp:", "why30: `Pourquoi 30\u00a0m\u00a0? À cette taille", "why30: `Why 30 m?", "zone: 'zone d\\'arrêt'",
-              "zone: 'stop zone'", "montée et descente comprises", "boarding included", 'id="mszone"', 'id="stopsQ"'):
+    # stop zone, legend swatch, tooltips: FR and EN
+    for s in ("stopsHelp:", "zone: 'zone d\\'arrêt'", "zone: 'stop zone'", "arrêt compris", "stop included", 'id="mszone"', 'id="stopsQ"'):
         assert s in p, s
     E = {"seg": {"key": list("abcdefgh"), "zone": ["stop", "running", "running", "stop", "stop", "stop", "running", "stop"],
                  "x0": [0, 30, 60, 90, 120, 150, 180, 210], "len": [30] * 8, "link": [0, 0, 0, 0, 1, 1, 1, 1]},
          "stops": [{"x": 0, "name": "A"}, {"x": 120, "name": "B"}, {"x": 240, "name": "C"}]}
     # time per vehicle per micro-segment, in observations per passage (tick 20 s)
     opp = [0.5, 0.2, 0.2, 1.0, 0.1, 0.4, 0.2, 0.6]
-    js = ("const P = {stop_zone: [30, 60]}, TICK = 20, SC = {L: 30};"
+    kmh = script[script.index("const KMAX = "):script.index("const pc = ")]
+    js = ("const P = {stop_zone: [30, 60]}, TICK = 20, SC = {L: 30};" + kmh +
           "function stopBefore(E, x) { let s = E.stops[0]; for (const t of E.stops) if (t.x <= x + .5) s = t; return s; }"
           + block +
           f"const E = {json.dumps(E)}, opp = {json.dumps(opp)};"
-          "const v = opp.map((o, i) => ({i, l: E.seg.link[i], x0: E.seg.x0[i], len: 30, stop: E.seg.zone[i] === 'stop', flags: 0, nd: 10, obs: o,"
-          "  opp: o, ex: i === 7 ? null : o - .2, exl: o - .1, oph: o * 10, pph: 8}));"
+          "const v = opp.map((o, i) => ({i, l: E.seg.link[i], x0: E.seg.x0[i], len: 30, stop: E.seg.zone[i] === 'stop', flags: 0, nd: 10, obs: 10 * o, robs: 10,"
+          "  opp: o, ref: i === 7 ? null : .2, pph: 8}));"
           "const zv = zvals(E, v), it = items(v, E, zv, true), raw = items(v, E, zv, false);"
           "const c = opp.map((o, i) => ({absent: false, d: .1, dx: .1, lo: i === 3 ? .05 : -.01, hi: .3, oa: o, ob: o + .1, fa: 8, fb: 9}));"
           "const cz = czvals(E, c);"
-          "console.log(JSON.stringify({Z: zonesOf(E).Z.map(z => [z.idx, z.name, z.len, z.nom]), zv: zv.map(z => [z.tot.opp, z.s30.opp, z.tot.ex, z.l]),"
-          "  items: it.map(b => b.z ? 'Z' + b.zone : b.i), raw: raw.length, cz: cz.map(z => [z.d, z.sig, z.oa])}));")
+          "console.log(JSON.stringify({Z: zonesOf(E).Z.map(z => [z.idx, z.name, z.len, z.nom]), zv: zv.map(z => [z.tot, z.kmh, z.dv, z.l]),"
+          "  items: it.map(b => b.z ? 'Z' + b.zone : b.i), raw: raw.length, cz: cz.map(z => [z.d, z.sig, z.oa, z.va, z.vb, z.dk, z.klo, z.khi])}));")
     r = _run_js(js)
     # three blocks: the terminus (one-sided, nominal 30 m), B (90 m), the end (30 m)
     assert r["Z"] == [[[0], "A", 30, 30], [[3, 4, 5], "B", 90, 90], [[7], "C", 30, 30]]
-    tot, s30, ex, link = r["zv"][1]
-    assert tot == pytest.approx(30.0) and s30 == pytest.approx(10.0)      # 30 s per vehicle over 90 m = 10 s per 30 m
-    assert ex == pytest.approx(30.0 - 3 * 0.2 * 20) and link == 1        # tooltip direction: the outgoing link
+    tot, kmh, dv, link = r["zv"][1]
+    assert tot == pytest.approx(30.0) and kmh == pytest.approx(10.8)      # 30 s per vehicle over 90 m = 10.8 km/h
+    assert dv == pytest.approx(10.8 - 27.0) and link == 1                # evening: 12 s over 90 m = 27 km/h; outgoing link
     assert r["zv"][2][2] is None                                          # one micro-segment without value: no zone value
     assert r["items"] == ["Z0", 1, 2, "Z1", 6, "Z2"] and r["raw"] == 8
     # comparison: summed differences; "sure" only when the summed bounds exclude zero
     assert r["cz"][1][0] == pytest.approx(.3) and r["cz"][1][1] is True and r["cz"][0][1] is False
     assert r["cz"][1][2] == pytest.approx(1.5)
+    # speeds: 30 s -> 36 s over 90 m = 10.8 -> 9 km/h; the time CI [.03, .9] obs maps to [-4.05, -0.21] km/h
+    _, _, _, va, vb, dk, klo, khi = r["cz"][1]
+    assert (va, vb, dk) == pytest.approx((10.8, 9.0, -1.8)) and klo == pytest.approx(-4.05) and khi == pytest.approx(324 / 30.6 - 10.8)
 
 
 def test_page_first_of_month_in_french():
@@ -285,3 +288,75 @@ def test_page_stop_zone_nominal_length_of_close_stops(an_hs):
           + block + f"const E = {json.dumps(E)};"
           "console.log(JSON.stringify(zonesOf(E).Z.map(z => [z.idx, z.name, z.len, z.nom])));")
     assert _run_js(js) == [[[1, 2, 3, 4, 5], "A / B", 150, 150]]
+
+
+def test_contract_bands_and_longest_version():
+    """The page's bands (am, midday, pm, evening) are in the contract, "day" stays internal; the reference
+    (display) version is the longest one running on >= max(5 days, 20 %) even when a shorter one runs on
+    more days; below that, the most frequent one."""
+    rare = simulate(n_days=12, seed=0, cut_days=range(3, 12))      # the full route on 3 days only
+    segs = rare.segment_fn(30)
+    an = metrics.analyse(aggregate.count(rare.placed, segs), rare.coverage, rare.passages, segs, rare.pattern_days)
+    v = [r for r in to_contract(an)["versions"] if r["dir"] == 0]
+    assert next(r for r in v if r["display"])["n_days"] == 9
+    sim = simulate(n_days=12, seed=0, cut_days=range(5, 12))
+    segs = sim.segment_fn(30)
+    an = metrics.analyse(aggregate.count(sim.placed, segs), sim.coverage, sim.passages, segs, sim.pattern_days)
+    c = to_contract(an)
+    assert c["bands"] == {"am": [7, 10], "midday": [10, 16], "pm": [16, 19], "evening": [20, 23]}
+    assert list(c["bands"]) == list(metrics.PAGE_BANDS) and c["day_hours"] == [6, 21]
+    assert metrics.BAND_HOUR["midday"] in an.result["hour"].to_list()
+    v = {r["pattern_uid"]: r for r in c["versions"] if r["dir"] == 0}
+    disp = next(r for r in v.values() if r["display"])
+    other = next(r for r in v.values() if not r["display"])
+    assert disp["n_days"] < other["n_days"] and other["links_removed"]
+    d = c["dirs"][0]
+    assert d["pattern_uid"] == disp["pattern_uid"] and len(d["seg"]["key"]) > len(d["alt"][0]["seg"]["key"])
+
+
+def test_page_speed_only_and_host_api(an_hs):
+    """Speeds only (no time wording in the measures), the exclusion reasons of the platform, the two-handle
+    hour range and the host's version switch."""
+    an, hs = an_hs
+    p = render(to_contract(an, hotspots=hs))
+    for s in ("opp: 'Vitesse moyenne', ex: 'Écart avec la soirée'", "bands: 'Période'", "school_holiday: ['en vacances scolaires'",
+              "user_period: ['en période exclue'", "user_period: ['in an excluded period', 'in excluded periods']", "reduced_service: ['de grève'", "m.ms === 'ver'", "qs.get('ver')",
+              'id="hA"', 'id="hB"', "tile.openstreetmap.org", "osmdark"):
+        assert s in p, s
+    for s in ("Temps passé", "Temps perdu", "s pour 30 m", "HERE", "arcgisonline", 'id="lede"', 'id="kicker"', "Moyennes"):
+        assert s not in p, s
+
+
+def test_page_interarrets_and_selection(an_hs):
+    """Interarrêt A→B = running bins of A→B + its tail + the head of B→C (the first stop's head is in none); its
+    time per vehicle sums each part over its own link's passages; excluded units leave the line totals; a speed
+    needs at least 3 reports; modes, the xia URL parameter and the excluded-periods wording are on the page."""
+    an, hs = an_hs
+    p = render(to_contract(an, hotspots=hs))
+    script = p[p.index('<script>\n"use strict"'):]
+    for s in ("viewl: {ms: 'Microsegments', ia: 'Interarrêts', sel: 'Sélection'}", "ia: 'Stop to stop'", "all: 'Toute la ligne'",
+              "all: 'Whole line'", "xia=A>B", "q.set('xia', xs)", "ms: 'xia'", "uq('view')", "'Escape' && isSel()"):
+        assert s in script, s
+    zones = script[script.index("// <zones>"):script.index("// </zones>")]
+    units = script[script.index("// <units>"):script.index("// </units>")]
+    kmh = script[script.index("const KMAX = "):script.index("const pc = ")]
+    # A |s r r s| B |s r s| C |s s| D : link 2 has no running bin, its 2 zone bins split at its middle
+    E = {"seg": {"key": list("abcdefghij"), "zone": ["stop", "running", "running", "stop", "stop", "running", "stop", "stop", "stop", "stop"],
+                 "x0": [0, 30, 60, 90, 120, 150, 180, 210, 240, 270], "len": [30] * 10, "link": [0, 0, 0, 0, 1, 1, 1, 2, 2, 2]},
+         "stops": [{"x": 0, "name": "A", "id": "a"}, {"x": 120, "name": "B", "id": "b"}, {"x": 210, "name": "C", "id": "c"},
+                   {"x": 300, "name": "D", "id": "d"}]}
+    js = ("const P = {stop_zone: [30, 60]}, TICK = 20, SC = {L: 30};" + kmh +
+          "function stopBefore(E, x) { let s = E.stops[0]; for (const t of E.stops) if (t.x <= x + .5) s = t; return s; }" + zones + units +
+          f"const E = {json.dumps(E)};"
+          "const v = E.seg.key.map((_, i) => ({i, l: E.seg.link[i], obs: 10, robs: 10, opp: .5, ref: .25, nd: 5, flags: 0, pph: 8}));"
+          "const xs = new Set(['b>c']), uv = uvals(E, v, xs), all = E.seg.key.map((_, i) => i);"
+          "const L = stretch(E, v, all, new Set(), false), Lx = stretch(E, v, all, xs, false);"
+          "console.log(JSON.stringify({U: unitsOf(E).U.map(u => [u.id, u.idx, u.len]), uv: uv.map(b => [b.opp, b.kmh, b.x]),"
+          "  L: [L.len, L.opp, L.skip], Lx: [Lx.len, Lx.opp], few: kmhOf(.1, 30, 2), ok: kmhOf(.1, 30, 3), gap: gapOf(10, 80)}));")
+    r = _run_js(js)
+    assert r["U"] == [["a>b", [1, 2, 3, 4], 120], ["b>c", [5, 6, 7], 90], ["c>d", [8, 9], 60]]
+    # 4 parts of 10 s over 120 m = 10.8 km/h; units sum obs per passage (here .5 each)
+    assert r["uv"][0][0] == pytest.approx(2.0) and r["uv"][0][1] == pytest.approx(10.8) and r["uv"][1][2] is True
+    # the line: every unit (the first stop's head is not counted); without b>c: 90 m and 1.5 obs per passage less
+    assert r["L"] == [270, pytest.approx(4.5), 30] and r["Lx"] == [180, pytest.approx(3.0)]
+    assert r["few"] is None and r["ok"] == pytest.approx(54.0) and r["gap"] is None

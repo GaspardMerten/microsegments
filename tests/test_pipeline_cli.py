@@ -86,7 +86,7 @@ def test_cli_compare(synth, tmp_path, capsys):
     c = json.loads((out / "compare.json").read_text())
     cp = c["compare"]
     assert cp["a"]["first"] == "2025-03-03" and cp["b"]["last"] <= "2025-03-16"
-    assert len(cp["dirs"]) == len(c["dirs"]) and cp["cols"][-4:] == ["am", "pm", "day", "evening"]
+    assert len(cp["dirs"]) == len(c["dirs"]) and cp["cols"][-5:] == ["am", "pm", "day", "evening", "midday"]
     assert all(len(d["d"]) == len(cp["cols"]) and len(d["d"][0]) == len(d["seg_key"]) for d in cp["dirs"])
     html = (out / "compare.html").read_text()
     assert not re.findall(r"__[A-Z]+__", html) and "Comparer" in html

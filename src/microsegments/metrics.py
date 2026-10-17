@@ -32,7 +32,8 @@ weekday)::
                          columns ``ref_line_obs_per_passage`` and ``excess_line_per_passage`` = O - r_l)
 
 Bands are emitted as extra rows with ``hour`` = -1 (am 7-10), -2 (pm 16-19), -3 (day 6-21),
--4 (evening 20-23), all [start, end).
+-4 (evening 20-23), -5 (midday 10-16), all [start, end). The page offers ``PAGE_BANDS``; "day" stays
+internal (hotspots, tune, reference agreement).
 """
 from __future__ import annotations
 
@@ -46,9 +47,12 @@ import polars as pl
 from .config import Params, Quality, Select
 from .schema import RESULT, Flag, conform
 
-BANDS: dict[str, tuple[int, int]] = {"am": (7, 10), "pm": (16, 19), "day": (6, 21), "evening": (20, 23)}
-BAND_HOUR: dict[str, int] = {"am": -1, "pm": -2, "day": -3, "evening": -4}
+# same key order in both (band columns follow it); new bands go at the end so the codes stay stable
+BANDS: dict[str, tuple[int, int]] = {"am": (7, 10), "pm": (16, 19), "day": (6, 21), "evening": (20, 23), "midday": (10, 16)}
+BAND_HOUR: dict[str, int] = {"am": -1, "pm": -2, "day": -3, "evening": -4, "midday": -5}
+PAGE_BANDS = ("am", "midday", "pm", "evening")    # the page's "Période" buttons, in this order
 DAY_HOURS = (6, 21)
+DISPLAY_MIN_DAYS, DISPLAY_MIN_SHARE = 5, 0.2   # a version shown by default runs on >= max(5 days, 20 % of the days)
 LINE_HOURS = (6, 23)     # [start, end): window of the line-level reference (same as hotspots.ALLDAY_HOURS)
 EXCLUDING = Flag.LOW_COVERAGE | Flag.FROZEN | Flag.LINE_ABSENT | Flag.DEVIATION | Flag.VEHICLE_RATIO
 _REASONS = ((Flag.FROZEN, "frozen"), (Flag.LINE_ABSENT, "line_absent"), (Flag.DEVIATION, "deviation"),
@@ -66,7 +70,7 @@ class DirData:
     dow: np.ndarray                  # (D,) 0 = Monday
     main_uid: np.ndarray             # (D,) main pattern of each day
     hours: np.ndarray                # (H,) internal hours
-    cols: np.ndarray                 # (Hx,) column labels: hours, then band codes -1..-4
+    cols: np.ndarray                 # (Hx,) column labels: hours, then band codes -1..-5
     seg_keys: np.ndarray             # (K,)
     seg_link: np.ndarray             # (K,) index into link_keys
     seg_len: np.ndarray              # (K,)
@@ -188,13 +192,21 @@ class Analysis:
         obs, cov, p, days, n = [], [], [], [], []
         for w in range(7):
             m = dd.dow == w
-            obs.append(np.rint(NM[m].sum(0)).astype(int).tolist())
+            obs.append(_r1(NM[m].sum(0)))
             cov.append(np.round(CL[m].sum(0), 3).tolist())
             p.append(np.round(PL[m].sum(0), 2).tolist())
             days.append(dd.LV[m][:, ls].sum(0).astype(int).tolist())
             n.append(NL[m].sum(0).astype(int).tolist())
         return {"pattern_uid": uid, "hours": list(self.hours), "seg_key": dd.seg_keys[ks].tolist(),
                 "link_key": dd.link_keys[ls].tolist(), "obs": obs, "cov": cov, "p": p, "days": days, "n": n}
+
+
+def _r1(a: np.ndarray) -> list:
+    """Weighted counts to 1 decimal for the contract, whole values written as ints. Line 7, Feb-May 2025: the
+    contract grows by 23 % gzipped (2 decimals: +60 %) over whole counts, whose rounding error matters in
+    stretches with few reports."""
+    r = np.round(a, 1)
+    return [[int(x) if x == int(x) else x for x in row] for row in r.tolist()]
 
 
 # ------------------------------------------------------------------------------------ estimator
@@ -433,14 +445,27 @@ def _build_dir(dirid, md, seg, cube, passages, passage_col, covA, ex, day_pos, h
     if not days_l:
         return None
     uids, counts = np.unique(main_uid, return_counts=True)
-    # display: the most frequent link_key sequence (patterns differing by shape edits only are pooled),
-    # and within it the pattern with the most days
-    seq = {u: tuple(g.sort("link_idx")["link_key"].unique(maintain_order=True).to_list())
-           for (u,), g in seg.filter(pl.col("pattern_uid").is_in(uids.tolist())).group_by(["pattern_uid"])}
-    tot: dict[tuple, int] = {}
+    # display (the reference version): among the versions (link_key sequences; patterns differing by shape edits
+    # only are pooled) running on >= max(5 days, 20 % of the days), the longest, then the one with most segments,
+    # then the most recent; within it the pattern with the most days. None that frequent: the most frequent one.
+    sg = seg.filter(pl.col("pattern_uid").is_in(uids.tolist()))
+    seq = {u: tuple(g.sort("link_idx")["link_key"].unique(maintain_order=True).to_list()) for (u,), g in sg.group_by(["pattern_uid"])}
+    size = {u: (float(g["len_m"].sum()), g.height) for (u,), g in sg.group_by(["pattern_uid"])}
+    last_of = {u: max(d for d, x in zip(days_l, main_uid) if x == u) for u in uids}
+    key = lambda u: seq.get(u, (u,))  # noqa: E731
+    last: dict[tuple, dt.date] = {}
+    for u in uids:
+        last[key(u)] = max(last.get(key(u), last_of[u]), last_of[u])
+    gdays: dict[tuple, int] = {}
     for u, c in zip(uids, counts):
-        tot[seq.get(u, (u,))] = tot.get(seq.get(u, (u,)), 0) + int(c)
-    order = sorted(range(len(uids)), key=lambda i: (-tot[seq.get(uids[i], (uids[i],))], -counts[i]))
+        gdays[key(u)] = gdays.get(key(u), 0) + int(c)
+    need = max(DISPLAY_MIN_DAYS, DISPLAY_MIN_SHARE * len(days_l))
+    if any(gdays[key(u)] >= need for u in uids):
+        order = sorted(range(len(uids)), key=lambda i: (gdays[key(uids[i])] < need, -round(size.get(uids[i], (0.0, 0))[0], 1),
+                                                        -size.get(uids[i], (0.0, 0))[1], -last[key(uids[i])].toordinal(), -counts[i]))
+    else:
+        order = sorted(range(len(uids)), key=lambda i: (-gdays[key(uids[i])], -round(size.get(uids[i], (0.0, 0))[0], 1),
+                                                        -last[key(uids[i])].toordinal(), -counts[i]))
     uids = uids[order]
     display = str(uids[0])
     s = seg.filter(pl.col("pattern_uid").is_in(uids.tolist()))
