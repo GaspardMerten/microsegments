@@ -56,6 +56,9 @@ CMP_KMH_TICKS = (-10, -5, 0, 5, 10)
 # the page colours speed gaps relative to the reference speed: +-25 % (diverging, red = slower)
 CMP_REL = 0.25
 CMP_REL_TICKS = (-25, -10, 0, 10, 25)      # %
+# gap with the evening on the page: km/h lost against it (0 when faster), linear 0 .. LOSS_KMH
+LOSS_KMH = 15.0
+LOSS_TICKS = (0, 3, 6, 9, 12, 15)
 
 # the STIB speed ramp (km/h, colour), interpolated in OKLab
 RAMP = ((4.5, "#7a1020"), (7.5, "#e5484d"), (10.5, "#f0a13a"), (13.5, "#b8e27f"), (16.5, "#3fb950"),
@@ -65,7 +68,8 @@ DIVERGING = ((-1.0, "#11683e"), (-0.45, "#3fb950"), (0.0, "#4a5470"), (0.45, "#f
 
 CONSTANTS = {"L": L_M, "T0": T_MIN, "T1": T_MAX, "TICKS": list(T_TICKS), "BASE": BASE_S, "OPH": OPH_S,
              "CMP": CMP_S, "CTICKS": list(CMP_TICKS), "K": KMH_PER_T, "KTICKS": list(KMH_TICKS), "CMPK": CMP_KMH,
-             "CKTICKS": list(CMP_KMH_TICKS), "CMPR": CMP_REL, "CRTICKS": list(CMP_REL_TICKS)}
+             "CKTICKS": list(CMP_KMH_TICKS), "CMPR": CMP_REL, "CRTICKS": list(CMP_REL_TICKS),
+             "LMAX": LOSS_KMH, "LTICKS": list(LOSS_TICKS)}
 
 
 def to_seconds(metric: str, value, len_m, tick_s: float = 20.0):
