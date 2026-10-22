@@ -79,3 +79,25 @@ def test_stib_vs_gtfsrt_link_totals():
     j = per_link(ra.frame).join(per_link(fb), on="link_key", suffix="_rt", how="full", coalesce=True).fill_null(0)
     rel = (j["n_rt"] / j["n"] - 1).abs()
     assert rel.max() <= 0.03, j.with_columns(rel=rel).sort("rel")
+
+
+def test_known_direction_whatever_the_rule():
+    """The feed's direction_id makes the direction known for every rule, not only trip / single."""
+    import numpy as np
+    from microsegments.locate.mapmatch import _known
+    how = np.array(["trip", "single", "continuity", "bearing", "single", "continuity", "trip"], dtype=object)
+    xd = np.array([-1, 0, 1, 0, -1, -1, 1])
+    assert _known(how, xd).tolist() == [True, True, True, True, False, False, True]
+
+
+def test_by_trip_first_pattern_in_trips_order():
+    """A trip_id on several patterns of the version: the first in trips order, whatever the join order."""
+    from types import SimpleNamespace as NS
+    from microsegments.locate.mapmatch import _by_trip
+    V = NS(kinds={"A": ("main", None, 0), "B": ("main", None, 0)})
+    cands = [NS(uid="A"), NS(uid="B")]
+    x = pl.DataFrame({"trip_id": [f"t{i % 50}" for i in range(2000)]})
+    trips = pl.DataFrame({"trip_id": [f"t{i}" for i in range(50)] * 2, "pattern_uid": ["B"] * 50 + ["A"] * 50})
+    for _ in range(5):
+        choice, how, _ = _by_trip(x, trips, V, cands)
+        assert (choice == 1).all() and (how == "trip").all()

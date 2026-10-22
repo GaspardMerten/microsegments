@@ -36,7 +36,8 @@ of delta x passages per hour in B x tick_s, seconds of vehicle time per day), th
 ``frequency_changed`` (|B / A - 1| > ``freq_change``): there a timetable change may explain part of
 the difference (bunching, dwell), so it should not be read as an infrastructure effect alone.
 Stretches are ranked per direction by |vehicle time change per day|. Fewer than ``MIN_DAYS``
-included days in a period: bins are still computed, no stretch (``params["status"]``). Weekday
+included days in a period: bins are still computed, no stretch for that direction (``params["dir_status"]``;
+``params["status"]`` is "computed" when some direction has stretches). Weekday
 strata are used only when every weekday has at least two days in the period.
 """
 from __future__ import annotations
@@ -167,6 +168,13 @@ def _draws(an: Analysis, dirid: int, W: np.ndarray, ci: np.ndarray, k: np.ndarra
     return out
 
 
+def _overall_status(dir_status: dict[int, str]) -> str:
+    """The overall status: "computed" when some direction has stretches, else the first direction's reason."""
+    if not dir_status or "computed" in dir_status.values():
+        return "computed"
+    return next(iter(dir_status.values()))
+
+
 def compare(a: Analysis, b: Analysis, *, B: int = 200, seed: int = 0, theta_s: float = 2.0, theta_bin_s: float = 0.0,
             q: float = 0.1,
             level: float = 0.95, freq_change: float = 0.2, gap: int = 1, stratified: bool = True,
@@ -179,23 +187,26 @@ def compare(a: Analysis, b: Analysis, *, B: int = 200, seed: int = 0, theta_s: f
     names = link_names(links)
     stat = {"B": B, "theta": theta_bin_s / tick, "q": q, "alpha": 1 - level, "stratified": stratified, "chunk": chunk}
     bin_frames, str_rows, unm, freq_rows, dirs = [], [], [], [], {}
-    status = "computed"
+    dir_status: dict[int, str] = {}
     for dirid in sorted(set(a.dirs) & set(b.dirs)):
         dA, dB = a.dirs[dirid], b.dirs[dirid]
         if len(dA.days) == 0 or len(dB.days) == 0:
             continue
-        if min(len(dA.days), len(dB.days)) < MIN_DAYS:
-            status = f"too_few_days: {len(dA.days)} / {len(dB.days)} included days < {MIN_DAYS}"
+        # gated per direction: a short direction has no stretch, the other keeps its own
+        few = min(len(dA.days), len(dB.days)) < MIN_DAYS
+        dir_status[dirid] = (f"too_few_days: {len(dA.days)} / {len(dB.days)} included days < {MIN_DAYS}"
+                             if few else "computed")
         al = dirs[dirid] = _align(dA, dB, dirid)
         unm += _unmatched(al)
         r = _compare_dir(a, b, al, hours, rngs, **stat)
         bin_frames.append(_bins_frame(al, r, tick))
         freq_rows += _freq_rows(dirid, r["labels"], r["fa"], r["fb"])
-        if status == "computed":
+        if not few:
             str_rows += _stretches(al, r, tick, stat["alpha"], gap, freq_change, names, len(dA.days), len(dB.days),
                                    theta_s / tick)
     params = {"B": B, "seed": seed, "theta_s": theta_s, "theta_bin_s": theta_bin_s, "q": q, "level": level, "freq_change": freq_change,
-              "gap": gap, "tick_s": tick, "hours": hours, "status": status}
+              "gap": gap, "tick_s": tick, "hours": hours, "status": _overall_status(dir_status),
+              "dir_status": dir_status}
     return Comparison(a=a, b=b, bins=pl.concat(bin_frames) if bin_frames else pl.DataFrame(), stretches=_ranked(str_rows),
                       unmatched=pl.DataFrame(unm, schema={"direction_id": pl.Int8, "period": pl.Utf8, "seg_key": pl.Utf8,
                                                           "link_key": pl.Utf8}, orient="row"),
@@ -422,6 +433,7 @@ def compare_contract(cmp: Comparison, names: dict[str, str] | None = None) -> di
         n_only_a = cmp.unmatched.filter((pl.col("direction_id") == dirid) & (pl.col("period") == "a")).height
         dirs.append({
             "dir": int(dirid), "pattern_uid": al.dB.display_uid,
+            "status": cmp.params.get("dir_status", {}).get(dirid, cmp.params.get("status", "computed")),
             "seg_key": al.dB.seg_keys[al.kB].tolist(),
             "matched": [int(k >= 0) for k in al.kA.tolist()],
             "only_a": n_only_a, "only_b": int((al.kA < 0).sum()),
@@ -440,6 +452,7 @@ def compare_contract(cmp: Comparison, names: dict[str, str] | None = None) -> di
             ch.append(rec)
     p = dict(cmp.params)
     p.pop("hours", None)
+    p.pop("dir_status", None)      # per direction in dirs[].status
     return {"a": _period(cmp.a), "b": _period(cmp.b), "params": p, "cols": cols, "dirs": dirs, "changes": ch}
 
 

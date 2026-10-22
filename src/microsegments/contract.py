@@ -6,7 +6,8 @@ Totals are kept per weekday so the page can recombine any set of weekdays client
     {
       "v": 1,
       "line": "55", "route_id": "...", "mode": "tram",
-      "params": {segment_m, phase_m, grid, tick_s, gap_cap_s, stop_zone: [up, down], reference_hours: [a, b]},
+      "params": {segment_m, phase_m, grid, tick_s, gap_cap_s, stop_zone: [up, down], reference_hours: [a, b],
+                 min_passages_per_day},          # additive: Quality.min_passages_per_day (page's ratio threshold)
       "period": {"first": "2025-02-17", "last": "2025-05-16",
                  "days": 60,                      # included service days
                  "per_dow": [11, 12, 13, 12, 12, 0, 0],
@@ -42,9 +43,11 @@ is period B's, plus an additive ``compare`` section (the page then opens in "com
     "compare": {
       "a": {"first", "last", "days", "per_dow", "excluded"},   # period A, before
       "b": {...},                                              # period B, after
-      "params": {B, seed, theta_s, theta_bin_s, q, level, freq_change, gap, tick_s, status},
+      "params": {B, seed, theta_s, theta_bin_s, q, level, freq_change, gap, tick_s, status},  # status: "computed"
+                                                               # when some direction has stretches
       "cols": [5, ..., 23, "am", "pm", "day", "evening", "midday"],   # column labels of the matrices below
       "dirs": [{"dir", "pattern_uid",                          # B's display pattern
+                "status",                                      # additive: "computed" | "too_few_days: ..."
                 "seg_key": [seg], "matched": [0|1],            # segments without match: null values
                 "only_a": n, "only_b": n,                      # unmatched segment counts
                 "oa", "ob": [col][seg] obs per passage A / B,

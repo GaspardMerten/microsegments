@@ -76,7 +76,8 @@ function cmpList() {
   const c = ctx(), hs = chgDir();
   $('hstitle').textContent = c.title2;
   $('hsnote').textContent = c.note(noun(false), noun(true));
-  if ((CMP.params || {}).status && CMP.params.status !== 'computed') { $('hslist').innerHTML = `<p class="empty">${c.few}</p>`; return; }
+  const stat = (cdirOf() || {}).status || (CMP.params || {}).status;   // per direction (older data: overall)
+  if (stat && stat !== 'computed') { $('hslist').innerHTML = `<p class="empty">${c.few}</p>`; return; }
   if (!hs.length) { $('hslist').innerHTML = `<p class="empty">${chgAll().length ? c.stops : c.none}</p>`; return; }
   fillList(hs.map((h, i) => {
     const k = stretchKmh(h, h.x1_m - h.x0_m);

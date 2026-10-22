@@ -45,24 +45,32 @@ ROUTE_TYPES = {0: "tram", 1: "metro", 2: "rail", 3: "bus", 4: "ferry", 5: "cable
                7: "funicular", 11: "trolleybus", 12: "monorail"}
 
 
-def _round_ll(c, nd: int = 6) -> list[list[float]]:
+def _round_ll(c, nd: int = 5) -> list[list[float]]:
+    # segment geometry: 5 decimals ~ 1 m, well under a 10 m segment
     return [[round(float(x), nd), round(float(y), nd)] for x, y in (c or [])]
 
 
-def _jsonable(v):
+def _jsonable(v, nd: int = 4):
     if isinstance(v, (dt.date, dt.datetime)):
         return v.isoformat()
     if isinstance(v, float):
-        return None if math.isnan(v) or math.isinf(v) else round(v, 4)
+        return None if math.isnan(v) or math.isinf(v) else round(v, nd)
     if isinstance(v, (list, tuple)):
-        return [_jsonable(x) for x in v]
+        return [_jsonable(x, nd) for x in v]
     if isinstance(v, np.generic):
-        return _jsonable(v.item())
+        return _jsonable(v.item(), nd)
     return v
 
 
+# decimals of record columns (others: 4, enough for obs per passage): metres and seconds to 0.1, shares and
+# correlations to 0.001, frequencies to 0.01 per hour
+NDIGITS = {"x0_m": 1, "x1_m": 1, "delta_s": 1, "veh_time_s_per_day": 1, "veh_time_s_per_day_all": 1,
+           "persistence": 3, "freq_change": 3, "spearman_day": 3, "spearman_day_all": 3, "top_overlap": 3,
+           "hotspots_both_share": 3, "passages_per_h_a": 2, "passages_per_h_b": 2}
+
+
 def frame_records(df: pl.DataFrame) -> list[dict]:
-    return [{k: _jsonable(v) for k, v in r.items()} for r in df.iter_rows(named=True)]
+    return [{k: _jsonable(v, NDIGITS.get(k, 4)) for k, v in r.items()} for r in df.iter_rows(named=True)]
 
 
 def _links_of(links: pl.DataFrame | None, segments: pl.DataFrame, uid: str) -> pl.DataFrame:
@@ -258,7 +266,8 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
         "source": source,
         "params": {"segment_m": p.segment_m, "phase_m": p.phase_m, "grid": p.grid, "tick_s": p.tick_s,
                    "gap_cap_s": p.gap_cap_s if math.isfinite(p.gap_cap_s) else None,
-                   "stop_zone": list(p.stop_zone), "reference_hours": list(p.reference_hours)},
+                   "stop_zone": list(p.stop_zone), "reference_hours": list(p.reference_hours),
+                   "min_passages_per_day": an.quality.min_passages_per_day},
         "period": {k: _jsonable(v) for k, v in period.items()},
         "hours": list(an.hours),
         "bands": {k: list(BANDS[k]) for k in PAGE_BANDS},

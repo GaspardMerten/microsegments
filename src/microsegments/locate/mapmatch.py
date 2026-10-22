@@ -178,7 +178,7 @@ def _place_version(x: pl.DataFrame, V, cands: list, shapes: dict, frame, trips, 
     # end zone: with a known trip / direction a fix is on its trip until the last stop (as the linear feed,
     # which reports the stop once reached); an inferred direction is not trusted within layover_m of the end
     # (a vehicle standing there fits both directions)
-    known = np.isin(how[rows], ["trip", "single"]) & (xd[rows] >= 0) | (how[rows] == "trip")
+    known = _known(how[rows], xd[rows])
     cols = _positions(cands, V, infos, ch, s, short_of[rows], known, params.layover_m, at_stop_m)
     return x[rows].with_columns(
         pl.Series("pattern_uid", cols["uid"].tolist(), dtype=pl.Utf8),
@@ -194,6 +194,12 @@ def _place_version(x: pl.DataFrame, V, cands: list, shapes: dict, frame, trips, 
         pl.Series("term_s_m", cols["term"], dtype=pl.Float64, nan_to_null=True),
         pl.coalesce("vehicle_id", "trip_id").alias("track_id"),
     )
+
+
+def _known(how: np.ndarray, xd: np.ndarray) -> np.ndarray:
+    """Direction known: by trip_id, or given by the feed (every rule then picks within that direction_id,
+    whether the fix was placed as single, by continuity or by bearing)."""
+    return (how == "trip") | (xd >= 0)
 
 
 def _project_all(cands: list, shapes: dict, pts: np.ndarray, max_d: float):
@@ -227,7 +233,9 @@ def _by_trip(x: pl.DataFrame, trips, V, cands: list):
     if trips is None or x["trip_id"].null_count() >= n:
         return choice, how, short_of
     tp = trips.select("trip_id", "pattern_uid").filter(pl.col("pattern_uid").is_in(list(V.kinds)))
-    tj = x.select("trip_id").with_row_index("_i").join(tp, on="trip_id", how="inner").unique("_i", keep="first")
+    # a trip_id on several patterns of the version: the first in trips order, reproducibly
+    tj = (x.select("trip_id").with_row_index("_i").join(tp, on="trip_id", how="inner", maintain_order="left_right")
+          .unique("_i", keep="first", maintain_order=True))
     for r, uid in zip(tj["_i"].to_list(), tj["pattern_uid"].to_list()):
         kind, parent, _ = V.kinds.get(uid, (None, None, None))
         tgt = parent if kind == "short" and parent in uid_idx else uid

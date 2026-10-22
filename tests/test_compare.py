@@ -81,3 +81,20 @@ def test_different_gtfs_versions():
     assert bins.filter(pl.col("link_key") == "S4-S5")["delta"].null_count() == bins.filter(pl.col("link_key") == "S4-S5").height
     top = cmp.stretches.row(0, named=True)
     assert top["sign"] == -1 and top["x0_m"] <= float(a.link_x0[2]) + 230 <= top["x1_m"]
+
+
+def test_too_few_days_gates_per_direction():
+    """A direction short of days has no stretch; the other direction keeps its own (status per direction)."""
+    from microsegments.compare import MIN_DAYS
+    a = simulate(link_len=LINKS, n_days=20, seed=1, hots=(HOT,))
+    b = simulate(link_len=LINKS, n_days=20, seed=2, hots=(), start=dt.date(2025, 4, 7))
+    A, B = _an(a), _an(b)
+    A.dirs[1], B.dirs[1] = A.dirs[0], B.dirs[0]
+    B.dirs[0] = B.dirs[0].take(np.arange(MIN_DAYS - 1))      # direction 0 short in period B
+    cmp = compare(A, B, B=100)
+    assert cmp.params["status"] == "computed"
+    assert cmp.params["dir_status"][0].startswith("too_few_days") and cmp.params["dir_status"][1] == "computed"
+    assert set(cmp.stretches["direction_id"].to_list()) == {1}
+    c = cmp.to_contract()
+    assert {d["dir"]: d["status"] == "computed" for d in c["dirs"]} == {0: False, 1: True}
+    assert "dir_status" not in c["params"]

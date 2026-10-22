@@ -32,6 +32,7 @@ def test_contract_keys(an_hs):
     c = to_contract(an, hotspots=hs, line="T1", mode="tram")
     assert TOP <= set(c) and c["v"] == CONTRACT_VERSION
     assert {"segment_m", "phase_m", "grid", "tick_s", "gap_cap_s", "stop_zone", "reference_hours"} <= set(c["params"])
+    assert c["params"]["min_passages_per_day"] == an.quality.min_passages_per_day      # the page's MINP
     assert {"first", "last", "days", "per_dow", "excluded"} <= set(c["period"])
     assert len(c["period"]["per_dow"]) == 7
     assert {"dates", "c"} <= set(c["coverage"]) and len(c["coverage"]["c"]) == len(c["coverage"]["dates"])

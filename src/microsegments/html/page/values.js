@@ -1,9 +1,9 @@
 
 // ---------------------------------------------------------------- sums over the chosen weekdays
 // Totals are per weekday in the data (wk); every view sums the chosen weekdays, then divides.
-// A ratio needs MINP passages per included day-hour (Quality.min_passages_per_day): p >= MINP x n, n the included
-// day-hours of the link (wk.n; an older contract without it: the link's days, every hour).
-const MINP = 0.5;
+// A ratio needs MINP passages per included day-hour (Quality.min_passages_per_day, exported in params): p >= MINP x n,
+// n the included day-hours of the link (wk.n; an older contract without it: the link's days, every hour).
+const MINP = P.min_passages_per_day ?? 0.5;
 const enough = (p, n) => p > 0 && p >= MINP * n;
 const AGG = new Map();
 function agg(E, days = st.days) {

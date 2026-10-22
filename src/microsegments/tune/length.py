@@ -214,19 +214,20 @@ def segment_length(placed: pl.DataFrame, segment_fn: SegmentFn,
 
 def _score(an: Analysis, fine, cube_f, rng, *, n_splits, B, n_jaccard, seed, hotspot_kw) -> tuple[dict, np.ndarray]:
     """The criteria of one length (directions with >= 2 days), and its per-day CV deviance."""
-    dev = 0.0
+    by_day: dict = {}                  # service date -> deviance summed over the directions running that day
     rel, snr, rex, spread, jac, ss = [], [], [], [], [], []
     for dirid, dd in an.dirs.items():
         if len(dd.days) < 2:
             continue
         ov = _overlap(an, dirid, fine)
-        dev = dev + _loo_deviance(an, dirid, _fine_counts(cube_f, dd, ov[0]), ov)
+        for d, v in zip(dd.days.tolist(), _loo_deviance(an, dirid, _fine_counts(cube_f, dd, ov[0]), ov).tolist()):
+            by_day[d] = by_day.get(d, 0.0) + v
         r, s, x = _split_half(an, dirid, n_splits, rng)
         rel.append(r); snr.append(s); rex.append(x); ss.append(_ss_cost(an, dirid))
         st = bin_stats(an, dirid, B=B, seed=seed, **hotspot_kw)
         spread.append(_loc_spread(st, stretches(st)))
         jac.append(_split_jaccard(an, dirid, rng, n_jaccard, B, seed, hotspot_kw))
-    dev = np.atleast_1d(dev)
+    dev = np.array([by_day[d] for d in sorted(by_day)]) if by_day else np.zeros(1)
     n_seg = sum(len(dd.pattern_segs[dd.display_uid]) for dd in an.dirs.values())
     return {"n_segments": n_seg, "cv_deviance": float(np.mean(dev)),
             "ss_cost": float(np.mean(ss)) if ss else np.nan,
