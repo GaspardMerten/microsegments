@@ -131,6 +131,15 @@ def ensure_local_time(df: pl.DataFrame, tz: str, service_day_start: str) -> pl.D
     return df
 
 
+def prepare_obs(obs, tz: str, service_day_start: str) -> tuple[pl.DataFrame, list[str]]:
+    """An OBSERVATION frame (lazy or not) with local time and ``obs_row``, and its extra (non-schema) columns."""
+    if isinstance(obs, pl.LazyFrame):
+        obs = obs.collect()
+    df = schema.conform(obs, schema.OBSERVATION, schema.OBSERVATION_REQUIRED)
+    extras = [c for c in df.columns if c not in schema.OBSERVATION and c not in ("service_date", "hour", "dow")]
+    return ensure_local_time(df, tz, service_day_start).with_row_index("obs_row"), extras
+
+
 def link_of_s(s: np.ndarray, stops_s: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """(link_idx, pos_m) of along-pattern positions, links half-open (lo, hi]: a position equal to a
     stop's s belongs to the end of the link arriving there; s <= 0 is link 0 at pos 0."""

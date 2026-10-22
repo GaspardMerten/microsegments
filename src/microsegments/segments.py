@@ -158,21 +158,11 @@ def segment(network_or_links, length: float = 30.0, phase: float = 0.0,
         bk = None if breaks is None else np.sort(np.asarray(breaks.get(uid, []), dtype=np.float64))
         seg_idx = 0
         for r, a, L_ in zip(lk.iter_rows(named=True), s0, ln):
-            if grid == "adaptive":
-                inner = bk[(bk > a) & (bk < a + L_)] - a
-                e = _merge_slivers(np.concatenate([[0.0], inner, [L_]]))
-                sfx = f"@a:{_hash_offsets(e)}"
-            elif grid == "stops":
-                e, zone, h, t = _stop_edges(L_, r["_head"], r["_tail"], length, phase)
-                sfx = f"{suffix}s{h:g}_{t:g}"
-            else:
-                e = link_edges(L_, length, phase, grid)
-                sfx = suffix
+            e, zone, sfx = _link_bins(grid, r, a, L_, length, phase, suffix, bk)
             lo, hi = e[:-1], e[1:]
-            x0, x1 = a + lo, a + hi
-            # overlap with [stop - up, stop + down] of any stop (positive length, or touching for 0-length bins)
-            if grid != "stops":
-                ov = (x0[:, None] < stops[None, :] + down) & (x1[:, None] > stops[None, :] - up)
+            if zone is None:
+                # overlap with [stop - up, stop + down] of any stop (positive length, or touching for 0-length bins)
+                ov = ((a + lo)[:, None] < stops[None, :] + down) & ((a + hi)[:, None] > stops[None, :] - up)
                 zone = np.where(ov.any(axis=1), "stop", "running")
             g = r["geometry"]
             for k in range(len(lo)):
@@ -183,13 +173,26 @@ def segment(network_or_links, length: float = 30.0, phase: float = 0.0,
                 cols["seg_key"].append(f"{r['link_key']}/{k}{sfx}")
                 cols["k"].append(k)
                 cols["offset_m"].append(float(lo[k]))
-                cols["x0_m"].append(float(x0[k]))
+                cols["x0_m"].append(float(a + lo[k]))
                 cols["len_m"].append(float(hi[k] - lo[k]))
                 cols["zone"].append(str(zone[k]))
                 cols["geometry"].append(
                     cut(g, lo[k], hi[k], scale_to=L_).tolist() if geometry and g is not None and len(g) else None)
                 seg_idx += 1
     return pl.DataFrame(cols, schema=schema.SEGMENT)
+
+
+def _link_bins(grid: str, r: dict, a: float, L_: float, length: float, phase: float, suffix: str, bk):
+    """Bin edges of one link (row ``r`` starting at ``a``, ``L_`` long), their zones (grid "stops"; else None:
+    from the stops' zones) and the seg_key suffix."""
+    if grid == "adaptive":
+        inner = bk[(bk > a) & (bk < a + L_)] - a
+        e = _merge_slivers(np.concatenate([[0.0], inner, [L_]]))
+        return e, None, f"@a:{_hash_offsets(e)}"
+    if grid == "stops":
+        e, zone, h, t = _stop_edges(L_, r["_head"], r["_tail"], length, phase)
+        return e, zone, f"{suffix}s{h:g}_{t:g}"
+    return link_edges(L_, length, phase, grid), None, suffix
 
 
 # ---------------------------------------------------------------- placing positions
@@ -279,28 +282,36 @@ def adaptive_breaks(counts, link_bounds, penalty: float | None = None, *, bin_m:
         pos = np.concatenate([[a], inner[(inner > a) & (inner < b)], [b]])
         # counts between consecutive candidate positions (bins assigned by their centre)
         cc = np.array([c[(centres >= lo) & (centres < hi)].sum() for lo, hi in zip(pos[:-1], pos[1:])])
-        cum = np.concatenate([[0.0], np.cumsum(cc)])
-        n = len(pos)
-        F = np.full(n, np.inf)
-        F[0] = 0.0
-        prev = np.zeros(n, dtype=np.int64)
-        for j in range(1, n):
-            for i in range(j - 1, -1, -1):
-                w = pos[j] - pos[i]
-                if w > max_m + 1e-9:
-                    break
-                if w < min_m - 1e-9 or not np.isfinite(F[i]):
-                    continue
-                v = F[i] + _poisson_cost(cum[j] - cum[i], w / bin_m) + pen
-                if v < F[j]:
-                    F[j], prev[j] = v, i
-        if not np.isfinite(F[-1]):   # cannot satisfy the bounds: equal parts of at most max_m
+        cuts = _partition(pos, np.concatenate([[0.0], np.cumsum(cc)]), pen, bin_m, min_m, max_m)
+        if cuts is None:   # cannot satisfy the bounds: equal parts of at most max_m
             k = int(np.ceil((b - a) / max_m))
             out += list(a + (b - a) * np.arange(1, k + 1) / k)
-            continue
-        cuts, j = [], n - 1
-        while j > 0:
-            cuts.append(float(pos[j]))
-            j = prev[j]
-        out += cuts[::-1]
+        else:
+            out += cuts
     return np.asarray(out)
+
+
+def _partition(pos: np.ndarray, cum: np.ndarray, pen: float, bin_m: float, min_m: float, max_m: float) -> list | None:
+    """Optimal partition of candidate positions ``pos`` (``cum``: cumulative counts at them): the cut positions
+    after pos[0], up to pos[-1]; None when no partition has every part within [min_m, max_m]."""
+    n = len(pos)
+    F = np.full(n, np.inf)
+    F[0] = 0.0
+    prev = np.zeros(n, dtype=np.int64)
+    for j in range(1, n):
+        for i in range(j - 1, -1, -1):
+            w = pos[j] - pos[i]
+            if w > max_m + 1e-9:
+                break
+            if w < min_m - 1e-9 or not np.isfinite(F[i]):
+                continue
+            v = F[i] + _poisson_cost(cum[j] - cum[i], w / bin_m) + pen
+            if v < F[j]:
+                F[j], prev[j] = v, i
+    if not np.isfinite(F[-1]):
+        return None
+    cuts, j = [], n - 1
+    while j > 0:
+        cuts.append(float(pos[j]))
+        j = prev[j]
+    return cuts[::-1]

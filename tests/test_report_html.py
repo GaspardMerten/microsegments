@@ -238,12 +238,12 @@ def test_page_stop_zone_is_one_block(an_hs):
           "  opp: o, ref: i === 7 ? null : .2, pph: 8}));"
           "const zv = zvals(E, v), it = items(v, E, zv, true), raw = items(v, E, zv, false);"
           "const c = opp.map((o, i) => ({absent: false, d: .1, dx: .1, lo: i === 3 ? .05 : -.01, hi: .3, oa: o, ob: o + .1, fa: 8, fb: 9}));"
-          "const cz = czvals(E, c);"
-          "console.log(JSON.stringify({Z: zonesOf(E).Z.map(z => [z.idx, z.name, z.len, z.nom]), zv: zv.map(z => [z.tot, z.kmh, z.dv, z.l]),"
+          "const cz = zvals(E, c, true);"
+          "console.log(JSON.stringify({Z: zonesOf(E).Z.map(z => [z.idx, z.name, z.len]), zv: zv.map(z => [z.opp * TICK, z.kmh, z.dv, z.l]),"
           "  items: it.map(b => b.z ? 'Z' + b.zone : b.i), raw: raw.length, cz: cz.map(z => [z.d, z.sig, z.oa, z.va, z.vb, z.dk, z.klo, z.khi])}));")
     r = _run_js(js)
     # three blocks: the terminus (one-sided, nominal 30 m), B (90 m), the end (30 m)
-    assert r["Z"] == [[[0], "A", 30, 30], [[3, 4, 5], "B", 90, 90], [[7], "C", 30, 30]]
+    assert r["Z"] == [[[0], "A", 30], [[3, 4, 5], "B", 90], [[7], "C", 30]]
     tot, kmh, dv, link = r["zv"][1]
     assert tot == pytest.approx(30.0) and kmh == pytest.approx(10.8)      # 30 s per vehicle over 90 m = 10.8 km/h
     assert dv == pytest.approx(10.8 - 27.0) and link == 1                # evening: 12 s over 90 m = 27 km/h; outgoing link
@@ -285,8 +285,8 @@ def test_page_stop_zone_nominal_length_of_close_stops(an_hs):
     js = ("const P = {stop_zone: [30, 60]}, TICK = 20, SC = {L: 30};"
           "function stopBefore(E, x) { let s = E.stops[0]; for (const t of E.stops) if (t.x <= x + .5) s = t; return s; }"
           + block + f"const E = {json.dumps(E)};"
-          "console.log(JSON.stringify(zonesOf(E).Z.map(z => [z.idx, z.name, z.len, z.nom])));")
-    assert _run_js(js) == [[[1, 2, 3, 4, 5], "A / B", 150, 150]]
+          "console.log(JSON.stringify(zonesOf(E).Z.map(z => [z.idx, z.name, z.len])));")
+    assert _run_js(js) == [[[1, 2, 3, 4, 5], "A / B", 150]]
 
 
 def test_contract_bands_and_longest_version():

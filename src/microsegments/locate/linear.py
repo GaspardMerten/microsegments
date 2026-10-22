@@ -43,14 +43,20 @@ from __future__ import annotations
 
 from collections import Counter
 
-import numpy as np
 import polars as pl
 
-from .. import schema
 from ..config import Params
 from ..io.ids import normalise_py
 from ..schema import Flag
-from .common import PatInfo, Placed, Version, date_versions, ensure_local_time, finish, pattern_infos
+from .common import (
+    PatInfo,
+    Placed,
+    Version,
+    date_versions,
+    finish,
+    pattern_infos,
+    prepare_obs,
+)
 
 AT_STOP_M = 10.0
 SW_END_FRAC = 0.75
@@ -118,43 +124,12 @@ def _match(pats: list[PatInfo], p: str, tid: str | None, tname: str | None, dire
 
 def _resolve(combos: pl.DataFrame, versions: list[Version], aliases: dict[str, str], names: dict[str, str],
              compat: bool = False):
+    """Pattern, link and terminus of each (version, stop, terminus code, direction) combination (rule 1)."""
     rows = []
     for ver, p, t, d in combos.iter_rows():
         tid = None if t is None else aliases.get(t, t)
         tname = None if tid is None else names.get(tid)
-        V = versions[ver]
-        status, hit = "off_pattern", None
-        if p is None:
-            status = "no_position"
-        else:
-            hits = _match(V.mains, p, tid, tname, d)
-            if len(hits) == 1:
-                status, hit = "ok", hits[0]
-            elif len(hits) > 1:
-                status = "ambiguous"
-            else:
-                hits = _match(V.others, p, tid, tname, d)
-                if len(hits) > 1 and not compat:
-                    # several detours / other patterns fit: the one run to its end (not a part of
-                    # it), then the busiest that day (others are sorted by trips), same direction only
-                    full = [h for h in hits if h[2] == len(h[0].norm) - 1] or hits
-                    if len({h[0].direction for h in full}) == 1:
-                        hits = full[:1]
-                if len(hits) == 1:
-                    status, hit = "ok_other", hits[0]
-                elif len(hits) > 1:
-                    status = "ambiguous"
-                elif t is not None and tid not in names:
-                    status = "unknown_terminus"
-                if hit is None and not compat and status != "ambiguous":
-                    # the terminus code fits no pattern here (some feeds code both directions with one
-                    # terminus): the stop alone, if exactly one main pattern serves it (not as its end)
-                    # and the code is that main's first stop (a vehicle past an intermediate own
-                    # terminus, e.g. a short working running on to the depot, stays dropped)
-                    hits = _match(V.mains, p, None, None, d)
-                    if len(hits) == 1 and tid is not None and (
-                            hits[0][0].norm[0] == tid or (tname is not None and hits[0][0].names[0] == tname)):
-                        status, hit = "ok_stop_only", hits[0]
+        status, hit = ("no_position", None) if p is None else _resolve_one(versions[ver], p, t, tid, tname, d, names, compat)
         if hit is None:
             rows.append((ver, p, t, d, status, None, None, None, None, None, None))
         else:
@@ -166,6 +141,39 @@ def _resolve(combos: pl.DataFrame, versions: list[Version], aliases: dict[str, s
         "_ver": pl.Int32, "_p": pl.Utf8, "_t": pl.Utf8, "_d": pl.Int8, "_status": pl.Utf8,
         "pattern_uid": pl.Utf8, "_li": pl.Int16, "_term": pl.Int16, "_short": pl.Boolean, "_sw_next": pl.Boolean,
         "_pdir": pl.Int8})
+
+
+def _resolve_one(V: Version, p: str, t, tid, tname, d, names: dict[str, str], compat: bool):
+    """(status, (pattern, stop index, terminus index) or None) of a stop ``p`` heading to ``tid`` / ``tname``."""
+    hits = _match(V.mains, p, tid, tname, d)
+    if len(hits) == 1:
+        return "ok", hits[0]
+    if len(hits) > 1:
+        return "ambiguous", None
+    status, hit = "off_pattern", None
+    hits = _match(V.others, p, tid, tname, d)
+    if len(hits) > 1 and not compat:
+        # several detours / other patterns fit: the one run to its end (not a part of it), then the
+        # busiest that day (others are sorted by trips), same direction only
+        full = [h for h in hits if h[2] == len(h[0].norm) - 1] or hits
+        if len({h[0].direction for h in full}) == 1:
+            hits = full[:1]
+    if len(hits) == 1:
+        return "ok_other", hits[0]
+    if len(hits) > 1:
+        return "ambiguous", None
+    if t is not None and tid not in names:
+        status = "unknown_terminus"
+    if not compat:
+        # the terminus code fits no pattern here (some feeds code both directions with one terminus): the
+        # stop alone, if exactly one main pattern serves it (not as its end) and the code is that main's
+        # first stop (a vehicle past an intermediate own terminus, e.g. a short working running on to the
+        # depot, stays dropped)
+        hits = _match(V.mains, p, None, None, d)
+        if len(hits) == 1 and tid is not None and (
+                hits[0][0].norm[0] == tid or (tname is not None and hits[0][0].names[0] == tname)):
+            return "ok_stop_only", hits[0]
+    return status, hit
 
 
 def _link_table(infos: dict[str, PatInfo], uids) -> pl.DataFrame:
@@ -202,11 +210,7 @@ def place_linear(obs, net, params: Params | None = None, *, feed_length="auto",
     in advance (others are learned). ``compat``: the prototype's rules exactly (several other patterns
     fitting = ambiguous; no stop-only placement)."""
     params = params or Params()
-    if isinstance(obs, pl.LazyFrame):
-        obs = obs.collect()
-    df = schema.conform(obs, schema.OBSERVATION, schema.OBSERVATION_REQUIRED)
-    extras = [c for c in df.columns if c not in schema.OBSERVATION and c not in ("service_date", "hour", "dow")]
-    df = ensure_local_time(df, tz, service_day_start).with_row_index("obs_row")
+    df, extras = prepare_obs(obs, tz, service_day_start)
     n0 = df.height
 
     def norm(x):
@@ -219,89 +223,24 @@ def place_linear(obs, net, params: Params | None = None, *, feed_length="auto",
     given = {str(k): norm(v) or str(v) for k, v in (terminus_aliases or {}).items()}
     aliases = learn_aliases(df, versions, set(names), given)
 
-    # ---- pattern of each (version, stop, terminus, direction)
-    key = [pl.col("_ver"), pl.col("stop_id").alias("_p"), pl.col("terminus_id").alias("_t"),
-           pl.col("direction_id").alias("_d")]
-    combos = df.select(key).unique()
-    res = _resolve(combos, versions, aliases, names, compat)
-    fill = [pl.col("_p").fill_null(_NULL), pl.col("_t").fill_null(_NULL), pl.col("_d").fill_null(-1)]
-    df = (df.with_columns(key[1:]).with_columns(fill)
-          .join(res.with_columns(fill), on=["_ver", "_p", "_t", "_d"], how="left", maintain_order="left"))
-    df = df.with_columns(pl.when(pl.col("dist_m").is_null()).then(pl.lit("no_position")).otherwise(pl.col("_status"))
-                         .alias("_status"))
+    df = _with_patterns(df, versions, aliases, names, compat)
     report = Counter(df["_status"].to_list())
 
-    # ---- terminus pseudo rows (feed the tracker, never counted)
-    pname = pl.col("stop_id").replace_strict(names, default=None, return_dtype=pl.Utf8)
-    tname = (pl.col("terminus_id").replace_strict(aliases, default=pl.col("terminus_id"), return_dtype=pl.Utf8)
-             .replace_strict(names, default=None, return_dtype=pl.Utf8))
-    base = df.with_columns(pname.alias("_pname"), tname.alias("_tname"))
-    pseudo = []
-    for vi, V in enumerate(versions):
-        bv = base.filter(pl.col("_ver") == vi)
-        if not bv.height:
-            continue
-        for P in V.mains:
-            for end in (0, -1):
-                N = P.names[end]
-                if N is None:
-                    continue
-                m = bv.filter((pl.col("_pname") == N) & ((pl.col("dist_m") < params.layover_m) | (pl.col("_tname") == N)))
-                if not m.height:
-                    continue
-                li = 0 if end == 0 else len(P.lens) - 1
-                pos = 0.0 if end == 0 else float(P.lens[-1])
-                pseudo.append(m.with_columns(
-                    pl.lit(P.uid).alias("pattern_uid"), pl.lit(li, pl.Int16).alias("link_idx"),
-                    pl.lit(P.keys[li]).alias("link_key"), pl.lit(pos).alias("pos_m"),
-                    pl.lit(0.0 if end == 0 else P.length).alias("s_m"), pl.lit(P.direction, pl.Int8).alias("_pdir"),
-                    pl.lit(False).alias("count"), pl.lit(Flag.LAYOVER, pl.UInt16).alias("flags"),
-                    pl.lit(None, pl.Float64).alias("term_s_m")))
-
+    pseudo = _pseudo_rows(df, versions, names, aliases, params.layover_m)
     # ---- placed rows
     x = df.filter(pl.col("_status").is_in(["ok", "ok_other", "ok_stop_only"]))
     lay = (pl.col("_li") == 0) & (pl.col("dist_m") < params.layover_m)
     report["layover_first_stop"] = int(x.select(lay.sum()).item())
     x = x.filter(~lay)
     links = _link_table(infos, sorted({u for V in versions for u in [p.uid for p in V.mains + V.others]}))
-    if isinstance(feed_length, pl.DataFrame):
-        fl = feed_length.select("pattern_uid", pl.col("link_idx").cast(pl.Int16).alias("_li"),
-                                pl.col("flen").cast(pl.Float64).alias("_flen"))
-        flen = (links.join(fl, on=["pattern_uid", "_li"], how="left")
-                .with_columns(pl.col("_flen").fill_null(pl.col("_glen")))
-                .select("pattern_uid", pl.col("_li").alias("link_idx"), pl.col("_key").alias("link_key"),
-                        pl.col("_glen").alias("glen"), pl.col("_flen").alias("flen"), pl.lit(None, pl.UInt32).alias("n")))
-    elif feed_length == "gtfs":
-        flen = links.select("pattern_uid", pl.col("_li").alias("link_idx"), pl.col("_key").alias("link_key"),
-                            pl.col("_glen").alias("glen"), pl.col("_glen").alias("flen"), pl.lit(None, pl.UInt32).alias("n"))
-    elif feed_length == "auto":
-        flen = feed_lengths(x, links, min_rows=flen_min_rows)
-    else:
-        raise ValueError(f"feed_length must be 'auto', 'gtfs' or a DataFrame, not {feed_length!r}")
+    flen = _flen_table(feed_length, x, links, flen_min_rows)
     x = x.join(flen.select("pattern_uid", pl.col("link_idx").alias("_li"), pl.col("flen").alias("_flen")),
                on=["pattern_uid", "_li"], how="left").join(links, on=["pattern_uid", "_li"], how="left")
     frac = pl.min_horizontal(pl.col("dist_m").cast(pl.Float64) / pl.col("_flen"), pl.lit(1.0))
     x = x.with_columns(frac.alias("_frac"))
     sw_end = pl.col("_short") & pl.col("_sw_next") & (pl.col("_frac") >= SW_END_FRAC)
     report["layover_short_working_end"] = int(x.select(sw_end.sum()).item())
-    x = x.filter(~sw_end)
-    at = pl.col("dist_m") < at_stop_m
-    # standing at stop i (> 0): end of link i - 1
-    back = at & (pl.col("_li") > 0)
-    x = x.with_columns(pl.when(at).then(0.0).otherwise(pl.col("_frac") * pl.col("_glen")).alias("pos_m"),
-                       at.alias("_at"))
-    x = x.with_columns(pl.when(back).then(pl.col("_li") - 1).otherwise(pl.col("_li")).cast(pl.Int16).alias("link_idx"))
-    x = x.join(links.select("pattern_uid", pl.col("_li").alias("link_idx"), pl.col("_glen").alias("_glen2"),
-                            pl.col("_s0").alias("_s02"), pl.col("_key").alias("link_key")),
-               on=["pattern_uid", "link_idx"], how="left")
-    x = x.with_columns(pl.when(back).then(pl.col("_glen2")).otherwise(pl.col("pos_m")).alias("pos_m"))
-    x = x.with_columns((pl.col("_s02") + pl.col("pos_m")).alias("s_m"),
-                       # short working on the link leading to its own terminus: where that terminus is
-                       pl.when(pl.col("_short") & (pl.col("link_idx") + 1 == pl.col("_term")))
-                       .then(pl.col("_s02") + pl.col("_glen2")).otherwise(None).alias("term_s_m"))
-    flags = (pl.when(pl.col("_short")).then(Flag.SHORT_WORKING).otherwise(0)
-             + pl.when(pl.col("_at")).then(Flag.AT_STOP).otherwise(0))
-    x = x.with_columns(flags.cast(pl.UInt16).alias("flags"), pl.lit(True).alias("count"))
+    x = _positions(x.filter(~sw_end), links, at_stop_m)
 
     cols = ["ts", "service_date", "hour", "dow", "route_id", "pattern_uid", "link_idx", "link_key", "pos_m", "s_m",
             "dist_m", "vehicle_id", "count", "flags", "_pdir", "obs_row", "term_s_m"] + extras
@@ -319,6 +258,89 @@ def place_linear(obs, net, params: Params | None = None, *, feed_length="auto",
     learned = {k: v for k, v in aliases.items() if k not in given}
     report["aliases_learned"] = len(learned)
     return Placed(frame=out, report=report, aliases=aliases, flen=flen)
+
+
+def _with_patterns(df: pl.DataFrame, versions: list[Version], aliases: dict[str, str], names: dict[str, str],
+                   compat: bool) -> pl.DataFrame:
+    """Rows with the pattern of their (version, stop, terminus, direction) combination (:func:`_resolve`)."""
+    key = [pl.col("_ver"), pl.col("stop_id").alias("_p"), pl.col("terminus_id").alias("_t"),
+           pl.col("direction_id").alias("_d")]
+    res = _resolve(df.select(key).unique(), versions, aliases, names, compat)
+    fill = [pl.col("_p").fill_null(_NULL), pl.col("_t").fill_null(_NULL), pl.col("_d").fill_null(-1)]
+    df = (df.with_columns(key[1:]).with_columns(fill)
+          .join(res.with_columns(fill), on=["_ver", "_p", "_t", "_d"], how="left", maintain_order="left"))
+    return df.with_columns(pl.when(pl.col("dist_m").is_null()).then(pl.lit("no_position")).otherwise(pl.col("_status"))
+                           .alias("_status"))
+
+
+def _pseudo_rows(df: pl.DataFrame, versions: list[Version], names: dict[str, str], aliases: dict[str, str],
+                 layover_m: float) -> list[pl.DataFrame]:
+    """Rule 2, terminus pseudo rows (feed the tracker, never counted): rows at (within ``layover_m``) or heading
+    to a main's first / last stop, put at that end of the main."""
+    pname = pl.col("stop_id").replace_strict(names, default=None, return_dtype=pl.Utf8)
+    tname = (pl.col("terminus_id").replace_strict(aliases, default=pl.col("terminus_id"), return_dtype=pl.Utf8)
+             .replace_strict(names, default=None, return_dtype=pl.Utf8))
+    base = df.with_columns(pname.alias("_pname"), tname.alias("_tname"))
+    pseudo = []
+    for vi, V in enumerate(versions):
+        bv = base.filter(pl.col("_ver") == vi)
+        if not bv.height:
+            continue
+        for P in V.mains:
+            for end in (0, -1):
+                N = P.names[end]
+                if N is None:
+                    continue
+                m = bv.filter((pl.col("_pname") == N) & ((pl.col("dist_m") < layover_m) | (pl.col("_tname") == N)))
+                if not m.height:
+                    continue
+                li = 0 if end == 0 else len(P.lens) - 1
+                pos = 0.0 if end == 0 else float(P.lens[-1])
+                pseudo.append(m.with_columns(
+                    pl.lit(P.uid).alias("pattern_uid"), pl.lit(li, pl.Int16).alias("link_idx"),
+                    pl.lit(P.keys[li]).alias("link_key"), pl.lit(pos).alias("pos_m"),
+                    pl.lit(0.0 if end == 0 else P.length).alias("s_m"), pl.lit(P.direction, pl.Int8).alias("_pdir"),
+                    pl.lit(False).alias("count"), pl.lit(Flag.LAYOVER, pl.UInt16).alias("flags"),
+                    pl.lit(None, pl.Float64).alias("term_s_m")))
+    return pseudo
+
+
+def _flen_table(feed_length, x: pl.DataFrame, links: pl.DataFrame, min_rows: int) -> pl.DataFrame:
+    """Rule 4: feed length per link ("auto": learned from ``x``, "gtfs": GTFS metres, or a given frame)."""
+    def table(flen):
+        return links.select("pattern_uid", pl.col("_li").alias("link_idx"), pl.col("_key").alias("link_key"),
+                            pl.col("_glen").alias("glen"), flen.alias("flen"), pl.lit(None, pl.UInt32).alias("n"))
+    if isinstance(feed_length, pl.DataFrame):
+        fl = feed_length.select("pattern_uid", pl.col("link_idx").cast(pl.Int16).alias("_li"),
+                                pl.col("flen").cast(pl.Float64).alias("_flen"))
+        links = links.join(fl, on=["pattern_uid", "_li"], how="left").with_columns(pl.col("_flen").fill_null(pl.col("_glen")))
+        return table(pl.col("_flen"))
+    if feed_length == "gtfs":
+        return table(pl.col("_glen"))
+    if feed_length == "auto":
+        return feed_lengths(x, links, min_rows=min_rows)
+    raise ValueError(f"feed_length must be 'auto', 'gtfs' or a DataFrame, not {feed_length!r}")
+
+
+def _positions(x: pl.DataFrame, links: pl.DataFrame, at_stop_m: float) -> pl.DataFrame:
+    """Rules 4-5: position on the link (feed fraction ``_frac`` of GTFS metres; standing at stop i > 0: end of
+    link i - 1), along-pattern ``s_m``, short working terminus ``term_s_m``, flags, count."""
+    at = pl.col("dist_m") < at_stop_m
+    back = at & (pl.col("_li") > 0)
+    x = x.with_columns(pl.when(at).then(0.0).otherwise(pl.col("_frac") * pl.col("_glen")).alias("pos_m"),
+                       at.alias("_at"))
+    x = x.with_columns(pl.when(back).then(pl.col("_li") - 1).otherwise(pl.col("_li")).cast(pl.Int16).alias("link_idx"))
+    x = x.join(links.select("pattern_uid", pl.col("_li").alias("link_idx"), pl.col("_glen").alias("_glen2"),
+                            pl.col("_s0").alias("_s02"), pl.col("_key").alias("link_key")),
+               on=["pattern_uid", "link_idx"], how="left")
+    x = x.with_columns(pl.when(back).then(pl.col("_glen2")).otherwise(pl.col("pos_m")).alias("pos_m"))
+    x = x.with_columns((pl.col("_s02") + pl.col("pos_m")).alias("s_m"),
+                       # short working on the link leading to its own terminus: where that terminus is
+                       pl.when(pl.col("_short") & (pl.col("link_idx") + 1 == pl.col("_term")))
+                       .then(pl.col("_s02") + pl.col("_glen2")).otherwise(None).alias("term_s_m"))
+    flags = (pl.when(pl.col("_short")).then(Flag.SHORT_WORKING).otherwise(0)
+             + pl.when(pl.col("_at")).then(Flag.AT_STOP).otherwise(0))
+    return x.with_columns(flags.cast(pl.UInt16).alias("flags"), pl.lit(True).alias("count"))
 
 
 def approach(placed: pl.DataFrame, links: pl.DataFrame, approach_m: float) -> pl.DataFrame:

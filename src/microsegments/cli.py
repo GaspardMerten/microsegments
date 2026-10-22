@@ -26,15 +26,18 @@ def _log(args):
     return (lambda s: print(s, file=sys.stderr)) if not getattr(args, "quiet", False) else None
 
 
+def _stretch(names: dict[str, str] | None) -> pl.Expr:
+    """"From -> To" of a stretch, stop names mapped through ``names``."""
+    fix = (lambda c: pl.col(c).replace(names)) if names else pl.col
+    return pl.concat_str([fix("from_stop_name"), pl.lit(" -> "), fix("to_stop_name")]).alias("stretch")
+
+
 def _hotspot_table(hs: pl.DataFrame, tick_s: float, names: dict[str, str] | None = None) -> pl.DataFrame:
     if hs is None or hs.height == 0:
         return pl.DataFrame()
-    nm = names or {}
-    fix = lambda c: pl.col(c).replace(nm) if nm else pl.col(c)  # noqa: E731
     crit = pl.col("criterion") if "criterion" in hs.columns else pl.lit("peak")
     return hs.select(
-        "direction_id", "rank",
-        pl.concat_str([fix("from_stop_name"), pl.lit(" -> "), fix("to_stop_name")]).alias("stretch"),
+        "direction_id", "rank", _stretch(names),
         pl.col("x0_m").round(0), pl.col("x1_m").round(0), "zone", "kind", crit.alias("criterion"),
         pl.col("hours").cast(pl.List(pl.Utf8)).list.join(",").alias("hours"),
         pl.col("excess_per_passage").round(2).alias("excess_obs_per_veh"),
@@ -111,26 +114,42 @@ def cmd_tune(args) -> int:
             sr.table.write_parquet(out / "sensitivity_profiles.parquet")
             sr.summary.write_parquet(out / "sensitivity.parquet")
     if out:
-        try:
-            import matplotlib
-            matplotlib.use("Agg")
-            from . import plot
-            plot.save(plot.tune_curves(tr), out / "tune.png")
-            if sr is not None:
-                plot.save(plot.sensitivity(sr), out / "sensitivity.png")
-        except ImportError:
-            pass
+        _tune_figures(out, tr, sr)
         print(out)
     return 0
+
+
+def _tune_figures(out: Path, tr, sr) -> None:
+    """tune.png (and sensitivity.png) when matplotlib is installed."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        from . import plot
+        plot.save(plot.tune_curves(tr), out / "tune.png")
+        if sr is not None:
+            plot.save(plot.sensitivity(sr), out / "sensitivity.png")
+    except ImportError:
+        pass
 
 
 def cmd_inspect(args) -> int:
     from .pipeline import prepare
     cfg = _cfg(args)
     pre = prepare(cfg, log=_log(args))
-    cov = pre.coverage
-    q = cfg.quality
     print(f"route {cfg.select.route}: {pre.observations.height:,} observations, {pre.snapshots.height:,} polls")
+    _print_coverage(pre.coverage, cfg.quality)
+    print("\nGTFS versions (main pattern runs):")
+    with pl.Config(tbl_rows=50, tbl_cols=12, fmt_str_lengths=40, tbl_width_chars=200):
+        print(pre.network.versions().with_columns(pl.col("links_added").list.len(), pl.col("links_removed").list.len()))
+    if pre.network.missing_dates:
+        print("dates without GTFS service:", ", ".join(d.isoformat() for d in pre.network.missing_dates))
+    _print_placement(pre)
+    if not args.no_agreement:
+        _print_agreement(cfg, pre)
+    return 0
+
+
+def _print_coverage(cov: pl.DataFrame, q) -> None:
     day = (cov.filter(pl.col("hour").is_between(6, 20))
            .group_by("service_date").agg(pl.col("coverage").mean().alias("mean_cov"),
                                          (pl.col("coverage") < q.min_hour_coverage).sum().alias("low_hours"),
@@ -139,15 +158,14 @@ def cmd_inspect(args) -> int:
     print("\ncoverage per service date (hours 6-20):")
     with pl.Config(tbl_rows=400, float_precision=2):
         print(day)
-    print("\nGTFS versions (main pattern runs):")
-    with pl.Config(tbl_rows=50, tbl_cols=12, fmt_str_lengths=40, tbl_width_chars=200):
-        print(pre.network.versions().with_columns(pl.col("links_added").list.len(), pl.col("links_removed").list.len()))
-    if pre.network.missing_dates:
-        print("dates without GTFS service:", ", ".join(d.isoformat() for d in pre.network.missing_dates))
+
+
+def _print_placement(pre) -> None:
+    """Placement report, flagged and counted rows, passages."""
+    from .schema import Flag
     print("\nplacement:")
     for k, v in (pre.place_report or {}).items():
         print(f"  {k:<36} {v:>12,}" if isinstance(v, (int, float)) else f"  {k:<36} {v}")
-    from .schema import Flag
     if "flags" in pre.placed.columns and pre.placed.height:
         fl = pre.placed["flags"].fill_null(0).to_numpy()
         for name in ("LAYOVER", "SHORT_WORKING", "OFF_PATTERN", "AMBIGUOUS", "AT_STOP"):
@@ -159,16 +177,18 @@ def cmd_inspect(args) -> int:
         p = pre.passages
         print(f"\npassages: {p['n'].sum():,.0f} link passages"
               + (f" (feed {p['n_feed'].sum():,.0f}, events {p['n_events'].sum():,.0f})" if p["n_events"].null_count() < p.height else ""))
-    if not args.no_agreement:
-        from .metrics import reference_agreement
-        from .pipeline import run
-        res = run(cfg, prepared=pre, hotspot_kw={"B": min(cfg.params.bootstrap, 100)})
-        ag = reference_agreement(res.analysis, res.hotspots)
-        print(f"\nreferences: evening {cfg.params.reference_hours[0]}-{cfg.params.reference_hours[1]} h vs line level "
-              "(median running obs / passage / m, 6-23 h); day-band excess profiles:")
-        with pl.Config(tbl_rows=10, tbl_cols=20, tbl_width_chars=200, float_precision=3):
-            print(ag)
-    return 0
+
+
+def _print_agreement(cfg: Config, pre) -> None:
+    """Evening vs line-level reference (runs the analysis, hotspots with at most 100 draws)."""
+    from .metrics import reference_agreement
+    from .pipeline import run
+    res = run(cfg, prepared=pre, hotspot_kw={"B": min(cfg.params.bootstrap, 100)})
+    ag = reference_agreement(res.analysis, res.hotspots)
+    print(f"\nreferences: evening {cfg.params.reference_hours[0]}-{cfg.params.reference_hours[1]} h vs line level "
+          "(median running obs / passage / m, 6-23 h); day-band excess profiles:")
+    with pl.Config(tbl_rows=10, tbl_cols=20, tbl_width_chars=200, float_precision=3):
+        print(ag)
 
 
 def _period(s: str) -> str:
@@ -186,10 +206,7 @@ def cmd_compare(args) -> int:
     st = res.comparison.stretches
     if st.height:
         from .report import name_map
-        nm = name_map(cfg.report.names, res.prepared.network)
-        fix = lambda c: pl.col(c).replace(nm) if nm else pl.col(c)  # noqa: E731
-        t = st.select("direction_id", "rank",
-                      pl.concat_str([fix("from_stop_name"), pl.lit(" -> "), fix("to_stop_name")]).alias("stretch"),
+        t = st.select("direction_id", "rank", _stretch(name_map(cfg.report.names, res.prepared.network)),
                       pl.col("x0_m").round(0), pl.col("x1_m").round(0), "zone",
                       pl.col("hours").cast(pl.List(pl.Utf8)).list.join(",").alias("hours"),
                       pl.col("delta_s").round(0).alias("delta_s_per_veh"),
@@ -226,29 +243,35 @@ def cmd_sensitivity_table(args) -> int:
     return 0
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="microsegments", description="Vehicle observations per micro-segment of a transit line.")
-    sub = ap.add_subparsers(dest="cmd", required=True)
+def _common(p) -> None:
+    p.add_argument("config", help="TOML configuration")
+    p.add_argument("--segment-m", type=float, help="override params.segment_m")
+    p.add_argument("--dates", help="override select.dates (YYYY-MM-DD..YYYY-MM-DD)")
+    p.add_argument("-q", "--quiet", action="store_true")
 
-    def common(p):
-        p.add_argument("config", help="TOML configuration")
-        p.add_argument("--segment-m", type=float, help="override params.segment_m")
-        p.add_argument("--dates", help="override select.dates (YYYY-MM-DD..YYYY-MM-DD)")
-        p.add_argument("-q", "--quiet", action="store_true")
 
-    p = sub.add_parser("run", help="full pipeline: parquet + JSON + HTML report + PNG matrices")
-    common(p)
-    p.add_argument("-o", "--out", default="out", help="output directory (default: out)")
+def _page_opts(p) -> None:
+    """The report page options (run, compare)."""
     p.add_argument("--lang", default="fr", choices=["fr", "en"])
     p.add_argument("--title")
     p.add_argument("--source", help="data credit shown in the page footer")
     p.add_argument("--no-html", action="store_true")
+
+
+def _parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(prog="microsegments", description="Vehicle observations per micro-segment of a transit line.")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("run", help="full pipeline: parquet + JSON + HTML report + PNG matrices")
+    _common(p)
+    p.add_argument("-o", "--out", default="out", help="output directory (default: out)")
+    _page_opts(p)
     p.add_argument("--no-png", action="store_true")
     p.add_argument("--no-hotspots", action="store_true")
     p.set_defaults(fn=cmd_run)
 
     p = sub.add_parser("tune", help="choose the segment length (and optionally run the sensitivity suite)")
-    common(p)
+    _common(p)
     p.add_argument("--lengths", default="10,15,20,30,40,50,75,100")
     p.add_argument("--bootstrap", type=int, default=100)
     p.add_argument("--sensitivity", action="store_true")
@@ -256,26 +279,23 @@ def main(argv=None) -> int:
     p.set_defaults(fn=cmd_tune)
 
     p = sub.add_parser("hotspots", help="print the hotspot table")
-    common(p)
+    _common(p)
     p.add_argument("-o", "--out", help="write .parquet, .csv or .geojson")
     p.set_defaults(fn=cmd_hotspots)
 
     p = sub.add_parser("inspect", help="coverage, GTFS versions, placement / drop counts, reference agreement")
-    common(p)
+    _common(p)
     p.add_argument("--no-agreement", action="store_true", help="skip the analysis (evening vs line-level reference)")
     p.set_defaults(fn=cmd_inspect)
 
     p = sub.add_parser("compare", help="compare two periods of the same line: parquet + JSON + HTML")
-    common(p)
+    _common(p)
     p.add_argument("--a", required=True, type=_period, help="period A, before (YYYY-MM-DD..YYYY-MM-DD)")
     p.add_argument("--b", required=True, type=_period, help="period B, after (YYYY-MM-DD..YYYY-MM-DD)")
     p.add_argument("-o", "--out", default="out_compare", help="output directory (default: out_compare)")
     p.add_argument("--bootstrap", type=int, help="bootstrap draws (default: params.bootstrap)")
     p.add_argument("--top", type=int, default=20, help="changes printed (0: all)")
-    p.add_argument("--lang", default="fr", choices=["fr", "en"])
-    p.add_argument("--title")
-    p.add_argument("--source", help="data credit shown in the page footer")
-    p.add_argument("--no-html", action="store_true")
+    _page_opts(p)
     p.set_defaults(fn=cmd_compare)
 
     p = sub.add_parser("sensitivity-table", help="sensitivity suite over several configs -> one tidy table + markdown")
@@ -286,8 +306,11 @@ def main(argv=None) -> int:
     p.add_argument("-o", "--out", help="directory for sensitivity_table.{parquet,csv,md}")
     p.add_argument("-q", "--quiet", action="store_true")
     p.set_defaults(fn=cmd_sensitivity_table)
+    return ap
 
-    args = ap.parse_args(argv)
+
+def main(argv=None) -> int:
+    args = _parser().parse_args(argv)
     return args.fn(args)
 
 

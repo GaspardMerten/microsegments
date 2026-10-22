@@ -153,40 +153,52 @@ def project_monotone(stops_ll, shape_ll) -> tuple[np.ndarray, np.ndarray]:
         d = haversine(stops[:, 0], stops[:, 1], shape[0, 0], shape[0, 1]) if len(shape) else np.zeros(n)
         return np.zeros(n), d
     fr = LocalFrame.around(stops, shape)
-    p, q = fr.xy(stops), fr.xy(shape)
+    d, s_all = _segment_projections(fr.xy(stops), fr.xy(shape), cum)
+    i = _monotone_path(d)
+    s = s_all[np.arange(n), i].copy()
+    off = d[np.arange(n), i]
+    _clamp_order(s, off)
+    return s, off
+
+
+def _segment_projections(p: np.ndarray, q: np.ndarray, cum: np.ndarray):
+    """(n, m) lateral distance of each point ``p`` to each segment of polyline ``q`` and along-line position of
+    its projection there (``cum``: metres at the vertices)."""
     a, v = q[:-1], np.diff(q, axis=0)                       # (m, 2)
     vv = (v * v).sum(axis=1)
     rel = p[:, None, :] - a[None, :, :]                     # (n, m, 2)
     t = np.where(vv > 0, (rel * v[None]).sum(axis=2) / np.where(vv > 0, vv, 1.0), 0.0)
     t = np.clip(t, 0.0, 1.0)
     d = np.hypot(*(rel - t[..., None] * v[None]).transpose(2, 0, 1))   # (n, m)
-    seg = np.diff(cum)
-    s_all = cum[:-1][None, :] + t * seg[None, :]
+    return d, cum[:-1][None, :] + t * np.diff(cum)[None, :]
 
+
+def _monotone_path(d: np.ndarray) -> np.ndarray:
+    """Segment index of each stop minimising the total (robust) cost under a non-decreasing order."""
     # robust cost: a stop far off the shape barely pulls on the solution, so it cannot drag its
     # neighbours along; it still lands at its nearest feasible point
     cost = np.where(d < ROBUST_OFF_M, d, ROBUST_OFF_M + 0.01 * (d - ROBUST_OFF_M))
-    m = d.shape[1]
+    n, m = d.shape
     back = np.zeros((n, m), dtype=np.int64)
     best = cost[0].copy()
     for j in range(1, n):
         # running prefix minimum of best over i' <= i, with its argmin (earliest on ties)
         pm = np.minimum.accumulate(best)
         changed = np.concatenate([[True], best[1:] < pm[:-1]])
-        arg = np.maximum.accumulate(np.where(changed, np.arange(m), 0))
-        back[j] = arg
+        back[j] = np.maximum.accumulate(np.where(changed, np.arange(m), 0))
         best = cost[j] + pm
     i = np.empty(n, dtype=np.int64)
     # last stop: on ties prefer the latest segment (end of a loop shape)
-    last = best.min()
-    i[-1] = int(np.flatnonzero(best <= last + 1e-9)[-1])
+    i[-1] = int(np.flatnonzero(best <= best.min() + 1e-9)[-1])
     for j in range(n - 1, 0, -1):
         i[j - 1] = back[j, i[j]]
-    s = s_all[np.arange(n), i].copy()
-    off = d[np.arange(n), i]
-    # order violations can only happen between stops sharing a segment: the stop closer to the
-    # shape keeps its projection, the other one is moved onto it
-    for j in range(1, n):
+    return i
+
+
+def _clamp_order(s: np.ndarray, off: np.ndarray) -> None:
+    """Order violations (in place) can only happen between stops sharing a segment: the stop closer to the
+    shape keeps its projection, the other one is moved onto it."""
+    for j in range(1, len(s)):
         if s[j] < s[j - 1]:
             if off[j] <= off[j - 1]:
                 k = j - 1
@@ -195,7 +207,6 @@ def project_monotone(stops_ll, shape_ll) -> tuple[np.ndarray, np.ndarray]:
                     k -= 1
             else:
                 s[j] = s[j - 1]
-    return s, off
 
 
 def shape_slices(stops_ll, shape_ll=None) -> Slices:

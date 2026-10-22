@@ -85,45 +85,45 @@ def coverage(snapshots: pl.DataFrame | pl.LazyFrame, tz: str = "Europe/Brussels"
     tf, gf = t[fr], (nxt_any - t)[fr]
     fs, fl = _split_by_hour(tf, tf + np.minimum(gf, cap), tz)
 
-    # stalls: runs of consecutive frozen snapshots longer than max_frozen_s
-    ss, sl = np.zeros(0), np.zeros(0)
-    if fr.any():
-        span = np.minimum(nxt_any - t, cap)
-        edge = np.diff(np.concatenate([[0], fr.astype(np.int8), [0]]))
-        r0, r1 = np.flatnonzero(edge == 1), np.flatnonzero(edge == -1)     # [r0, r1) frozen runs
-        csum = np.concatenate([[0.0], np.cumsum(np.where(fr, span, 0.0))])
-        dur = csum[r1] - csum[r0]
-        long = dur > max_frozen_s
-        if long.any():
-            ss, sl = _split_by_hour(t[r0[long]], t[r0[long]] + dur[long], tz)
-
+    ss, sl = _stalls(t, fr, np.minimum(nxt_any - t, cap), max_frozen_s, tz)
     sds = service_day_start
-    cov = _hour_table(ps, pl_, "covered_s", tz, sds)
-    frz = _hour_table(fs, fl, "frozen_s", tz, sds)
-    stall = _hour_table(ss, sl, "stall_s", tz, sds) if ss.size else None
-    nsn = _hour_table(tp, np.ones_like(tp), "n_snapshots", tz, sds)
-
+    tables = [_hour_table(ps, pl_, "covered_s", tz, sds), _hour_table(fs, fl, "frozen_s", tz, sds),
+              _hour_table(tp, np.ones_like(tp), "n_snapshots", tz, sds)]
+    if ss.size:
+        tables.append(_hour_table(ss, sl, "stall_s", tz, sds))
     if dates is None:
         if t.size == 0:
             return pl.DataFrame(schema=COVERAGE)
         sd = add_local_time(df.select("ts"), tz, sds)["service_date"]
         dates = (sd.min(), sd.max())
     h0 = parse_hhmm(sds) // 3600
-    grid = pl.DataFrame({"service_date": pl.date_range(dates[0], dates[1], "1d", eager=True)}).join(
+    out = pl.DataFrame({"service_date": pl.date_range(dates[0], dates[1], "1d", eager=True)}).join(
         pl.DataFrame({"hour": pl.Series(range(h0, h0 + 24), dtype=pl.Int8)}), how="cross")
-    out = (grid.join(cov, on=["service_date", "hour"], how="left")
-           .join(frz, on=["service_date", "hour"], how="left")
-           .join(nsn, on=["service_date", "hour"], how="left")
-           .with_columns(pl.col("covered_s", "frozen_s", "n_snapshots").fill_null(0.0)))
-    if stall is not None:
-        out = out.join(stall, on=["service_date", "hour"], how="left").with_columns(pl.col("stall_s").fill_null(0.0))
-    else:
-        out = out.with_columns(pl.lit(0.0).alias("stall_s"))
+    for tab in tables:
+        out = out.join(tab, on=["service_date", "hour"], how="left")
+    if not ss.size:
+        out = out.with_columns(pl.lit(None, pl.Float64).alias("stall_s"))
+    out = out.with_columns(pl.col("covered_s", "frozen_s", "n_snapshots", "stall_s").fill_null(0.0))
     c = (pl.col("covered_s") / 3600.0).clip(0.0, 1.0)
     flags = (pl.when(c < min_coverage).then(Flag.LOW_COVERAGE).otherwise(0)
              + pl.when(pl.col("stall_s") > 0).then(Flag.FROZEN).otherwise(0))
     out = out.with_columns(c.alias("coverage"), flags.alias("flags"))
     return out.select([pl.col(k).cast(v) for k, v in COVERAGE.items()]).sort("service_date", "hour")
+
+
+def _stalls(t: np.ndarray, fr: np.ndarray, span: np.ndarray, max_frozen_s: float, tz: str):
+    """Runs of consecutive frozen snapshots (``fr``, each lasting ``span``) longer than ``max_frozen_s``, split by
+    hour: (starts, lengths)."""
+    if not fr.any():
+        return np.zeros(0), np.zeros(0)
+    edge = np.diff(np.concatenate([[0], fr.astype(np.int8), [0]]))
+    r0, r1 = np.flatnonzero(edge == 1), np.flatnonzero(edge == -1)     # [r0, r1) frozen runs
+    csum = np.concatenate([[0.0], np.cumsum(np.where(fr, span, 0.0))])
+    dur = csum[r1] - csum[r0]
+    long = dur > max_frozen_s
+    if not long.any():
+        return np.zeros(0), np.zeros(0)
+    return _split_by_hour(t[r0[long]], t[r0[long]] + dur[long], tz)
 
 
 def coverage_from_config(snapshots, cfg, dates=None) -> pl.DataFrame:

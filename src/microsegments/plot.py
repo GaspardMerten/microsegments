@@ -10,12 +10,11 @@ fixed height, the top of the scale.
 """
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import numpy as np
 import polars as pl
-
-import warnings
 
 from . import scale as S
 from .metrics import BAND_HOUR, Analysis
@@ -95,6 +94,28 @@ def _no_vmax(vmax):
 def _seconds(an: Analysis, m: str, v, len_m) -> np.ndarray:
     """T (seconds per passage per 30 m) of values ``v`` of metric ``m`` (NaN stays NaN)."""
     return S.to_seconds(m, np.asarray(v, dtype=float), np.asarray(len_m, dtype=float), an.params.tick_s)
+
+
+def _colors(T: np.ndarray, null) -> np.ndarray:
+    """RGBA of seconds ``T`` on the fixed scale; NaN: ``null``."""
+    colors = cmap()(norm()(np.nan_to_num(T, nan=S.T_MIN)))
+    colors[np.isnan(T)] = null
+    return colors
+
+
+def _when(code: int) -> str:
+    return next((k for k, c in BAND_HOUR.items() if c == code), None) or f"{code} h"
+
+
+def _runs(hours) -> list[list[int]]:
+    """Consecutive runs [first, last] of sorted hours."""
+    runs: list[list[int]] = []
+    for h in hours:
+        if runs and h == runs[-1][1] + 1:
+            runs[-1][1] = h
+        else:
+            runs.append([h, h])
+    return runs
 
 
 def _colorbar(fig, ax, m: str, fraction: float):
@@ -231,16 +252,8 @@ def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_passage", day
     m = _metric(metric)
     _no_vmax(vmax)
     an = _subset(an0, days)
-    f = _frame(an, direction_id, m, pattern_uid).filter(pl.col("hour") >= 0)
     hours = sorted(an.hours)
-    segs = f.select("seg_idx", "x0_m", "len_m", "zone").unique("seg_idx").sort("seg_idx")
-    si = {s: i for i, s in enumerate(segs["seg_idx"].to_list())}
-    Z = np.full((len(hours), segs.height), np.nan)
-    hi = {h: i for i, h in enumerate(hours)}
-    f = f.with_columns(pl.Series("T", _seconds(an, m, f["value"].fill_null(np.nan).to_numpy(), f["len_m"].to_numpy())))
-    for h, s, v in f.select("hour", "seg_idx", "T").iter_rows():
-        if h in hi and v is not None and np.isfinite(v):
-            Z[hi[h], si[s]] = v
+    segs, Z = _grid(an, direction_id, m, pattern_uid, hours)
     x_edges = np.concatenate([segs["x0_m"].to_numpy(), [segs["x0_m"][-1] + segs["len_m"][-1]]]) if segs.height else np.array([0, 1])
     y_edges = np.arange(len(hours) + 1) - 0.5 + hours[0] if hours else np.array([0, 1])
     fig, ax = (ax.figure, ax) if ax is not None else plt.subplots(figsize=figsize, layout="constrained")
@@ -253,20 +266,7 @@ def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_passage", day
     for x in xs:
         ax.axvline(x, color=BG, lw=1.2)
     if hotspots is not None and hotspots.height and (pattern_uid is None or pattern_uid == an.dirs[direction_id].display_uid):
-        from matplotlib.patches import Rectangle
-        for r in hotspots.filter(pl.col("direction_id") == direction_id).iter_rows(named=True):
-            hs_h = sorted(int(h) for h in (r["hours"] or []))
-            runs: list[list[int]] = []
-            for h in hs_h:
-                if runs and h == runs[-1][1] + 1:
-                    runs[-1][1] = h
-                else:
-                    runs.append([h, h])
-            for a, b in runs:
-                ax.add_patch(Rectangle((r["x0_m"], a - 0.5), r["x1_m"] - r["x0_m"], b - a + 1, fill=False,
-                                       ec="#ffe600", lw=1.2))
-            ax.text(r["x1_m"], (hs_h[0] if hs_h else hours[0]) - 0.6, str(r["rank"]), color="#ffe600", fontsize=8,
-                    ha="left", va="bottom")
+        _outline_hours(ax, hotspots.filter(pl.col("direction_id") == direction_id), hours)
     ax.set_xlim(x_edges[0], x_edges[-1])
     ax.set_ylim(y_edges[-1], y_edges[0])
     ax.set_yticks(hours)
@@ -276,6 +276,32 @@ def matrix(analysis, direction_id: int = 0, metric: str = "obs_per_passage", day
     if colorbar:
         _colorbar(fig, ax, m, 0.025)
     return fig
+
+
+def _grid(an: Analysis, direction_id: int, m: str, pattern_uid, hours) -> tuple[pl.DataFrame, np.ndarray]:
+    """The segments (seg_idx, x0_m, len_m, zone) and the (hour, segment) matrix of seconds T (NaN: no value)."""
+    f = _frame(an, direction_id, m, pattern_uid).filter(pl.col("hour") >= 0)
+    segs = f.select("seg_idx", "x0_m", "len_m", "zone").unique("seg_idx").sort("seg_idx")
+    si = {s: i for i, s in enumerate(segs["seg_idx"].to_list())}
+    Z = np.full((len(hours), segs.height), np.nan)
+    hi = {h: i for i, h in enumerate(hours)}
+    f = f.with_columns(pl.Series("T", _seconds(an, m, f["value"].fill_null(np.nan).to_numpy(), f["len_m"].to_numpy())))
+    for h, s, v in f.select("hour", "seg_idx", "T").iter_rows():
+        if h in hi and v is not None and np.isfinite(v):
+            Z[hi[h], si[s]] = v
+    return segs, Z
+
+
+def _outline_hours(ax, hotspots: pl.DataFrame, hours) -> None:
+    """Hotspots outlined in yellow over their runs of hours, ranked at the top right."""
+    from matplotlib.patches import Rectangle
+    for r in hotspots.iter_rows(named=True):
+        hs_h = sorted(int(h) for h in (r["hours"] or []))
+        for a, b in _runs(hs_h):
+            ax.add_patch(Rectangle((r["x0_m"], a - 0.5), r["x1_m"] - r["x0_m"], b - a + 1, fill=False,
+                                   ec="#ffe600", lw=1.2))
+        ax.text(r["x1_m"], (hs_h[0] if hs_h else hours[0]) - 0.6, str(r["rank"]), color="#ffe600", fontsize=8,
+                ha="left", va="bottom")
 
 
 def profile(analysis, direction_id: int = 0, hour: int | str | None = None, *, band: str | None = None,
@@ -293,15 +319,14 @@ def profile(analysis, direction_id: int = 0, hour: int | str | None = None, *, b
     code = _hour_code(hour, band)
     f = _frame(an, direction_id, m, pattern_uid).sort("seg_idx")
     top = auto_vmax(None, m)
-    shown = lambda d: S.from_seconds(m, _seconds(an, m, d["value"].fill_null(np.nan).to_numpy(), d["len_m"].to_numpy()))  # noqa: E731
+    T_of = lambda d: _seconds(an, m, d["value"].fill_null(np.nan).to_numpy(), d["len_m"].to_numpy())
     cur = f.filter(pl.col("hour") == code)
     if not stops:
         cur = cur.filter(pl.col("zone") != "stop")
-    T = _seconds(an, m, cur["value"].fill_null(np.nan).to_numpy(), cur["len_m"].to_numpy())
+    T = T_of(cur)
     v = S.from_seconds(m, T)
     fig, ax = (ax.figure, ax) if ax is not None else plt.subplots(figsize=figsize, layout="constrained")
-    colors = cmap()(norm()(np.nan_to_num(T, nan=S.T_MIN)))
-    colors[np.isnan(T)] = (0, 0, 0, 0)
+    colors = _colors(T, (0, 0, 0, 0))
     ax.bar(cur["x0_m"].to_numpy(), np.nan_to_num(v), width=cur["len_m"].to_numpy() * 0.96, align="edge", color=colors)
     if not stops:
         _hatch_spans(ax, f.filter((pl.col("hour") == code) & (pl.col("zone") == "stop")), 0, top * 1.05, alpha=0.55)
@@ -309,7 +334,7 @@ def profile(analysis, direction_id: int = 0, hour: int | str | None = None, *, b
         ev = f.filter(pl.col("hour") == BAND_HOUR["evening"])
         if not stops:
             ev = ev.filter(pl.col("zone") != "stop")
-        x0, ln, ve = ev["x0_m"].to_numpy(), ev["len_m"].to_numpy(), shown(ev)
+        x0, ln, ve = ev["x0_m"].to_numpy(), ev["len_m"].to_numpy(), S.from_seconds(m, T_of(ev))
         ax.hlines(ve, x0, x0 + ln, color="0.25", lw=1.3, label="evening")
     xs, names = _stops(an, direction_id, links, pattern_uid)
     for x in xs:
@@ -318,8 +343,7 @@ def profile(analysis, direction_id: int = 0, hour: int | str | None = None, *, b
     ax.set_xlim(xs[0], xs[-1])
     ax.set_ylim(0, top * 1.05)
     ax.set_ylabel(METRICS[m] + (" (per 10 m)" if m == "obs_per_h_10m" else " (per 30 m)"), fontsize=9)
-    when = next((k for k, c in BAND_HOUR.items() if c == code), None) or f"{code} h"
-    ax.set_title(title or f"{_dir_label(an, direction_id, links, pattern_uid)} · {when}", fontsize=11, loc="left")
+    ax.set_title(title or f"{_dir_label(an, direction_id, links, pattern_uid)} · {_when(code)}", fontsize=11, loc="left")
     return fig
 
 
@@ -344,21 +368,11 @@ def map(analysis, direction_id: int = 0, hour: int | str | None = None, *, band:
     if not any(len(c) for c in lines):
         raise ValueError("segments have no geometry (segment(..., geometry=True))")
     T = _seconds(an, m, g["value"].fill_null(np.nan).to_numpy(), g["len_m"].to_numpy())
-    colors = cmap()(norm()(np.nan_to_num(T, nan=S.T_MIN)))
-    colors[np.isnan(T)] = matplotlib_color(NULL_COLOR)
+    colors = _colors(T, matplotlib_color(NULL_COLOR))
     masked = np.array(g["zone"].to_list()) == "stop" if not stops else np.zeros(len(lines), bool)
     fig, ax = (ax.figure, ax) if ax is not None else plt.subplots(figsize=figsize, layout="constrained")
     if hotspots is not None and hotspots.height and uid == an.dirs[direction_id].display_uid:
-        x0 = g["x0_m"].to_numpy()
-        x1 = x0 + g["len_m"].to_numpy()
-        for r in hotspots.filter(pl.col("direction_id") == direction_id).iter_rows(named=True):
-            sel = np.flatnonzero((x1 > r["x0_m"] + 0.5) & (x0 < r["x1_m"] - 0.5))
-            hl = [lines[i] for i in sel if len(lines[i])]
-            if hl:
-                ax.add_collection(LineCollection(hl, colors="#ffe600", linewidths=linewidth * 1.8, capstyle="butt", zorder=1))
-                mid = hl[len(hl) // 2][len(hl[len(hl) // 2]) // 2]
-                ax.annotate(str(r["rank"]), mid, xytext=(8, 8), textcoords="offset points", fontsize=8,
-                            bbox=dict(boxstyle="circle", fc="#ffe600", ec="none"), zorder=4)
+        _map_hotspots(ax, hotspots.filter(pl.col("direction_id") == direction_id), g, lines, linewidth)
     keep = ~masked
     ax.add_collection(LineCollection([c for c, k in zip(lines, keep) if k], colors=colors[keep], linewidths=linewidth,
                                      capstyle="butt", zorder=2))
@@ -367,27 +381,48 @@ def map(analysis, direction_id: int = 0, hour: int | str | None = None, *, band:
         ax.add_collection(LineCollection(ml, colors=MASK_COLOR, linewidths=linewidth, capstyle="butt", zorder=2))
         ax.add_collection(LineCollection(ml, colors=MASK_HATCH, linewidths=linewidth, linestyles=(0, (1, 1.5)),
                                          capstyle="butt", zorder=2))
-    xs, names = _stops(an, direction_id, links, uid)
     if links is not None:
-        lk = links.filter(pl.col("pattern_uid") == uid).sort("link_idx")
-        geos = [gm for gm in lk["geometry"].to_list() if gm]
-        pts = [gm[0] for gm in geos] + ([geos[-1][-1]] if geos else [])
-        if pts:
-            P = np.asarray(pts)
-            ax.scatter(P[:, 0], P[:, 1], s=14, c="#9aa4b8", edgecolors="k", linewidths=0.6, zorder=3)
-            for (x, y), n in zip(P, names):
-                ax.annotate(n, (x, y), xytext=(4, 4), textcoords="offset points", fontsize=7)
-    allc = np.concatenate([c for c in lines if len(c)])
+        _map_stops(ax, links.filter(pl.col("pattern_uid") == uid).sort("link_idx"), _stops(an, direction_id, links, uid)[1])
+    _fit_lonlat(ax, np.concatenate([c for c in lines if len(c)]))
+    ax.set_title(title or f"{_dir_label(an, direction_id, links, uid)} · {_when(code)} · {METRICS[m]}", fontsize=10, loc="left")
+    _colorbar(fig, ax, m, 0.03)
+    return fig
+
+
+def _map_hotspots(ax, hotspots: pl.DataFrame, g: pl.DataFrame, lines, linewidth: float) -> None:
+    """Hotspot stretches as wide yellow halos under the segments, with their rank."""
+    from matplotlib.collections import LineCollection
+    x0 = g["x0_m"].to_numpy()
+    x1 = x0 + g["len_m"].to_numpy()
+    for r in hotspots.iter_rows(named=True):
+        sel = np.flatnonzero((x1 > r["x0_m"] + 0.5) & (x0 < r["x1_m"] - 0.5))
+        hl = [lines[i] for i in sel if len(lines[i])]
+        if hl:
+            ax.add_collection(LineCollection(hl, colors="#ffe600", linewidths=linewidth * 1.8, capstyle="butt", zorder=1))
+            mid = hl[len(hl) // 2][len(hl[len(hl) // 2]) // 2]
+            ax.annotate(str(r["rank"]), mid, xytext=(8, 8), textcoords="offset points", fontsize=8,
+                        bbox={"boxstyle": "circle", "fc": "#ffe600", "ec": "none"}, zorder=4)
+
+
+def _map_stops(ax, lk: pl.DataFrame, names) -> None:
+    """Stop dots (the links' first points and the last link's end) and names."""
+    geos = [gm for gm in lk["geometry"].to_list() if gm]
+    pts = [gm[0] for gm in geos] + ([geos[-1][-1]] if geos else [])
+    if pts:
+        P = np.asarray(pts)
+        ax.scatter(P[:, 0], P[:, 1], s=14, c="#9aa4b8", edgecolors="k", linewidths=0.6, zorder=3)
+        for (x, y), n in zip(P, names):
+            ax.annotate(n, (x, y), xytext=(4, 4), textcoords="offset points", fontsize=7)
+
+
+def _fit_lonlat(ax, allc: np.ndarray) -> None:
+    """Frame the lon / lat points with a 5 % pad, equal metres on both axes, no ticks."""
     pad = 0.05 * max(np.ptp(allc[:, 0]), np.ptp(allc[:, 1]), 1e-3)
     ax.set_xlim(allc[:, 0].min() - pad, allc[:, 0].max() + pad)
     ax.set_ylim(allc[:, 1].min() - pad, allc[:, 1].max() + pad)
     ax.set_aspect(1 / np.cos(np.radians(allc[:, 1].mean())))
     ax.set_xticks([])
     ax.set_yticks([])
-    when = next((k for k, c in BAND_HOUR.items() if c == code), None) or f"{code} h"
-    ax.set_title(title or f"{_dir_label(an, direction_id, links, uid)} · {when} · {METRICS[m]}", fontsize=10, loc="left")
-    _colorbar(fig, ax, m, 0.03)
-    return fig
 
 
 def matplotlib_color(c: str):

@@ -301,61 +301,20 @@ def build_network(source: GtfsSource | str, route: str, dates: Iterable, *,
             stops_seen.setdefault(r[0], r)
         used: set[str] = set()
         for d in by_feed[path]:
-            on = active_services(feed, d)
-            counts = (fp.trips.filter(pl.col("service_id").is_in(list(on)))
-                      .group_by("pkey").agg(n=pl.len()))
-            if not len(counts):
+            rows = _day_rows(feed, fp, d)
+            if not rows:
                 missing.append(d)
-                continue
-            cnt = dict(zip(counts["pkey"].to_list(), counts["n"].to_list()))
-            for direction in sorted({fp.info[k]["direction_id"] for k in cnt}):
-                keys = [k for k in cnt if fp.info[k]["direction_id"] == direction]
-                keys = choose_main(keys, cnt, {k: fp.info[k]["seq"] for k in keys}, {k: fp.info[k]["uid"] for k in keys})
-                main = fp.info[keys[0]]
-                for k in keys:
-                    p = fp.info[k]
-                    kind, off = classify(p["seq"], main["seq"])
-                    day_rows.append({"service_date": d, "route_id": p["route_id"], "direction_id": direction,
-                                     "pattern_uid": p["uid"], "n_trips": cnt[k], "is_main": k == keys[0],
-                                     "kind": kind, "parent_uid": main["uid"] if kind in ("short", "detour") else None,
-                                     "parent_offset": off})
-                    used.add(k)
+            day_rows += [r for r, _ in rows]
+            used |= {k for _, k in rows}
         uid_of = pl.DataFrame({"pkey": list(used), "pattern_uid": [fp.info[k]["uid"] for k in used]},
                               schema={"pkey": pl.Utf8, "pattern_uid": pl.Utf8})
         trip_rows.append(fp.trips.join(uid_of, on="pkey", how="inner")
                          .select(pl.col("trip_id").cast(pl.Utf8), pl.col("service_id").cast(pl.Utf8),
                                  "direction_id", "pattern_uid"))
-        # register links of the busiest patterns first (their geometry seeds new keys)
-        tot = Counter()
-        for r in day_rows:
-            tot[r["pattern_uid"]] += r["n_trips"]
-        for k in sorted(used, key=lambda k: (-tot[fp.info[k]["uid"]], fp.info[k]["uid"])):
-            p = fp.info[k]
-            if p["uid"] in pat_rows:
-                continue
-            sl = p["slices"]
-            s0 = np.concatenate([[0.0], np.cumsum(sl.lengths)])
-            for i in range(len(p["seq"]) - 1):
-                key = registry.key_for(p["seq"][i], p["seq"][i + 1], sl.coords[i], float(sl.lengths[i]))
-                link_rows.append({"pattern_uid": p["uid"], "link_idx": i, "link_key": key,
-                                  "from_stop": p["seq"][i], "to_stop": p["seq"][i + 1],
-                                  "from_name": p["names"][i], "to_name": p["names"][i + 1],
-                                  "s0_m": float(s0[i]), "len_m": float(sl.lengths[i]),
-                                  "geometry": _ll_list(sl.coords[i])})
-            pat_rows[p["uid"]] = {"pattern_uid": p["uid"], "route_id": p["route_id"],
-                                  "route_short_name": p["route_short_name"], "direction_id": p["direction_id"],
-                                  "stop_ids": p["seq"], "stop_names": p["names"],
-                                  "length_m": float(sl.lengths.sum()), "geometry": _ll_list(p["geometry"])}
+        _register(fp, used, day_rows, pat_rows, link_rows, registry)
 
     days = pl.DataFrame(day_rows, schema={**schema.PATTERN_DAY, **PATTERN_DAY_EXTRA})
-    # pattern-level kind: the class it has on most of its days (ties: main < short < detour < other)
-    for uid, row in pat_rows.items():
-        mine = [r for r in day_rows if r["pattern_uid"] == uid]
-        kinds = Counter(r["kind"] for r in mine)
-        kind = min(kinds, key=lambda k: (-kinds[k], KIND_ORDER[k]))
-        parents = Counter((r["parent_uid"], r["parent_offset"]) for r in mine if r["kind"] == kind)
-        parent, off = max(parents, key=lambda po: (parents[po], str(po[0]))) if kind in ("short", "detour") else (None, None)
-        row.update(kind=kind, parent_uid=parent, parent_offset=off)
+    _pattern_kinds(pat_rows, day_rows)
     patterns = pl.DataFrame(list(pat_rows.values()), schema=schema.PATTERN).sort("direction_id", "pattern_uid")
     links = pl.DataFrame(link_rows, schema=schema.LINK).sort("pattern_uid", "link_idx")
     stops = pl.DataFrame([dict(zip(("stop_id", "stop_name", "stop_lon", "stop_lat"), r)) for r in stops_seen.values()],
@@ -363,6 +322,63 @@ def build_network(source: GtfsSource | str, route: str, dates: Iterable, *,
     return Network(route=route, patterns=patterns, pattern_days=days.sort("service_date", "direction_id", "n_trips",
                                                                           descending=[False, False, True]),
                    links=links, stops=stops, registry=registry, missing_dates=sorted(set(missing)),
-                   trips=(pl.concat(trip_rows).unique(["trip_id", "pattern_uid"], keep="first") if trip_rows else
+                   trips=(pl.concat(trip_rows).unique(["trip_id", "pattern_uid"], keep="first", maintain_order=True) if trip_rows else
                           pl.DataFrame(schema={"trip_id": pl.Utf8, "service_id": pl.Utf8, "direction_id": pl.Int8,
                                                "pattern_uid": pl.Utf8})))
+
+
+def _day_rows(feed, fp, d) -> list[tuple[dict, str]]:
+    """PATTERN_DAY rows of date ``d`` (with each one's pattern key): per direction, the main pattern first, the
+    others classified against it."""
+    on = active_services(feed, d)
+    counts = fp.trips.filter(pl.col("service_id").is_in(list(on))).group_by("pkey").agg(n=pl.len())
+    cnt = dict(zip(counts["pkey"].to_list(), counts["n"].to_list()))
+    out = []
+    for direction in sorted({fp.info[k]["direction_id"] for k in cnt}):
+        keys = [k for k in cnt if fp.info[k]["direction_id"] == direction]
+        keys = choose_main(keys, cnt, {k: fp.info[k]["seq"] for k in keys}, {k: fp.info[k]["uid"] for k in keys})
+        main = fp.info[keys[0]]
+        for k in keys:
+            p = fp.info[k]
+            kind, off = classify(p["seq"], main["seq"])
+            out.append(({"service_date": d, "route_id": p["route_id"], "direction_id": direction,
+                         "pattern_uid": p["uid"], "n_trips": cnt[k], "is_main": k == keys[0],
+                         "kind": kind, "parent_uid": main["uid"] if kind in ("short", "detour") else None,
+                         "parent_offset": off}, k))
+    return out
+
+
+def _register(fp, used: set[str], day_rows: list[dict], pat_rows: dict, link_rows: list, registry: KeyRegistry) -> None:
+    """Pattern and link rows of the feed's patterns ``used`` not seen yet; links of the busiest patterns (trips over
+    ``day_rows`` so far) are registered first (their geometry seeds new keys)."""
+    tot = Counter()
+    for r in day_rows:
+        tot[r["pattern_uid"]] += r["n_trips"]
+    for k in sorted(used, key=lambda k: (-tot[fp.info[k]["uid"]], fp.info[k]["uid"])):
+        p = fp.info[k]
+        if p["uid"] in pat_rows:
+            continue
+        sl = p["slices"]
+        s0 = np.concatenate([[0.0], np.cumsum(sl.lengths)])
+        for i in range(len(p["seq"]) - 1):
+            key = registry.key_for(p["seq"][i], p["seq"][i + 1], sl.coords[i], float(sl.lengths[i]))
+            link_rows.append({"pattern_uid": p["uid"], "link_idx": i, "link_key": key,
+                              "from_stop": p["seq"][i], "to_stop": p["seq"][i + 1],
+                              "from_name": p["names"][i], "to_name": p["names"][i + 1],
+                              "s0_m": float(s0[i]), "len_m": float(sl.lengths[i]),
+                              "geometry": _ll_list(sl.coords[i])})
+        pat_rows[p["uid"]] = {"pattern_uid": p["uid"], "route_id": p["route_id"],
+                              "route_short_name": p["route_short_name"], "direction_id": p["direction_id"],
+                              "stop_ids": p["seq"], "stop_names": p["names"],
+                              "length_m": float(sl.lengths.sum()), "geometry": _ll_list(p["geometry"])}
+
+
+def _pattern_kinds(pat_rows: dict, day_rows: list[dict]) -> None:
+    """Pattern-level kind (in place): the class it has on most of its days (ties: main < short < detour < other)."""
+    for uid, row in pat_rows.items():
+        mine = [r for r in day_rows if r["pattern_uid"] == uid]
+        kinds = Counter(r["kind"] for r in mine)
+        kind = min(kinds, key=lambda k: (-kinds[k], KIND_ORDER[k]))
+        parents = Counter((r["parent_uid"], r["parent_offset"]) for r in mine if r["kind"] == kind)
+        parent, off = max(parents, key=lambda po: (parents[po], str(po[0]))) if kind in ("short", "detour") else (None, None)
+        row.update(kind=kind, parent_uid=parent, parent_offset=off)

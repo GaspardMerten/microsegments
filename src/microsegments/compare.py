@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import warnings
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable
@@ -50,8 +51,9 @@ from typing import Any, Callable
 import numpy as np
 import polars as pl
 
-from .hotspots import _bh, _erfc, bootstrap_weights, nanquantile0
+from .hotspots import link_names, stretch_ends
 from .metrics import BAND_HOUR, BANDS, Analysis, DirData
+from .stats import bh, boot_test, bootstrap_weights
 
 COMPARE_BANDS = ("am", "pm", "day", "evening", "midday")
 MIN_DAYS = 5          # per period, as hotspots.MIN_HOTSPOT_DAYS: fewer days, no stretch is reported
@@ -172,14 +174,10 @@ def compare(a: Analysis, b: Analysis, *, B: int = 200, seed: int = 0, theta_s: f
     """Compare period A (``a``, before) with period B (``b``, after) for the same line. See the module
     docstring. ``links`` (schema.LINK, e.g. ``network.links``) names the stops of the stretches."""
     tick = b.params.tick_s
-    theta = theta_bin_s / tick
     hours = [h for h in b.hours if h in set(a.hours)]
-    rng_a, rng_b = np.random.default_rng([seed, 0]), np.random.default_rng([seed, 1])
-    names: dict[str, tuple] = {}
-    if links is not None:
-        for r in links.select("link_key", "from_name", "to_name").iter_rows():
-            names.setdefault(r[0], (r[1], r[2]))
-
+    rngs = np.random.default_rng([seed, 0]), np.random.default_rng([seed, 1])
+    names = link_names(links)
+    stat = {"B": B, "theta": theta_bin_s / tick, "q": q, "alpha": 1 - level, "stratified": stratified, "chunk": chunk}
     bin_frames, str_rows, unm, freq_rows, dirs = [], [], [], [], {}
     status = "computed"
     for dirid in sorted(set(a.dirs) & set(b.dirs)):
@@ -188,103 +186,112 @@ def compare(a: Analysis, b: Analysis, *, B: int = 200, seed: int = 0, theta_s: f
             continue
         if min(len(dA.days), len(dB.days)) < MIN_DAYS:
             status = f"too_few_days: {len(dA.days)} / {len(dB.days)} included days < {MIN_DAYS}"
-        al = _align(dA, dB, dirid)
-        dirs[dirid] = al
-        m = al.kA >= 0
-        # unmatched segments, both ways (A: those of A's display pattern)
-        for j in np.flatnonzero(~m):
-            k = al.kB[j]
-            unm.append((dirid, "b", dB.seg_keys[k], dB.link_keys[dB.seg_link[k]]))
-        matched_a = set(al.kA[m].tolist())
-        for k in dA.pattern_segs[dA.display_uid]:
-            if int(k) not in matched_a:
-                unm.append((dirid, "a", dA.seg_keys[k], dA.link_keys[dA.seg_link[k]]))
-        ciA, ciB = _cols(a, dA, hours), _cols(b, dB, hours)
-        labels = dB.cols[ciB]
-        J = len(al.kB)
-        kA = np.where(m, al.kA, 0)
-        eA, eB = a.estimate(dirid), b.estimate(dirid)
-        nanA = lambda x: np.where(m[None, :], x, np.nan)  # noqa: E731
-        oa, ob = nanA(_pick(eA, "obs_per_passage", ciA, kA)[0]), _pick(eB, "obs_per_passage", ciB, al.kB)[0]
-        xa, xb = nanA(_pick(eA, "excess_per_passage", ciA, kA)[0]), _pick(eB, "excess_per_passage", ciB, al.kB)[0]
-        la, lb = nanA(_pick(eA, "excess_line_per_passage", ciA, kA)[0]), _pick(eB, "excess_line_per_passage", ciB, al.kB)[0]
-        ra, rb = np.where(m, eA["ref"][0][kA], np.nan), eB["ref"][0][al.kB]
-        fa = nanA(_pph(_pick(eA, "passages", ciA, kA)[0], _pick(eA, "n_cells", ciA, kA)[0], labels))
-        fb = _pph(_pick(eB, "passages", ciB, al.kB)[0], _pick(eB, "n_cells", ciB, al.kB)[0], labels)
-        delta = ob - oa
-        dx = xb - xa
-        # bootstrap: independent day resampling of each period, paired by draw index
-        WA = bootstrap_weights(dA.dow, B, rng_a, _strat(dA.dow, stratified))
-        WB = bootstrap_weights(dB.dow, B, rng_b, _strat(dB.dow, stratified))
-        draws = _draws(b, dirid, WB, ciB, al.kB, chunk) - _draws(a, dirid, WA, ciA, kA, chunk)
-        draws[:, :, ~m] = np.nan
-        alpha = 1 - level
-        import warnings
-        with np.errstate(all="ignore"), warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            lo, hi = nanquantile0(draws, [alpha / 2, 1 - alpha / 2])
-            se = np.nanstd(draws, axis=0, ddof=1)
-            z = (np.abs(delta) - theta) / se
-            z = np.where(se > 0, z, np.where(np.abs(delta) > theta, np.inf, -np.inf))
-            p = 0.5 * _erfc(z / math.sqrt(2)).astype(float)
-        p[~np.isfinite(delta)] = np.nan
-        reject = _bh(p, q)
-        sig = reject & ((lo > theta) | (hi < -theta))
-        sign = np.where(sig, np.sign(delta), 0).astype(np.int8)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            fchg = fb / fa - 1
-        u = dB.display_uid
-        C = len(labels)
-        bin_frames.append(pl.DataFrame({
-            "direction_id": np.full(J * C, dirid, np.int8),
-            "pattern_uid": [u] * (J * C),
-            "seg_key": np.repeat(dB.seg_keys[al.kB], C).tolist(),
-            "seg_key_a": np.repeat(np.where(m, dA.seg_keys[kA], None), C).tolist(),
-            "match": np.repeat(np.array(al.how, dtype=object), C).tolist(),
-            "seg_idx": np.repeat(dB.pattern_seg_idx[u], C).astype(np.int32),
-            "x0_m": np.repeat(dB.pattern_x0[u], C),
-            "len_m": np.repeat(dB.seg_len[al.kB], C),
-            "zone": np.repeat(dB.seg_zone[al.kB], C).tolist(),
-            "link_key": np.repeat(dB.link_keys[dB.seg_link[al.kB]], C).tolist(),
-            "hour": np.tile(labels, J).astype(np.int8),
-            "obs_per_passage_a": oa.T.reshape(-1), "obs_per_passage_b": ob.T.reshape(-1),
-            "ref_a": np.repeat(ra, C), "ref_b": np.repeat(rb, C),
-            "excess_a": xa.T.reshape(-1), "excess_b": xb.T.reshape(-1),
-            "excess_line_a": la.T.reshape(-1), "excess_line_b": lb.T.reshape(-1),
-            "delta": delta.T.reshape(-1), "delta_s": (delta * tick).T.reshape(-1),
-            "delta_excess": dx.T.reshape(-1),
-            "ci_lo": lo.T.reshape(-1), "ci_hi": hi.T.reshape(-1), "se": se.T.reshape(-1), "p": p.T.reshape(-1),
-            "significant": sig.T.reshape(-1), "sign": sign.T.reshape(-1),
-            "passages_per_h_a": fa.T.reshape(-1), "passages_per_h_b": fb.T.reshape(-1),
-            "freq_change": fchg.T.reshape(-1),
-        }, nan_to_null=True))
-        # direction-level frequency per hour (median over matched segments)
-        import warnings as _w
-        with _w.catch_warnings():
-            _w.simplefilter("ignore", RuntimeWarning)
-            ma, mb = np.nanmedian(fa, axis=1), np.nanmedian(fb, axis=1)
-        for c, h in enumerate(labels):
-            freq_rows.append((dirid, int(h), float(ma[c]), float(mb[c]),
-                              float(mb[c] / ma[c] - 1) if ma[c] and np.isfinite(ma[c]) and ma[c] > 0 else float("nan")))
+        al = dirs[dirid] = _align(dA, dB, dirid)
+        unm += _unmatched(al)
+        r = _compare_dir(a, b, al, hours, rngs, **stat)
+        bin_frames.append(_bins_frame(al, r, tick))
+        freq_rows += _freq_rows(dirid, r["labels"], r["fa"], r["fb"])
         if status == "computed":
-            str_rows += _stretches(al, labels, sign, delta, draws, oa, ob, xa, xb, fa, fb, tick, alpha, gap,
-                                   freq_change, names, len(dA.days), len(dB.days), theta_s / tick)
-
-    bins = pl.concat(bin_frames) if bin_frames else pl.DataFrame()
-    st = pl.DataFrame(str_rows, schema=STRETCH_SCHEMA, orient="row") if str_rows else pl.DataFrame(schema=STRETCH_SCHEMA)
-    if st.height:
-        st = (st.with_columns(pl.col("veh_time_s_per_day").abs().alias("_a"))
-              .sort(["direction_id", "_a"], descending=[False, True]).drop("_a")
-              .with_columns(pl.int_range(1, pl.len() + 1).over("direction_id").cast(pl.Int16).alias("rank")))
-    unmatched = pl.DataFrame(unm, schema={"direction_id": pl.Int8, "period": pl.Utf8, "seg_key": pl.Utf8,
-                                          "link_key": pl.Utf8}, orient="row")
-    frequency = pl.DataFrame(freq_rows, schema={"direction_id": pl.Int8, "hour": pl.Int8, "passages_per_h_a": pl.Float64,
-                                                "passages_per_h_b": pl.Float64, "freq_change": pl.Float64},
-                             orient="row").fill_nan(None)
+            str_rows += _stretches(al, r, tick, stat["alpha"], gap, freq_change, names, len(dA.days), len(dB.days),
+                                   theta_s / tick)
     params = {"B": B, "seed": seed, "theta_s": theta_s, "theta_bin_s": theta_bin_s, "q": q, "level": level, "freq_change": freq_change,
               "gap": gap, "tick_s": tick, "hours": hours, "status": status}
-    return Comparison(a=a, b=b, bins=bins, stretches=st, unmatched=unmatched, frequency=frequency,
+    return Comparison(a=a, b=b, bins=pl.concat(bin_frames) if bin_frames else pl.DataFrame(), stretches=_ranked(str_rows),
+                      unmatched=pl.DataFrame(unm, schema={"direction_id": pl.Int8, "period": pl.Utf8, "seg_key": pl.Utf8,
+                                                          "link_key": pl.Utf8}, orient="row"),
+                      frequency=pl.DataFrame(freq_rows, schema={"direction_id": pl.Int8, "hour": pl.Int8,
+                                                                "passages_per_h_a": pl.Float64, "passages_per_h_b": pl.Float64,
+                                                                "freq_change": pl.Float64}, orient="row").fill_nan(None),
                       params=params, _dirs=dirs)
+
+
+def _unmatched(al: _Dir) -> list[tuple]:
+    """Segments without a match, both ways (A: those of A's display pattern)."""
+    dA, dB, m = al.dA, al.dB, al.kA >= 0
+    out = [(al.dirid, "b", dB.seg_keys[k], dB.link_keys[dB.seg_link[k]]) for k in al.kB[~m]]
+    matched_a = set(al.kA[m].tolist())
+    return out + [(al.dirid, "a", dA.seg_keys[k], dA.link_keys[dA.seg_link[k]])
+                  for k in dA.pattern_segs[dA.display_uid] if int(k) not in matched_a]
+
+
+def _compare_dir(a: Analysis, b: Analysis, al: _Dir, hours, rngs, *, B, theta, q, alpha, stratified, chunk) -> dict:
+    """Per aligned segment and column (hours, then bands) of one direction: both periods' values (unmatched: NaN
+    in A), the change ``delta`` = B - A in obs per passage, its bootstrap CI, BH test and sign of a sure change."""
+    dA, dB, dirid, m = al.dA, al.dB, al.dirid, al.kA >= 0
+    ciA, ciB = _cols(a, dA, hours), _cols(b, dB, hours)
+    labels = dB.cols[ciB]
+    kA = np.where(m, al.kA, 0)
+    eA, eB = a.estimate(dirid), b.estimate(dirid)
+    pa = lambda name: np.where(m[None, :], _pick(eA, name, ciA, kA)[0], np.nan)
+    pb = lambda name: _pick(eB, name, ciB, al.kB)[0]
+    r = {"labels": labels, "kA": kA, "oa": pa("obs_per_passage"), "ob": pb("obs_per_passage"),
+         "xa": pa("excess_per_passage"), "xb": pb("excess_per_passage"),
+         "la": pa("excess_line_per_passage"), "lb": pb("excess_line_per_passage"),
+         "ra": np.where(m, eA["ref"][0][kA], np.nan), "rb": eB["ref"][0][al.kB],
+         "fa": np.where(m[None, :], _pph(_pick(eA, "passages", ciA, kA)[0], _pick(eA, "n_cells", ciA, kA)[0], labels), np.nan),
+         "fb": _pph(pb("passages"), pb("n_cells"), labels)}
+    delta = r["delta"] = r["ob"] - r["oa"]
+    # bootstrap: independent day resampling of each period, paired by draw index
+    WA = bootstrap_weights(dA.dow, B, rngs[0], _strat(dA.dow, stratified))
+    WB = bootstrap_weights(dB.dow, B, rngs[1], _strat(dB.dow, stratified))
+    draws = r["draws"] = _draws(b, dirid, WB, ciB, al.kB, chunk) - _draws(a, dirid, WA, ciA, kA, chunk)
+    draws[:, :, ~m] = np.nan
+    lo, hi, r["se"], p = boot_test(np.abs(delta), draws, theta, alpha)
+    p[~np.isfinite(delta)] = np.nan
+    sig = bh(p, q) & ((lo > theta) | (hi < -theta))
+    r.update(lo=lo, hi=hi, p=p, sig=sig, sign=np.where(sig, np.sign(delta), 0).astype(np.int8))
+    return r
+
+
+def _bins_frame(al: _Dir, r: dict, tick: float) -> pl.DataFrame:
+    dA, dB, m, kA, labels = al.dA, al.dB, al.kA >= 0, r["kA"], r["labels"]
+    u, J, C = dB.display_uid, len(al.kB), len(labels)
+    flat = lambda x: x.T.reshape(-1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        fchg = r["fb"] / r["fa"] - 1
+    return pl.DataFrame({
+        "direction_id": np.full(J * C, al.dirid, np.int8),
+        "pattern_uid": [u] * (J * C),
+        "seg_key": np.repeat(dB.seg_keys[al.kB], C).tolist(),
+        "seg_key_a": np.repeat(np.where(m, dA.seg_keys[kA], None), C).tolist(),
+        "match": np.repeat(np.array(al.how, dtype=object), C).tolist(),
+        "seg_idx": np.repeat(dB.pattern_seg_idx[u], C).astype(np.int32),
+        "x0_m": np.repeat(dB.pattern_x0[u], C),
+        "len_m": np.repeat(dB.seg_len[al.kB], C),
+        "zone": np.repeat(dB.seg_zone[al.kB], C).tolist(),
+        "link_key": np.repeat(dB.link_keys[dB.seg_link[al.kB]], C).tolist(),
+        "hour": np.tile(labels, J).astype(np.int8),
+        "obs_per_passage_a": flat(r["oa"]), "obs_per_passage_b": flat(r["ob"]),
+        "ref_a": np.repeat(r["ra"], C), "ref_b": np.repeat(r["rb"], C),
+        "excess_a": flat(r["xa"]), "excess_b": flat(r["xb"]),
+        "excess_line_a": flat(r["la"]), "excess_line_b": flat(r["lb"]),
+        "delta": flat(r["delta"]), "delta_s": flat(r["delta"] * tick),
+        "delta_excess": flat(r["xb"] - r["xa"]),
+        "ci_lo": flat(r["lo"]), "ci_hi": flat(r["hi"]), "se": flat(r["se"]), "p": flat(r["p"]),
+        "significant": flat(r["sig"]), "sign": flat(r["sign"]),
+        "passages_per_h_a": flat(r["fa"]), "passages_per_h_b": flat(r["fb"]),
+        "freq_change": flat(fchg),
+    }, nan_to_null=True)
+
+
+def _freq_rows(dirid: int, labels, fa, fb) -> list[tuple]:
+    """Direction-level frequency per column (median over matched segments)."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        ma, mb = np.nanmedian(fa, axis=1), np.nanmedian(fb, axis=1)
+    return [(dirid, int(h), float(ma[c]), float(mb[c]),
+             float(mb[c] / ma[c] - 1) if ma[c] and np.isfinite(ma[c]) and ma[c] > 0 else float("nan"))
+            for c, h in enumerate(labels)]
+
+
+def _ranked(rows: list[tuple]) -> pl.DataFrame:
+    """Stretches ranked per direction by |vehicle time per day|, largest first."""
+    st = pl.DataFrame(rows, schema=STRETCH_SCHEMA, orient="row") if rows else pl.DataFrame(schema=STRETCH_SCHEMA)
+    if not st.height:
+        return st
+    return (st.with_columns(pl.col("veh_time_s_per_day").abs().alias("_a"))
+            .sort(["direction_id", "_a"], descending=[False, True]).drop("_a")
+            .with_columns(pl.int_range(1, pl.len() + 1).over("direction_id").cast(pl.Int16).alias("rank")))
 
 
 STRETCH_SCHEMA = {
@@ -323,59 +330,68 @@ def _seg_hours(labels: np.ndarray, sign: np.ndarray, s: int) -> list[set[int]]:
     return out
 
 
-def _stretches(al: _Dir, labels, sign, delta, draws, oa, ob, xa, xb, fa, fb, tick, alpha, gap, freq_tol,
-               names, nda, ndb, theta_stretch) -> list[tuple]:
-    dB = al.dB
-    u = dB.display_uid
-    zone = dB.seg_zone[al.kB]
-    x0 = dB.pattern_x0[u]
-    ln = dB.seg_len[al.kB]
-    seg_idx = dB.pattern_seg_idx[u]
-    hc = np.flatnonzero(labels >= 0)
-    hrs = labels[hc]
+def _seg_groups(hs: list[set[int]], zone: np.ndarray, gap: int) -> list[list]:
+    """Runs [j0, j1, hours] of segments with retained hours, bridging ``gap`` segments within one zone kind."""
+    groups: list[list] = []
+    for j, h in enumerate(hs):
+        if not h:
+            continue
+        if groups:
+            g = groups[-1]
+            if j - g[1] <= gap + 1 and all(zone[i] == zone[j] for i in range(g[1], j + 1)):
+                g[1] = j
+                g[2] |= h
+                continue
+        groups.append([j, j, set(h)])
+    return groups
+
+
+def _stretches(al: _Dir, r: dict, tick, alpha, gap, freq_tol, names, nda, ndb, theta_stretch) -> list[tuple]:
+    labels, zone = r["labels"], al.dB.seg_zone[al.kB]
     rows = []
     for s in (1, -1):
-        hs = _seg_hours(labels, sign, s)
-        groups: list[list] = []
-        for j, h in enumerate(hs):
-            if not h:
-                continue
-            if groups:
-                g = groups[-1]
-                if j - g[1] <= gap + 1 and all(zone[i] == zone[j] for i in range(g[1], j + 1)):
-                    g[1] = j
-                    g[2] |= h
-                    continue
-            groups.append([j, j, set(h)])
-        for j0, j1, hset in groups:
-            sl = slice(j0, j1 + 1)
-            hidx = np.array([hc[np.flatnonzero(hrs == h)[0]] for h in sorted(hset)])
-            sx = np.nansum(delta[hidx][:, sl], axis=1)
-            pk = int(np.nanargmax(s * sx))
-            pcol = hidx[pk]
-            val = float(sx[pk])
-            dr = np.nansum(draws[:, pcol, sl], axis=1)
-            dr = dr[np.isfinite(dr)]
-            lo, hi = (np.quantile(dr, [alpha / 2, 1 - alpha / 2]) if len(dr) else (np.nan, np.nan))
-            if not ((s > 0 and lo > theta_stretch) or (s < 0 and hi < -theta_stretch)):
-                continue                       # the stretch as a whole must move by more than theta_s
-            vt = float(np.nansum(delta[hidx][:, sl] * fb[hidx][:, sl]) * tick)
-            vt_all = float(np.nansum(delta[hc][:, sl] * fb[hc][:, sl]) * tick)
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", RuntimeWarning)
-                pa = float(np.nanmean(np.nanmean(fa[hidx][:, sl], axis=0)))
-                pb = float(np.nanmean(np.nanmean(fb[hidx][:, sl], axis=0)))
-            fc = pb / pa - 1 if pa > 0 and np.isfinite(pa) and np.isfinite(pb) else float("nan")
-            lk0 = dB.link_keys[dB.seg_link[al.kB[j0]]]
-            lk1 = dB.link_keys[dB.seg_link[al.kB[j1]]]
-            rows.append((al.dirid, u, 0, s, int(seg_idx[j0]), int(seg_idx[j1]), float(x0[j0]), float(x0[j1] + ln[j1]),
-                         names.get(lk0, (lk0, None))[0], names.get(lk1, (None, lk1))[1], str(zone[j0]),
-                         sorted(int(h) for h in hset), int(labels[pcol]), val, float(lo), float(hi), val * tick,
-                         float(np.nansum(oa[pcol, sl])), float(np.nansum(ob[pcol, sl])),
-                         float(np.nansum(xa[pcol, sl])), float(np.nansum(xb[pcol, sl])), vt, vt_all, pa, pb, fc,
-                         bool(np.isfinite(fc) and abs(fc) > freq_tol), nda, ndb, dB.seg_keys[al.kB[sl]].tolist()))
+        for j0, j1, hset in _seg_groups(_seg_hours(labels, r["sign"], s), zone, gap):
+            row = _stretch_row(al, r, s, j0, j1, hset, tick, alpha, freq_tol, names, nda, ndb, theta_stretch)
+            if row:
+                rows.append(row)
     return rows
+
+
+def _stretch_row(al: _Dir, r: dict, s: int, j0: int, j1: int, hset: set[int], tick, alpha, freq_tol, names, nda, ndb,
+                 theta_stretch) -> tuple | None:
+    """One stretch of sign ``s`` over aligned segments j0..j1 and hours ``hset``, measured at its peak column; None
+    when the stretch as a whole does not move by more than ``theta_stretch``."""
+    dB, labels, delta, fa, fb = al.dB, r["labels"], r["delta"], r["fa"], r["fb"]
+    u = dB.display_uid
+    x0, ln, seg_idx, zone = dB.pattern_x0[u], dB.seg_len[al.kB], dB.pattern_seg_idx[u], dB.seg_zone[al.kB]
+    hc = np.flatnonzero(labels >= 0)
+    hrs = labels[hc]
+    sl = slice(j0, j1 + 1)
+    hidx = np.array([hc[np.flatnonzero(hrs == h)[0]] for h in sorted(hset)])
+    sx = np.nansum(delta[hidx][:, sl], axis=1)
+    pk = int(np.nanargmax(s * sx))
+    pcol = hidx[pk]
+    val = float(sx[pk])
+    dr = np.nansum(r["draws"][:, pcol, sl], axis=1)
+    dr = dr[np.isfinite(dr)]
+    lo, hi = (np.quantile(dr, [alpha / 2, 1 - alpha / 2]) if len(dr) else (np.nan, np.nan))
+    if not ((s > 0 and lo > theta_stretch) or (s < 0 and hi < -theta_stretch)):
+        return None
+    vt = float(np.nansum(delta[hidx][:, sl] * fb[hidx][:, sl]) * tick)
+    vt_all = float(np.nansum(delta[hc][:, sl] * fb[hc][:, sl]) * tick)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        pa = float(np.nanmean(np.nanmean(fa[hidx][:, sl], axis=0)))
+        pb = float(np.nanmean(np.nanmean(fb[hidx][:, sl], axis=0)))
+    fc = pb / pa - 1 if pa > 0 and np.isfinite(pa) and np.isfinite(pb) else float("nan")
+    lk0 = dB.link_keys[dB.seg_link[al.kB[j0]]]
+    lk1 = dB.link_keys[dB.seg_link[al.kB[j1]]]
+    at = lambda k: float(np.nansum(r[k][pcol, sl]))
+    return (al.dirid, u, 0, s, int(seg_idx[j0]), int(seg_idx[j1]), float(x0[j0]), float(x0[j1] + ln[j1]),
+            *stretch_ends(names, lk0, lk1), str(zone[j0]),
+            sorted(int(h) for h in hset), int(labels[pcol]), val, float(lo), float(hi), val * tick,
+            at("oa"), at("ob"), at("xa"), at("xb"), vt, vt_all, pa, pb, fc,
+            bool(np.isfinite(fc) and abs(fc) > freq_tol), nda, ndb, dB.seg_keys[al.kB[sl]].tolist())
 
 
 # ------------------------------------------------------------------------------------ contract

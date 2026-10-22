@@ -71,29 +71,7 @@ def _track_group(t: list, s: list, minpos: list, real: list, end_s: float | None
         k = 0
         for r in range(i, j):
             p = s[r]
-            m = None
-            while k < len(open_):
-                tr = open_[k]
-                if tr[1] > p + ahead:            # track ahead of this vehicle: not seen now
-                    k += 1
-                    continue
-                if (stale is not None and tr[1] > p and tt - tr[0] > stale and k + 1 < len(open_)):
-                    # a stale ghost just ahead vs a fresh track behind: vehicles do not reverse, the
-                    # detection is the follower (the ghost's vehicle vanished, e.g. at a terminus)
-                    nx = open_[k + 1]
-                    if (nx[1] <= p and tt - nx[0] <= stale and p - nx[1] <= vmax * (tt - nx[0]) + ahead
-                            and nx[1] >= minpos[r]):
-                        k += 1
-                        continue
-                if p - tr[1] <= vmax * (tt - tr[0]) + ahead and tr[1] >= minpos[r]:
-                    if p >= end and real[r] and tr[1] >= end and k + 1 < len(open_):
-                        nx = open_[k + 1]
-                        if p - nx[1] <= vmax * (tt - nx[0]) + ahead and nx[1] >= minpos[r]:
-                            open_[k], open_[k + 1] = nx, tr
-                            tr = nx
-                    m = tr
-                    k += 1
-                break
+            m, k = _take(open_, k, tt, p, minpos[r], real[r], end, ahead, vmax, stale)
             if m is None:
                 m = [tt, p, len(tracks)]
                 open_.append(m)
@@ -105,6 +83,32 @@ def _track_group(t: list, s: list, minpos: list, real: list, end_s: float | None
             tid[r] = m[2]
         i = j
     return tid, tracks
+
+
+def _take(open_: list, k: int, tt: float, p: float, minpos: float, real: bool, end: float, ahead: float, vmax: float,
+          stale: float | None):
+    """The open track (sorted front to back, from ``k`` on) taking a detection at ``p`` at time ``tt``, or None;
+    and the next ``k``. May swap a parked track at the end with the running one behind it."""
+    reach = lambda tr: p - tr[1] <= vmax * (tt - tr[0]) + ahead and tr[1] >= minpos  # noqa: E731
+    while k < len(open_):
+        tr = open_[k]
+        if tr[1] > p + ahead:            # track ahead of this vehicle: not seen now
+            k += 1
+            continue
+        if stale is not None and tr[1] > p and tt - tr[0] > stale and k + 1 < len(open_):
+            # a stale ghost just ahead vs a fresh track behind: vehicles do not reverse, the detection is
+            # the follower (the ghost's vehicle vanished, e.g. at a terminus)
+            nx = open_[k + 1]
+            if nx[1] <= p and tt - nx[0] <= stale and reach(nx):
+                k += 1
+                continue
+        if not reach(tr):
+            return None, k
+        if p >= end and real and tr[1] >= end and k + 1 < len(open_) and reach(open_[k + 1]):
+            open_[k], open_[k + 1] = open_[k + 1], tr
+            tr = open_[k]
+        return tr, k + 1
+    return None, k
 
 
 def track_anonymous(placed: pl.DataFrame, *, ghost_s: float = GHOST_S, ahead_m: float = AHEAD_M,
@@ -129,7 +133,6 @@ def track_anonymous(placed: pl.DataFrame, *, ghost_s: float = GHOST_S, ahead_m: 
     s_all = ok["s_m"].cast(pl.Float64).to_numpy()
     fl = ok["flags"].fill_null(0).to_numpy().astype(np.int64)
     standing_all = ((fl & Flag.AT_STOP) != 0) & ((fl & Flag.LAYOVER) == 0)
-    ix_all = ok["_ix"].to_numpy()
     pos_all = ok["pos_m"].cast(pl.Float64).fill_null(0.0).to_numpy()
     end_pseudo = ((fl & Flag.LAYOVER) != 0) & ~ok["count"].fill_null(True).to_numpy() & (pos_all > 0)
     real_all = ok["count"].fill_null(True).to_numpy() | ((fl & Flag.LAYOVER) == 0)
@@ -138,35 +141,22 @@ def track_anonymous(placed: pl.DataFrame, *, ghost_s: float = GHOST_S, ahead_m: 
                      | (pl.col("pattern_uid") != pl.col("pattern_uid").shift(1))).fill_null(True).cum_sum()
                     .alias("g"))["g"].to_numpy()
     bounds = np.flatnonzero(np.diff(grp)) + 1
-    starts = np.concatenate([[0], bounds])
-    ends = np.concatenate([bounds, [len(grp)]])
     labels = np.empty(len(grp), dtype=object)
     drop = []
     dates = ok["service_date"].to_list()
     uids = ok["pattern_uid"].to_list()
-    for a, b in zip(starts, ends):
+    for a, b in zip(np.concatenate([[0], bounds]), np.concatenate([bounds, [len(grp)]])):
         if b <= a:
             continue
         t = t_all[a:b].tolist()
         s = s_all[a:b].tolist()
-        end_s = None if compat else float(max(s))
-        tid, tracks = _track_group(t, s, minpos_all[a:b].tolist(), real_all[a:b].tolist(), end_s, ghost_s,
-                                   ahead_m, vmax_ms, None if compat else STALE_S)
-        prefix = f"{dates[a]}/{uids[a]}/"
-        names = [prefix + str(k) for k in range(len(tracks))]
+        tid, tracks = _track_group(t, s, minpos_all[a:b].tolist(), real_all[a:b].tolist(), None if compat else float(max(s)),
+                                   ghost_s, ahead_m, vmax_ms, None if compat else STALE_S)
+        names = [f"{dates[a]}/{uids[a]}/{k}" for k in range(len(tracks))]
         labels[a:b] = [names[k] for k in tid]
-        if standing_s is None:
-            continue
-        for rows in tracks:
-            r0 = rows[0]
-            if not standing_all[a + r0]:
-                continue
-            q = 0
-            while q < len(rows) and abs(s[rows[q]] - s[r0]) < 1e-3:
-                q += 1
-            if t[rows[q - 1]] - t[r0] >= standing_s:
-                drop += [a + r for r in rows[:q]]
-    lab = pl.DataFrame({"_ix": ix_all, "_tid": pl.Series(labels.tolist(), dtype=pl.Utf8),
+        if standing_s is not None:
+            drop += [a + r for r in _standing_start(tracks, t, s, standing_all[a:b], standing_s)]
+    lab = pl.DataFrame({"_ix": ok["_ix"].to_numpy(), "_tid": pl.Series(labels.tolist(), dtype=pl.Utf8),
                         "_drop": np.isin(np.arange(len(grp)), drop)})
     out = df.join(lab, on="_ix", how="left", maintain_order="left")
     out = out.with_columns(
@@ -176,6 +166,21 @@ def track_anonymous(placed: pl.DataFrame, *, ghost_s: float = GHOST_S, ahead_m: 
         .cast(pl.UInt16).alias("flags"),
     )
     return out.drop("_ix", "_tid", "_drop")
+
+
+def _standing_start(tracks: list[list[int]], t: list, s: list, standing: np.ndarray, standing_s: float) -> list[int]:
+    """Rows of the tracks that start standing at a stop (AT_STOP) for at least ``standing_s``: those first rows."""
+    out = []
+    for rows in tracks:
+        r0 = rows[0]
+        if not standing[r0]:
+            continue
+        q = 0
+        while q < len(rows) and abs(s[rows[q]] - s[r0]) < 1e-3:
+            q += 1
+        if t[rows[q - 1]] - t[r0] >= standing_s:
+            out += rows[:q]
+    return out
 
 
 # ---------------------------------------------------------------- crossings of counting lines
@@ -202,16 +207,7 @@ def crossings(placed: pl.DataFrame, *, ghost_s: float = GHOST_S, reset_m: float 
     empty = pl.DataFrame(schema={"service_date": pl.Date, "pattern_uid": pl.Utf8, "line": pl.Int64, "t": pl.Float64})
     if not d.height:
         return empty
-    key = ["pattern_uid", "service_date", "track_id"]
-    newkey = pl.any_horizontal([pl.col(c) != pl.col(c).shift(1) for c in key]).fill_null(True)
-    brk = newkey | ((pl.col("t") - pl.col("t").shift(1)) > ghost_s) | ((pl.col("s") - pl.col("s").shift(1)) < -reset_m)
-    d = d.with_columns(brk.fill_null(True).cum_sum().alias("run"))
-    d = d.with_columns(pl.col("s").cum_max().over("run").alias("cm"))
-    runs = (d.group_by("run", maintain_order=True)
-            .agg(pl.col("service_date").first(), pl.col("pattern_uid").first(), pl.len().alias("n"),
-                 pl.col("s").first().alias("s0"), pl.col("cm").last().alias("s1"),
-                 pl.col("term").last().alias("term"), pl.col("t").last().alias("tl"))
-            .filter(pl.col("n") >= 2))
+    d, runs = _runs(d, ghost_s, reset_m)
     if not runs.height:
         return empty
     s1 = runs["s1"].to_numpy()
@@ -225,15 +221,31 @@ def crossings(placed: pl.DataFrame, *, ghost_s: float = GHOST_S, reset_m: float 
     first = np.repeat(np.cumsum(nl) - nl, nl)
     k = np.repeat(kmin, nl) + (np.arange(nl.sum()) - first)
     line_s = offset_m + k * step_m
+    # crossing time: interpolated on the run's running max position (runs kept apart by a large offset)
     big = 1e7
     xp = d["run"].to_numpy().astype(np.float64) * big + d["cm"].to_numpy()
-    fp = d["t"].to_numpy()
-    tc = np.interp(rid.astype(np.float64) * big + line_s, xp, fp)
+    tc = np.interp(rid.astype(np.float64) * big + line_s, xp, d["t"].to_numpy())
     sel = np.repeat(np.arange(runs.height), nl)
     beyond = line_s > s1[sel]
     tc[beyond] = runs["tl"].to_numpy()[sel][beyond]
     return pl.DataFrame({"service_date": runs["service_date"].gather(sel), "pattern_uid": runs["pattern_uid"].gather(sel),
                          "line": k, "t": tc})
+
+
+def _runs(d: pl.DataFrame, ghost_s: float, reset_m: float) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """``d`` with its monotone runs numbered (``run``; a new run at another track, a gap over ``ghost_s`` or a
+    step back over ``reset_m``) and the running max position ``cm``; and the runs of >= 2 rows: first position
+    s0, max s1, last term and time tl."""
+    key = ["pattern_uid", "service_date", "track_id"]
+    newkey = pl.any_horizontal([pl.col(c) != pl.col(c).shift(1) for c in key]).fill_null(True)
+    brk = newkey | ((pl.col("t") - pl.col("t").shift(1)) > ghost_s) | ((pl.col("s") - pl.col("s").shift(1)) < -reset_m)
+    d = d.with_columns(brk.fill_null(True).cum_sum().alias("run"))
+    d = d.with_columns(pl.col("s").cum_max().over("run").alias("cm"))
+    return d, (d.group_by("run", maintain_order=True)
+            .agg(pl.col("service_date").first(), pl.col("pattern_uid").first(), pl.len().alias("n"),
+                 pl.col("s").first().alias("s0"), pl.col("cm").last().alias("s1"),
+                 pl.col("term").last().alias("term"), pl.col("t").last().alias("tl"))
+            .filter(pl.col("n") >= 2))
 
 
 def _line_selection(stops_s: np.ndarray, lines: np.ndarray) -> list[np.ndarray]:

@@ -37,7 +37,8 @@ import numpy as np
 import polars as pl
 
 from .contract import CONTRACT_VERSION
-from .metrics import BANDS, DAY_HOURS, PAGE_BANDS, Analysis
+from .hotspots import hotspot_status
+from .metrics import BANDS, DAY_HOURS, PAGE_BANDS, Analysis, reference_agreement, version_groups
 from .schema import Flag
 
 ROUTE_TYPES = {0: "tram", 1: "metro", 2: "rail", 3: "bus", 4: "ferry", 5: "cable_tram", 6: "aerial_lift",
@@ -102,62 +103,66 @@ def _stop_ll(stops: pl.DataFrame | None, links: pl.DataFrame) -> list[list[float
     return out
 
 
+def _day_flags(n: int, D: int, min_days: int) -> int:
+    """FEW_DAYS / PARTIAL_VERSIONS of a segment or link valid on n of the D included days."""
+    return (Flag.FEW_DAYS if n < min_days else 0) | (Flag.PARTIAL_VERSIONS if n < D else 0)
+
+
 def _dir_entry(an: Analysis, dirid: int, uid: str, links: pl.DataFrame | None, stops: pl.DataFrame | None,
                names: dict[str, str]) -> dict[str, Any]:
     dd = an.dirs[dirid]
-    fix = lambda n: names.get(n, n) if n is not None else n
+    fix = lambda n: names.get(n, n) if n is not None else n  # noqa: E731
     lk = _links_of(links, an.segments, uid)
-    seg = an.segments.filter(pl.col("pattern_uid") == uid).sort("seg_idx")
     wk = an.to_contract_wk(dirid, pattern_uid=uid)
-    # wk is in the analysis seg_key order of the pattern (= seg_idx order); align the geometry on it
-    geo = dict(zip(seg["seg_key"].to_list(), seg["geometry"].to_list()))
-    kpos = {k: i for i, k in enumerate(dd.seg_keys.tolist())}
+    stops_e = _stops_entry(lk, stops, fix)
     lpos = {k: i for i, k in enumerate(dd.link_keys.tolist())}
-    D = len(dd.days)
-    nd_seg = dd.V.sum(0)
-    nd_link = dd.LV.sum(0)
-    link_key_order = {k: i for i, k in enumerate(lk["link_key"].to_list())}
-    s0 = lk["s0_m"].to_list()
-    x_stops = s0 + [s0[-1] + lk["len_m"].to_list()[-1]] if lk.height else []
-    stop_ids = lk["from_stop"].to_list() + lk["to_stop"].to_list()[-1:] if lk.height else []
-    stop_names = lk["from_name"].to_list() + lk["to_name"].to_list()[-1:] if lk.height else []
-    lls = _stop_ll(stops, lk) if lk.height else []
-
-    def seg_flags(k):
-        n = int(nd_seg[kpos[k]])
-        return (Flag.FEW_DAYS if n < an.quality.min_days else 0) | (Flag.PARTIAL_VERSIONS if n < D else 0)
-
-    def link_flags(k):
-        n = int(nd_link[lpos[k]])
-        return (Flag.FEW_DAYS if n < an.quality.min_days else 0) | (Flag.PARTIAL_VERSIONS if n < D else 0)
-
-    keys = wk["seg_key"]
-    x0 = dict(zip(seg["seg_key"].to_list(), seg["x0_m"].to_list()))
-    ln = dict(zip(seg["seg_key"].to_list(), seg["len_m"].to_list()))
-    zone = dict(zip(seg["seg_key"].to_list(), seg["zone"].to_list()))
-    slink = dict(zip(seg["seg_key"].to_list(), seg["link_key"].to_list()))
+    nd_link, D = dd.LV.sum(0), len(dd.days)
     return {
         "dir": int(dirid),
         "pattern_uid": uid,
-        "from": fix(stop_names[0]) if stop_names else None,
-        "to": fix(stop_names[-1]) if stop_names else None,
-        "stops": [{"id": i, "name": fix(n), "ll": ll, "x": round(float(x), 1)}
-                  for i, n, ll, x in zip(stop_ids, stop_names, lls, x_stops)],
+        "from": stops_e[0]["name"] if stops_e else None,
+        "to": stops_e[-1]["name"] if stops_e else None,
+        "stops": stops_e,
         "links": [{"key": r["link_key"], "from": fix(r["from_name"]), "to": fix(r["to_name"]),
-                   "len": round(float(r["len_m"]), 1), "n_days": int(nd_link[lpos[r["link_key"]]]) if r["link_key"] in lpos else 0,
-                   "flags": link_flags(r["link_key"]) if r["link_key"] in lpos else 0}
+                   "len": round(float(r["len_m"]), 1),
+                   "n_days": int(nd_link[lpos[r["link_key"]]]) if r["link_key"] in lpos else 0,
+                   "flags": _day_flags(int(nd_link[lpos[r["link_key"]]]), D, an.quality.min_days) if r["link_key"] in lpos else 0}
                   for r in lk.iter_rows(named=True)],
-        "seg": {
-            "key": keys,
-            "link": [link_key_order.get(slink[k], -1) for k in keys],
-            "x0": [round(float(x0[k]), 1) for k in keys],
-            "len": [round(float(ln[k]), 1) for k in keys],
-            "zone": [zone[k] for k in keys],
-            "c": [_round_ll(geo.get(k)) for k in keys],
-            "flags": [seg_flags(k) for k in keys],
-        },
+        "seg": _seg_entry(an, dd, uid, wk["seg_key"], lk),
         "wk": {k: wk[k] for k in ("obs", "cov", "p", "days", "n")},
-        "ref": _refs(an, dirid, keys),
+        "ref": _refs(an, dirid, wk["seg_key"]),
+    }
+
+
+def _stops_entry(lk: pl.DataFrame, stops: pl.DataFrame | None, fix) -> list[dict]:
+    """The pattern's stops: id, shown name, lon/lat, position along the pattern (m)."""
+    if not lk.height:
+        return []
+    s0 = lk["s0_m"].to_list()
+    x_stops = s0 + [s0[-1] + lk["len_m"].to_list()[-1]]
+    ids = lk["from_stop"].to_list() + lk["to_stop"].to_list()[-1:]
+    nms = lk["from_name"].to_list() + lk["to_name"].to_list()[-1:]
+    return [{"id": i, "name": fix(n), "ll": ll, "x": round(float(x), 1)}
+            for i, n, ll, x in zip(ids, nms, _stop_ll(stops, lk), x_stops)]
+
+
+def _seg_entry(an: Analysis, dd, uid: str, keys: list[str], lk: pl.DataFrame) -> dict[str, list]:
+    """Per segment of the pattern, in the contract's seg_key order (= seg_idx order): link index, position,
+    length, zone, geometry, flags."""
+    seg = an.segments.filter(pl.col("pattern_uid") == uid).sort("seg_idx")
+    col = lambda c: dict(zip(seg["seg_key"].to_list(), seg[c].to_list()))  # noqa: E731
+    x0, ln, zone, slink, geo = col("x0_m"), col("len_m"), col("zone"), col("link_key"), col("geometry")
+    link_order = {k: i for i, k in enumerate(lk["link_key"].to_list())}
+    kpos = {k: i for i, k in enumerate(dd.seg_keys.tolist())}
+    nd_seg, D = dd.V.sum(0), len(dd.days)
+    return {
+        "key": keys,
+        "link": [link_order.get(slink[k], -1) for k in keys],
+        "x0": [round(float(x0[k]), 1) for k in keys],
+        "len": [round(float(ln[k]), 1) for k in keys],
+        "zone": [zone[k] for k in keys],
+        "c": [_round_ll(geo.get(k)) for k in keys],
+        "flags": [_day_flags(int(nd_seg[kpos[k]]), D, an.quality.min_days) for k in keys],
     }
 
 
@@ -233,33 +238,7 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
     if net is not None and route_id is None and net.patterns.height:
         route_id = net.patterns["route_id"][0]
 
-    dirs = []
-    for dirid in sorted(an.dirs):
-        dd = an.dirs[dirid]
-        if len(dd.days) == 0:
-            continue
-        e = _dir_entry(an, dirid, dd.display_uid, links, stops, names)
-        from .metrics import version_groups
-        others = [u for u in version_groups(dd) if u != dd.display_uid]   # one per distinct link sequence
-        e["versions"] = [dd.display_uid] + others
-        e["alt"] = [{k: v for k, v in _dir_entry(an, dirid, u, links, stops, names).items() if k != "dir"}
-                    for u in others]
-        dirs.append(e)
-
-    # coverage per date x output hour, over every selected date (included or not)
-    exc = {r[0]: r[1] for r in an.excluded_days.iter_rows()}
-    dh = an.day_hours
-    if coverage is not None:
-        dh = coverage.select("service_date", "hour", "coverage")
-    dates = sorted(set(dh["service_date"].to_list()) | set(exc) | set(an.days))
-    rng = an.select.date_range()
-    if rng is not None:
-        dates = [d for d in dates if rng[0] <= d <= rng[1]]
-    cmap = {(r[0], int(r[1])): r[2] for r in dh.select("service_date", "hour", "coverage").iter_rows()}
-    c = [[None if cmap.get((d, h)) is None else round(float(cmap[(d, h)]), 3) for h in an.hours] for d in dates]
-    inc_set = set(an.days)
-    inc = [True if d in inc_set else exc.get(d, "not_selected") for d in dates]
-
+    dates, c, inc, exc = _coverage(an, coverage)
     p = an.params
     period = {
         "first": (min(an.days) if an.days else (dates[0] if dates else None)),
@@ -268,26 +247,8 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
         "per_dow": list(an.per_dow),
         "excluded": [{"date": d.isoformat(), "reason": r} for d, r in sorted(exc.items())],
     }
-    period = {k: _jsonable(v) for k, v in period.items()}
-    versions = []
-    for r in an.versions.iter_rows(named=True):
-        versions.append({"dir": int(r["direction_id"]), "pattern_uid": r["pattern_uid"],
-                         "first": _jsonable(r["first"]), "last": _jsonable(r["last"]), "n_days": int(r["n_days"]),
-                         "links_added": list(r["links_added"] or []), "links_removed": list(r["links_removed"] or []),
-                         "display": bool(r["display"])})
-    from .metrics import reference_agreement
-    agree = frame_records(reference_agreement(an, hotspots if hotspots is not None and hotspots.height else None))
-    from .hotspots import hotspot_status
-    hs_status = "computed" if hotspots is not None and hotspot_status(an)[0] else "not_computed"
-    hs = []
-    if hotspots is not None and hotspots.height:
-        keep = [c for c in hotspots.columns if c != "seg_keys"]
-        for r in frame_records(hotspots.select(keep)):
-            r["dir"] = r.get("direction_id")
-            for k in ("from_stop_name", "to_stop_name"):
-                if r.get(k) in names:
-                    r[k] = names[r[k]]
-            hs.append(r)
+    hs_ok = hotspots is not None and hotspots.height
+    agree = frame_records(reference_agreement(an, hotspots if hs_ok else None))
     return {
         "v": CONTRACT_VERSION,
         "line": line,
@@ -298,18 +259,64 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
         "params": {"segment_m": p.segment_m, "phase_m": p.phase_m, "grid": p.grid, "tick_s": p.tick_s,
                    "gap_cap_s": p.gap_cap_s if math.isfinite(p.gap_cap_s) else None,
                    "stop_zone": list(p.stop_zone), "reference_hours": list(p.reference_hours)},
-        "period": period,
+        "period": {k: _jsonable(v) for k, v in period.items()},
         "hours": list(an.hours),
         "bands": {k: list(BANDS[k]) for k in PAGE_BANDS},
         "day_hours": list(DAY_HOURS),
         "coverage": {"dates": [d.isoformat() for d in dates], "c": c, "inc": inc},
-        "versions": versions,
-        "dirs": dirs,
-        "hotspots": hs,
-        "hotspots_status": hs_status,
+        "versions": [{"dir": int(r["direction_id"]), "pattern_uid": r["pattern_uid"], "first": _jsonable(r["first"]),
+                      "last": _jsonable(r["last"]), "n_days": int(r["n_days"]), "links_added": list(r["links_added"] or []),
+                      "links_removed": list(r["links_removed"] or []), "display": bool(r["display"])}
+                     for r in an.versions.iter_rows(named=True)],
+        "dirs": _dirs(an, links, stops, names),
+        "hotspots": _hotspot_rows(hotspots, names) if hs_ok else [],
+        "hotspots_status": "computed" if hotspots is not None and hotspot_status(an)[0] else "not_computed",
         "reference_agreement": agree,
         "ctx": ctx or [],
     }
+
+
+def _dirs(an: Analysis, links, stops, names) -> list[dict]:
+    """One entry per direction with included days (its display version), the other versions under ``alt``."""
+    dirs = []
+    for dirid in sorted(an.dirs):
+        dd = an.dirs[dirid]
+        if len(dd.days) == 0:
+            continue
+        e = _dir_entry(an, dirid, dd.display_uid, links, stops, names)
+        others = [u for u in version_groups(dd) if u != dd.display_uid]   # one per distinct link sequence
+        e["versions"] = [dd.display_uid] + others
+        e["alt"] = [{k: v for k, v in _dir_entry(an, dirid, u, links, stops, names).items() if k != "dir"}
+                    for u in others]
+        dirs.append(e)
+    return dirs
+
+
+def _coverage(an: Analysis, coverage: pl.DataFrame | None):
+    """Coverage per date x output hour over every selected date (included or not): dates, c, inc (True or the
+    exclusion reason), and {date: reason} of the excluded days."""
+    exc = {r[0]: r[1] for r in an.excluded_days.iter_rows()}
+    dh = an.day_hours if coverage is None else coverage.select("service_date", "hour", "coverage")
+    dates = sorted(set(dh["service_date"].to_list()) | set(exc) | set(an.days))
+    rng = an.select.date_range()
+    if rng is not None:
+        dates = [d for d in dates if rng[0] <= d <= rng[1]]
+    cmap = {(r[0], int(r[1])): r[2] for r in dh.select("service_date", "hour", "coverage").iter_rows()}
+    c = [[None if cmap.get((d, h)) is None else round(float(cmap[(d, h)]), 3) for h in an.hours] for d in dates]
+    inc_set = set(an.days)
+    return dates, c, [True if d in inc_set else exc.get(d, "not_selected") for d in dates], exc
+
+
+def _hotspot_rows(hotspots: pl.DataFrame, names: dict[str, str]) -> list[dict]:
+    """Hotspot records for the page (no seg_keys; ``dir`` alias; stop names fixed)."""
+    out = []
+    for r in frame_records(hotspots.select([c for c in hotspots.columns if c != "seg_keys"])):
+        r["dir"] = r.get("direction_id")
+        for k in ("from_stop_name", "to_stop_name"):
+            if r.get(k) in names:
+                r[k] = names[r[k]]
+        out.append(r)
+    return out
 
 
 def _with_segments(an: Analysis, segments: pl.DataFrame) -> Analysis:

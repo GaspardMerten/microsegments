@@ -240,8 +240,7 @@ def prepare(cfg: Config, *, log: Callable[[str], None] | None = None) -> Prepare
         raise ValueError("select.route is required")
     tm: dict[str, float] = {}
     t = time.perf_counter()
-    obs = read_observations(cfg).collect()
-    obs = add_local_time(obs, cfg.input.timezone, cfg.input.service_day_start) if "service_date" not in obs.columns else obs
+    obs = _read(cfg)
     tm["read"] = time.perf_counter() - t
     say(f"observations: {obs.height:,} rows")
     if obs.height == 0:
@@ -261,9 +260,7 @@ def prepare(cfg: Config, *, log: Callable[[str], None] | None = None) -> Prepare
     t = time.perf_counter()
     res = place(obs, net, cfg)
     placed = getattr(res, "frame", res)
-    if isinstance(placed, pl.LazyFrame):
-        placed = placed.collect()
-    report = dict(getattr(res, "report", {}) or {})
+    placed = placed.collect() if isinstance(placed, pl.LazyFrame) else placed
     tm["place"] = time.perf_counter() - t
     say(f"placed: {placed.height:,} rows")
     t = time.perf_counter()
@@ -274,14 +271,25 @@ def prepare(cfg: Config, *, log: Callable[[str], None] | None = None) -> Prepare
                     id_normaliser=cfg.input.linear.id_normaliser)
     tm["passages"] = time.perf_counter() - t
     per_vehicle = bool(obs["vehicle_id"].null_count() < obs.height / 2) if "vehicle_id" in obs.columns else False
-    mode = None
+    return Prepared(cfg=cfg, observations=obs, snapshots=snaps, coverage=cov, network=net, placed=placed,
+                    passages=pas, events=events, place_report=dict(getattr(res, "report", {}) or {}),
+                    per_vehicle=per_vehicle, timings=tm, mode=_route_mode(source, cfg.select.route, net))
+
+
+def _read(cfg: Config) -> pl.DataFrame:
+    """The route's observations, with local time and service date."""
+    obs = read_observations(cfg).collect()
+    obs = add_local_time(obs, cfg.input.timezone, cfg.input.service_day_start) if "service_date" not in obs.columns else obs
+    return obs
+
+
+def _route_mode(source, route: str, net) -> str | None:
+    """The GTFS route mode (tram, bus, ...) on the first date, None when unknown."""
     try:
         from .report import route_mode
-        mode = route_mode(source, cfg.select.route, net.dates[0]) if net.dates else None
+        return route_mode(source, route, net.dates[0]) if net.dates else None
     except Exception:  # noqa: BLE001
-        pass
-    return Prepared(cfg=cfg, observations=obs, snapshots=snaps, coverage=cov, network=net, placed=placed,
-                    passages=pas, events=events, place_report=report, per_vehicle=per_vehicle, timings=tm, mode=mode)
+        return None
 
 
 def run(cfg: Config | str | Path, *, prepared: Prepared | None = None, hotspots: bool = True,

@@ -1,23 +1,37 @@
 """Standalone HTML report: ``template.html`` filled with the JSON contract (``report.to_contract``).
 
-The page needs Leaflet JS from cdnjs (and, if ``tiles``, OpenStreetMap base-map tiles, or the contract's ``tile_url``) for the map; the
-matrix, profile, hotspots and coverage calendar work offline. Leaflet's CSS is inlined.
+The page is one self-contained document. Its source is split for editing: ``template.html`` (markup),
+``page.css`` and the scripts of ``page/`` (``PAGE_JS``, concatenated in that order into one
+``<script>``); :func:`render` inlines them, with Leaflet's CSS. The page needs Leaflet JS from cdnjs
+(and, if ``tiles``, OpenStreetMap base-map tiles, or the contract's ``tile_url``) for the map; the
+matrix, profile, hotspots and coverage calendar work offline.
 """
 from __future__ import annotations
 
 import html
-import warnings
 import json
 import re
+import warnings
+from functools import cache
 from importlib import resources
 from pathlib import Path
 from typing import Any
 
-PLACEHOLDERS = ("__LANG__", "__TITLE__", "__DESC__", "__LEAFLETCSS__", "__DATA__")
+# page/*.js, in script order (one scope: top-level statements run in this order)
+PAGE_JS = ("data", "words", "colors", "state", "values", "zones", "units", "tips", "compare", "texts", "controls",
+           "map", "legend", "panels", "matrix", "profile", "calendar", "main")
+PLACEHOLDERS = ("__LANG__", "__TITLE__", "__DESC__", "__LEAFLETCSS__", "__CSS__", "__JS__", "__DATA__")
 
 
 def _resource(name: str) -> str:
     return resources.files("microsegments.html").joinpath(name).read_text(encoding="utf-8")
+
+
+@cache
+def page_source() -> dict[str, str]:
+    """The fixed parts of the page: the template and what is inlined into it."""
+    return {"template": _resource("template.html"), "__LEAFLETCSS__": _resource("leaflet.min.css"),
+            "__CSS__": _resource("page.css"), "__JS__": "".join(_resource(f"page/{n}.js") for n in PAGE_JS)}
 
 
 def _contract(obj, **kw) -> dict[str, Any]:
@@ -52,9 +66,9 @@ def render(analysis_or_contract, *, title: str | None = None, lang: str = "fr", 
            scales: dict | None = None, description: str | None = None, show_hotspots: bool = True, **contract_kw) -> str:
     """The full HTML document as a string. ``contract_kw`` go to ``to_contract`` when an Analysis /
     RunResult is given. The colour scale is fixed for every page (``microsegments.scale``); ``scales`` is
-    deprecated and ignored. ``show_hotspots=False`` hides every hotspot element
-    (list, map markers and outlines, tile, method paragraph), and the retained changes of the two-period view; the page reads it from the contract key
-    ``show_hotspots``, so a page fed with its data later can set that key instead."""
+    deprecated and ignored. ``show_hotspots=False`` hides every hotspot element (list, map markers and
+    outlines, tile, method paragraph), and the retained changes of the two-period view; the page reads it
+    from the contract key ``show_hotspots``, so a page fed with its data later can set that key instead."""
     c = dict(_contract(analysis_or_contract, **contract_kw))
     c["tiles"] = bool(tiles)
     if not show_hotspots:
@@ -70,16 +84,11 @@ def render(analysis_or_contract, *, title: str | None = None, lang: str = "fr", 
     desc = description or (
         f"{page_title}. {p.get('first', '')} – {p.get('last', '')}, {p.get('days', 0)} "
         + ("days." if lang == "en" else "jours."))
-    out = _resource("template.html")
-    out = out.replace("__LANG__", "en" if lang == "en" else "fr")
-    out = out.replace("__TITLE__", html.escape(page_title))
-    out = out.replace("__DESC__", html.escape(desc, quote=True))
-    out = out.replace("__LEAFLETCSS__", _resource("leaflet.min.css"))
-    out = out.replace("__DATA__", _json_for_script(c))
-    left = [m for m in re.findall(r"__[A-Z]+__", out) if m in PLACEHOLDERS]
-    if left:  # pragma: no cover - template bug
-        raise RuntimeError(f"unfilled placeholders {left}")
-    return out
+    src = page_source()
+    fill = {**src, "__LANG__": "en" if lang == "en" else "fr", "__TITLE__": html.escape(page_title),
+            "__DESC__": html.escape(desc, quote=True), "__DATA__": _json_for_script(c)}
+    # one pass over the template: inlined text is never scanned for placeholders
+    return re.sub("|".join(PLACEHOLDERS), lambda m: fill[m.group(0)], src["template"])
 
 
 def export(analysis_or_contract, path: str | Path, *, title: str | None = None, lang: str = "fr",

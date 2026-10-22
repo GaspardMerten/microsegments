@@ -29,14 +29,16 @@ obs - ref * passages, divided by the number of days).
 """
 from __future__ import annotations
 
-import math
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
 import polars as pl
 
-from .metrics import BANDS, BAND_HOUR, Analysis, DirData
+from .estimate import running_level
+from .metrics import BAND_HOUR, BANDS, Analysis, DirData
 from .schema import HOTSPOT, conform
+from .stats import bh, boot_test, bootstrap_weights
 
 PEAK_BANDS = ("am", "pm")
 ALLDAY_HOURS = (6, 23)      # [start, end): window of the persistent criterion, evening included
@@ -84,68 +86,6 @@ class BinStats:
     p_pas: np.ndarray | None = None
 
 
-def bootstrap_weights(dow: np.ndarray, B: int, rng: np.random.Generator, stratified: bool = True) -> np.ndarray:
-    """(B, D) day weights of a Rao-Wu rescaled day bootstrap (within each weekday when ``stratified``):
-    n_h - 1 days drawn with replacement in a stratum of n_h days, multiplicities scaled by
-    n_h / (n_h - 1). This removes the (n_h - 1) / n_h variance shrinkage of the naive bootstrap,
-    which matters with few days per weekday. A stratum with one day keeps weight 1."""
-    D = len(dow)
-    W = np.zeros((B, D), np.float32)
-    groups = [np.flatnonzero(dow == w) for w in np.unique(dow)] if stratified else [np.arange(D)]
-    rows = np.arange(B)[:, None]
-    for g in groups:
-        n = len(g)
-        if n == 0:
-            continue
-        if n == 1:
-            W[:, g] = 1.0
-            continue
-        pick = g[rng.integers(0, n, (B, n - 1))]
-        np.add.at(W, (np.broadcast_to(rows, pick.shape), pick), n / (n - 1))
-    return W
-
-
-def _bh(p: np.ndarray, q: float) -> np.ndarray:
-    flat = p.reshape(-1)
-    ok = np.isfinite(flat)
-    out = np.zeros(flat.shape, bool)
-    pv = flat[ok]
-    m = len(pv)
-    if m == 0:
-        return out.reshape(p.shape)
-    order = np.argsort(pv)
-    passed = pv[order] <= q * np.arange(1, m + 1) / m
-    if passed.any():
-        kmax = np.flatnonzero(passed).max()
-        sel = np.zeros(m, bool)
-        sel[order[: kmax + 1]] = True
-        out[np.flatnonzero(ok)[sel]] = True
-    return out.reshape(p.shape)
-
-
-_erfc = np.frompyfunc(math.erfc, 1, 1)
-
-
-def nanquantile0(a: np.ndarray, qs) -> np.ndarray:
-    """``np.nanquantile(a, qs, axis=0)`` (linear interpolation), vectorised: one sort along axis 0
-    instead of numpy's per-column loop (tens of times faster on (B, H, K) bootstrap draws)."""
-    a = np.asarray(a)
-    qs = np.atleast_1d(np.asarray(qs, float))
-    srt = np.sort(a, axis=0)                          # NaN last
-    n = np.isfinite(a).sum(0)
-    out = np.full((len(qs),) + a.shape[1:], np.nan, dtype=np.float64)
-    for i, q in enumerate(qs):
-        pos = (n - 1) * q
-        lo = np.floor(pos).astype(np.int64)
-        hi = np.minimum(lo + 1, np.maximum(n - 1, 0))
-        lo = np.clip(lo, 0, None)
-        vlo = np.take_along_axis(srt, lo[None], 0)[0].astype(np.float64)
-        vhi = np.take_along_axis(srt, hi[None], 0)[0].astype(np.float64)
-        v = vlo + (pos - np.floor(pos)) * (vhi - vlo)
-        out[i] = np.where(n > 0, v, np.nan)
-    return out
-
-
 def bin_stats(an: Analysis, direction_id: int, *, B: int | None = None, theta_s: float = 2.0, q: float = 0.1,
               level: float = 0.95, min_persistence: float = 0.6, seed: int = 0, stratified: bool = True,
               chunk: int = 50, theta_persistent_s: float | None = None, min_hour_share: float = 0.75,
@@ -158,61 +98,26 @@ def bin_stats(an: Analysis, direction_id: int, *, B: int | None = None, theta_s:
     out_hours = set(an.hours)
     ci = np.array([i for i, c in enumerate(dd.cols) if (c >= 0 and int(c) in out_hours)]
                   + [int(np.flatnonzero(dd.cols == BAND_HOUR[b])[0]) for b in PEAK_BANDS])
-    cols = dd.cols[ci]
-
     est = an.estimate(direction_id)
     x = est["excess_per_passage"][0][ci][:, ks]
-
-    rng = np.random.default_rng(seed)
-    W = bootstrap_weights(dd.dow, B, rng, stratified)
-    draws = np.empty((B, len(ci), len(ks)), np.float32)
+    W = bootstrap_weights(dd.dow, B, np.random.default_rng(seed), stratified)
     hrs_all = dd.cols[dd.hour_cols]
     pcols = dd.hour_cols[(hrs_all >= ALLDAY_HOURS[0]) & (hrs_all < ALLDAY_HOURS[1])]
     length = dd.seg_len[ks]
     running = dd.seg_zone[ks] == "running"
     do_p = persistent and len(pcols) > 0 and running.any()
-    if do_p:
-        p_draws = np.empty((B, len(ks)), np.float32)
-        p_draws_h = np.empty((B, len(pcols), len(ks)), np.float32)
-    for a in range(0, B, chunk):
-        e = an.estimate(direction_id, W[a:a + chunk], coverage=False)
-        draws[a:a + chunk] = e["excess_per_passage"][:, ci][:, :, ks]
-        if do_p:
-            _, xa, xh = _persistent_level(e["obs"][:, pcols][:, :, ks], e["passages"][:, pcols][:, :, ks], length, running)
-            p_draws[a:a + chunk] = xa
-            p_draws_h[a:a + chunk] = xh
-    alpha = 1 - level
-    with np.errstate(all="ignore"):
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            lo, hi = nanquantile0(draws, [alpha / 2, 1 - alpha / 2])
-            se = np.nanstd(draws, axis=0, ddof=1)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        z = (x - theta) / se
-        z = np.where(se > 0, z, np.where(x > theta, np.inf, -np.inf))
-        p = 0.5 * _erfc(z / math.sqrt(2)).astype(float)
+    draws, p_draws, p_draws_h = _bin_draws(an, direction_id, W, ci, ks, pcols if do_p else None, running, chunk)
+    lo, hi, se, p = boot_test(x, draws, theta, 1 - level)
     p[~np.isfinite(x)] = np.nan
-    reject = _bh(p, q)
-
+    reject = bh(p, q)
     X = dd.stacked()
-    NM, PM = X["NM"][:, ci][:, :, ks], X["PM"][:, ci][:, :, ks]
     ref = est["ref"][0][ks]
-    with np.errstate(divide="ignore", invalid="ignore"):
-        daily = np.where(PM > 0, NM / PM - ref[None, None, :], np.nan)
-        npos = (daily > 0).sum(0)
-        nval = np.isfinite(daily).sum(0)
-        pers = np.where(nval > 0, npos / nval, np.nan)
+    daily, pers = _daily(X["NM"][:, ci][:, :, ks], X["PM"][:, ci][:, :, ks], ref[None, None, :])
     cand = (lo > theta) & (pers >= min_persistence) & reject
-    cube_keys = [k for k, v in est.items() if np.ndim(v) == 3]       # (B, Hx, K) arrays
-    cut = {k: est[k][0][ci][:, ks] for k in cube_keys}
-    cut["ref"] = ref
-    cut["ref_line"] = est["ref_line"][0][ks]
-    cut["all"] = {k: est[k][0][:, ks] for k in cube_keys}
     u = dd.display_uid
-    st = BinStats(dd=dd, ks=ks, seg_idx=dd.pattern_seg_idx[u], x0=dd.pattern_x0[u], length=dd.seg_len[ks],
-                  zone=dd.seg_zone[ks], cols=cols, x=x, est=cut, ci_lo=lo, ci_hi=hi, se=se, p=p, reject=reject,
-                  persistence=pers, candidate=cand, draws=draws, daily=daily, theta=theta)
+    st = BinStats(dd=dd, ks=ks, seg_idx=dd.pattern_seg_idx[u], x0=dd.pattern_x0[u], length=length,
+                  zone=dd.seg_zone[ks], cols=dd.cols[ci], x=x, est=_est_cut(est, ci, ks), ci_lo=lo, ci_hi=hi, se=se,
+                  p=p, reject=reject, persistence=pers, candidate=cand, draws=draws, daily=daily, theta=theta)
     if do_p:
         _persistent_stats(st, an, est, X, pcols, p_draws, p_draws_h, running,
                           (theta_s if theta_persistent_s is None else theta_persistent_s) / tick,
@@ -220,20 +125,54 @@ def bin_stats(an: Analysis, direction_id: int, *, B: int | None = None, theta_s:
     return st
 
 
+def _bin_draws(an: Analysis, dirid: int, W: np.ndarray, ci, ks, pcols, running, chunk: int):
+    """Bootstrap draws of the excess (B, columns ci, segments ks) and, with ``pcols`` (the all-day hours), of the
+    persistent excess (B, Kd) and its hourly values (B, Hp, Kd); estimated ``chunk`` draws at a time."""
+    B = len(W)
+    draws = np.empty((B, len(ci), len(ks)), np.float32)
+    p_draws = p_draws_h = None
+    if pcols is not None:
+        p_draws = np.empty((B, len(ks)), np.float32)
+        p_draws_h = np.empty((B, len(pcols), len(ks)), np.float32)
+    length = an.dirs[dirid].seg_len[ks]
+    for a in range(0, B, chunk):
+        e = an.estimate(dirid, W[a:a + chunk], coverage=False)
+        draws[a:a + chunk] = e["excess_per_passage"][:, ci][:, :, ks]
+        if pcols is not None:
+            _, xa, xh = _persistent_level(e["obs"][:, pcols][:, :, ks], e["passages"][:, pcols][:, :, ks], length, running)
+            p_draws[a:a + chunk] = xa
+            p_draws_h[a:a + chunk] = xh
+    return draws, p_draws, p_draws_h
+
+
+def _daily(NM: np.ndarray, PM: np.ndarray, typ: np.ndarray):
+    """Per-day excess (obs / passages of each day minus the typical level ``typ``) and the share of the
+    valid days where it is positive (persistence)."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        daily = np.where(PM > 0, NM / PM - typ, np.nan)
+        npos, nval = (daily > 0).sum(0), np.isfinite(daily).sum(0)
+        return daily, np.where(nval > 0, npos / nval, np.nan)
+
+
+def _est_cut(est: dict, ci, ks) -> dict:
+    """The full-sample estimate on the statistic's columns ``ci`` and segments ``ks`` (``all``: every column)."""
+    cube_keys = [k for k, v in est.items() if np.ndim(v) == 3]       # (B, Hx, K) arrays
+    cut = {k: est[k][0][ci][:, ks] for k in cube_keys}
+    cut["ref"] = est["ref"][0][ks]
+    cut["ref_line"] = est["ref_line"][0][ks]
+    cut["all"] = {k: est[k][0][:, ks] for k in cube_keys}
+    return cut
+
+
 def _persistent_level(obs: np.ndarray, pas: np.ndarray, length: np.ndarray, running: np.ndarray):
     """obs, pas: (B, Hp, Kd) sums over the all-day hours. Returns the typical running level m (B,)
     in obs / passage / m (median over running segments of all-day obs / passages / length), the all-day
     excess over it (B, Kd) and the hourly excess (B, Hp, Kd), in obs / passage."""
-    import warnings
-    with np.errstate(divide="ignore", invalid="ignore"), warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        O, P = obs.sum(1), pas.sum(1)
-        occ = np.where(P > 0, O / np.where(P > 0, P, 1), np.nan)
-        m = np.nanmedian(np.where(running[None, :], occ / length[None, :], np.nan), axis=1)
-        typ = m[:, None] * length[None, :]
-        xa = occ - typ
+    occ, m = running_level(obs.sum(1), pas.sum(1), length, running)
+    typ = m[:, None] * length[None, :]
+    with np.errstate(divide="ignore", invalid="ignore"):
         xh = np.where(pas > 0, obs / np.where(pas > 0, pas, 1), np.nan) - typ[:, None, :]
-    return m, xa, xh
+    return m, occ - typ, xh
 
 
 def _persistent_stats(st: BinStats, an, est, X, pcols, p_draws, p_draws_h, running, theta, q, level,
@@ -244,24 +183,15 @@ def _persistent_stats(st: BinStats, an, est, X, pcols, p_draws, p_draws_h, runni
     above theta, positive on >= min_persistence of the days, BH at q over the running segments, and
     above theta in >= min_hour_share of the all-day hours and of the reference (evening) hours."""
     dd, ks = st.dd, st.ks
-    import warnings
     obs = est["obs"][0][pcols][:, ks]
     pas = est["passages"][0][pcols][:, ks]
     m, xa, xh = _persistent_level(obs[None], pas[None], st.length, running)
     m, xa, xh = float(m[0]), xa[0], xh[0]
-    alpha = 1 - level
-    with np.errstate(all="ignore"), warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        lo, hi = nanquantile0(p_draws, [alpha / 2, 1 - alpha / 2])
-        se = np.nanstd(p_draws, axis=0, ddof=1)
-        z = (xa - theta) / se
-        z = np.where(se > 0, z, np.where(xa > theta, np.inf, -np.inf))
-        p = 0.5 * _erfc(z / math.sqrt(2)).astype(float)
-        p[~(np.isfinite(xa) & running)] = np.nan
-        NM, PM = X["NM"][:, pcols][:, :, ks].sum(1), X["PM"][:, pcols][:, :, ks].sum(1)
-        daily = np.where(PM > 0, NM / PM - m * st.length[None, :], np.nan)
-        npos, nval = (daily > 0).sum(0), np.isfinite(daily).sum(0)
-        pers = np.where(nval > 0, npos / nval, np.nan)
+    lo, hi, _, p = boot_test(xa, p_draws, theta, 1 - level)
+    p[~(np.isfinite(xa) & running)] = np.nan
+    NM, PM = X["NM"][:, pcols][:, :, ks].sum(1), X["PM"][:, pcols][:, :, ks].sum(1)
+    daily, pers = _daily(NM, PM, m * st.length[None, :])
+    with np.errstate(divide="ignore", invalid="ignore"):
         ok_h = np.isfinite(xh)
         above = (xh > theta) & ok_h
         share = np.where(ok_h.sum(0) > 0, above.sum(0) / ok_h.sum(0), np.nan)
@@ -269,7 +199,7 @@ def _persistent_stats(st: BinStats, an, est, X, pcols, p_draws, p_draws_h, runni
         ev = (hrs >= an.params.reference_hours[0]) & (hrs < an.params.reference_hours[1])
         ev_share = np.where(ok_h[ev].sum(0) > 0, above[ev].sum(0) / np.maximum(ok_h[ev].sum(0), 1), np.nan) \
             if ev.any() else np.ones(len(ks))
-    reject = _bh(p, q)
+    reject = bh(p, q)
     cand = running & (lo > theta) & (pers >= min_persistence) & reject & (share >= min_hour_share) & (ev_share >= 0.5)
     st.p_hours, st.p_level, st.p_x, st.p_xh = hrs, m, xa, xh
     st.p_draws, st.p_draws_h, st.p_daily = p_draws, p_draws_h, daily
@@ -409,10 +339,7 @@ def hotspots(an: Analysis, *, B: int | None = None, theta_s: float = 2.0, q: flo
     ok, status = hotspot_status(an)
     rows = []
     if ok:
-        names = {}
-        if links is not None:
-            for r in links.select("link_key", "from_name", "to_name").iter_rows():
-                names.setdefault(r[0], (r[1], r[2]))
+        names = link_names(links)
         for dirid in an.dirs:
             if len(an.dirs[dirid].days) == 0:
                 continue
@@ -442,113 +369,136 @@ def _q(a, alpha):
 
 
 def _describe(an, st: BinStats, groups, names, level, f_min, peak_ratio_min) -> list[tuple]:
-    dd = st.dd
+    """One HOTSPOT row per merged group (j0, j1, peak hours, persistent hours, is peak, is persistent)."""
+    dd, alpha = st.dd, 1 - level
+    D = max(len(dd.days), 1)
     hcols = np.flatnonzero(st.cols >= 0)
     hrs = st.cols[hcols]
-    alpha = 1 - level
-    allc = st.est["all"]
-    hour_cols_all = dd.hour_cols
-    hours_all = dd.cols[hour_cols_all]
-    day_sel = hour_cols_all[(hours_all >= 6) & (hours_all <= 20)]
-    opp_all = allc["obs_per_passage"]                       # (Hx, Kd)
+    hours_all = dd.cols[dd.hour_cols]
+    day_sel = dd.hour_cols[(hours_all >= 6) & (hours_all <= 20)]
+    opp_day = st.est["all"]["obs_per_passage"][day_sel]                       # (Hd, Kd)
     cand = np.zeros(len(st.ks), bool)
     for g in groups:
         cand[g[0]:g[1] + 1] = True
-    import warnings
     with np.errstate(all="ignore"), warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
-        seg_ff = np.nanquantile(opp_all[day_sel] / st.length[None, :], 0.2, axis=0)
-    mid = st.x0 + st.length / 2
-    D = max(len(dd.days), 1)
-    peak_hours = {h for b in PEAK_BANDS for h in range(*BANDS[b])}
-    obs_h, pas_h, ref = st.est["obs"], st.est["passages"], st.est["ref"]
-    tick = an.params.tick_s
-    has_p = st.p_x is not None
+        seg_ff = np.nanquantile(opp_day / st.length[None, :], 0.2, axis=0)
     out = []
     for j0, j1, ha, hb, fa, fb in groups:
         sl = slice(j0, j1 + 1)
         crit = "both" if (fa and fb) else ("persistent" if fb else "peak")
-        # (a) peak excess over the evening, at the best hour of the peak hours
-        pk_val = pk_lo = pk_hi = pk_pers = float("nan")
-        pk_hour, exc_a = None, float("nan")
-        if ha:
-            hidx = np.array([hcols[np.flatnonzero(hrs == h)[0]] for h in sorted(ha)])
-            sx = np.nansum(st.x[hidx][:, sl], axis=1)
-            pk = int(np.nanargmax(sx))
-            pcol = hidx[pk]
-            pk_hour = int(st.cols[pcol])
-            pk_val = float(sx[pk])
-            pk_lo, pk_hi = _q(np.nansum(st.draws[:, pcol, sl], axis=1), alpha)
-            dly = st.daily[:, pcol, sl]
-            okd = np.isfinite(dly).all(1)
-            pk_pers = float((dly[okd].sum(1) > 0).mean()) if okd.any() else float("nan")
-            exc_a = float(np.nansum(obs_h[hidx][:, sl] - ref[None, sl] * pas_h[hidx][:, sl]) / D)
-        # (b) all-day excess over the typical running level
-        al_val = al_lo = al_hi = al_pers = exc_b = float("nan")
-        if has_p and st.zone[j0] == "running":     # the typical level is a running-zone level
-            al_val = float(np.nansum(st.p_x[sl]))
-            al_lo, al_hi = _q(np.nansum(st.p_draws[:, sl], axis=1), alpha)
-            dl = st.p_daily[:, sl]
-            okd = np.isfinite(dl).all(1)
-            al_pers = float((dl[okd].sum(1) > 0).mean()) if okd.any() else float("nan")
-            typ = st.p_level * st.length[sl]
-            exc_b = float(np.nansum(st.p_obs[:, sl] - typ[None, :] * st.p_pas[:, sl]) / D)
-        if crit == "peak":
-            val, lo, hi, pers, peak_hour, exc_day = pk_val, pk_lo, pk_hi, pk_pers, pk_hour, exc_a
-            hours = ha
-        else:
-            hp = st.p_hours
-            inout = np.isin(hp, hrs)
-            sxh = np.where(inout, np.nansum(st.p_xh[:, sl], axis=1), -np.inf)
-            ih = int(np.argmax(sxh))
-            if crit == "persistent":
-                val, (lo, hi), pers, exc_day = al_val, (al_lo, al_hi), al_pers, exc_b
-            else:
-                val = float(sxh[ih])
-                lo, hi = _q(np.nansum(st.p_draws_h[:, ih, sl], axis=1), alpha)
-                pers, exc_day = al_pers, float(np.nanmax([exc_a, exc_b]))
-            peak_hour = int(hp[ih]) if np.isfinite(sxh[ih]) else pk_hour
-            hours = ha | hb
-        # fixed score
-        with np.errstate(all="ignore"), warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            occ = np.nansum(opp_all[day_sel][:, sl], axis=1) / st.length[sl].sum()
-            f_num = float(np.nanquantile(occ, 0.2)) if np.isfinite(occ).any() else float("nan")
-        zone = st.zone[j0]
-        c = 0.5 * (mid[j0] + mid[j1])
-        base_m = (~cand) & (st.zone == zone) & np.isfinite(seg_ff)
-        near = base_m & (np.abs(mid - c) <= 500)
-        pool = seg_ff[near] if near.sum() >= 5 else seg_ff[base_m]
-        base = float(np.median(pool)) if len(pool) else float("nan")
-        F = f_num / base if base and base > 0 else float("nan")
-        # peak ratio over day hours, from the full-sample per-hour summed excess over the evening
-        dh = [h for h in range(6, 20) if h in set(hrs.tolist())]
-        summed = {h: float(np.nansum(st.x[hcols[np.flatnonzero(hrs == h)[0]], sl])) for h in dh}
-        pv = [v for h, v in summed.items() if h in peak_hours]
-        ov = [v for h, v in summed.items() if h not in peak_hours]
-        pmean = np.mean(pv) if pv else float("nan")
-        omean = np.mean(ov) if ov else float("nan")
-        ratio = float(pmean / max(omean, st.theta / 2)) if np.isfinite(pmean) else float("nan")
-        if crit == "persistent":
-            kind = "infrastructure"          # present all day, evening included
-        elif crit == "both":
-            kind = "mixed"                   # a fixed all-day delay plus a peak surplus
-        elif np.isfinite(F) and F >= f_min and not ratio >= peak_ratio_min:
-            kind = "infrastructure"
-        elif ratio >= peak_ratio_min and not (np.isfinite(F) and F >= f_min):
-            kind = "congestion"
-        else:
-            kind = "mixed"
-        lk0 = dd.link_keys[dd.seg_link[st.ks[j0]]]
-        lk1 = dd.link_keys[dd.seg_link[st.ks[j1]]]
-        n0 = names.get(lk0, (lk0, None))[0]
-        n1 = names.get(lk1, (None, lk1))[1]
+        pk = _peak_part(st, sl, ha, hcols, hrs, alpha, D)
+        ad = _allday_part(st, sl, alpha, D) if st.p_x is not None and st.zone[j0] == "running" else (float("nan"),) * 5
+        val, lo, hi, pers, peak_hour, exc_day = _headline(st, sl, crit, pk, ad, hrs, alpha)
+        hours = ha if crit == "peak" else ha | hb
+        F = _fixed_score(st, j0, j1, opp_day, seg_ff, cand)
+        ratio = _peak_ratio(st, sl, hcols, hrs)
+        lk0, lk1 = dd.link_keys[dd.seg_link[st.ks[j0]]], dd.link_keys[dd.seg_link[st.ks[j1]]]
         out.append((dd.display_uid, dd.direction_id, 0, int(st.seg_idx[j0]), int(st.seg_idx[j1]), float(st.x0[j0]),
-                    float(st.x0[j1] + st.length[j1]), n0, n1, zone, kind, sorted(int(h) for h in hours), peak_hour,
+                    float(st.x0[j1] + st.length[j1]), *stretch_ends(names, lk0, lk1), st.zone[j0],
+                    _kind(crit, F, ratio, f_min, peak_ratio_min), sorted(int(h) for h in hours), peak_hour,
                     val, lo, hi, pers, int(dd.V[:, st.ks[sl]].sum(0).min()), exc_day, F, ratio,
-                    dd.seg_keys[st.ks[sl]].tolist(), crit, val * tick, pk_val, al_val, sorted(int(h) for h in ha)))
+                    dd.seg_keys[st.ks[sl]].tolist(), crit, val * an.params.tick_s, pk[0], ad[0], sorted(int(h) for h in ha)))
     return out
 
+
+def _day_share(daily: np.ndarray) -> float:
+    """Share of the days (rows; complete ones only) where the stretch's summed daily excess is positive."""
+    ok = np.isfinite(daily).all(1)
+    return float((daily[ok].sum(1) > 0).mean()) if ok.any() else float("nan")
+
+
+def _peak_part(st: BinStats, sl, ha, hcols, hrs, alpha, D) -> tuple:
+    """Criterion (a) over a stretch: (excess over the evening at its best peak hour, CI lo, hi, day persistence,
+    that hour, excess obs per day over the peak hours); NaN / None without peak hours."""
+    if not ha:
+        return (float("nan"),) * 4 + (None, float("nan"))
+    hidx = np.array([hcols[np.flatnonzero(hrs == h)[0]] for h in sorted(ha)])
+    sx = np.nansum(st.x[hidx][:, sl], axis=1)
+    pk = int(np.nanargmax(sx))
+    pcol = hidx[pk]
+    obs, pas, ref = st.est["obs"], st.est["passages"], st.est["ref"]
+    exc = float(np.nansum(obs[hidx][:, sl] - ref[None, sl] * pas[hidx][:, sl]) / D)
+    return (float(sx[pk]), *_q(np.nansum(st.draws[:, pcol, sl], axis=1), alpha), _day_share(st.daily[:, pcol, sl]),
+            int(st.cols[pcol]), exc)
+
+
+def _allday_part(st: BinStats, sl, alpha, D) -> tuple:
+    """Criterion (b) over a running stretch: (all-day excess over the typical running level, CI lo, hi, day
+    persistence, excess obs per day)."""
+    typ = st.p_level * st.length[sl]
+    exc = float(np.nansum(st.p_obs[:, sl] - typ[None, :] * st.p_pas[:, sl]) / D)
+    return (float(np.nansum(st.p_x[sl])), *_q(np.nansum(st.p_draws[:, sl], axis=1), alpha), _day_share(st.p_daily[:, sl]), exc)
+
+
+def _headline(st: BinStats, sl, crit, pk, ad, hrs, alpha) -> tuple:
+    """(value, lo, hi, persistence, peak hour, excess obs per day) of the stretch's criterion: peak -> at the peak
+    hour vs the evening; persistent -> all-day vs the typical level; both -> at the worst hour vs the typical level."""
+    if crit == "peak":
+        return pk
+    hp = st.p_hours
+    sxh = np.where(np.isin(hp, hrs), np.nansum(st.p_xh[:, sl], axis=1), -np.inf)
+    ih = int(np.argmax(sxh))
+    peak_hour = int(hp[ih]) if np.isfinite(sxh[ih]) else pk[4]
+    if crit == "persistent":
+        return ad[0], ad[1], ad[2], ad[3], peak_hour, ad[4]
+    lo, hi = _q(np.nansum(st.p_draws_h[:, ih, sl], axis=1), alpha)
+    return float(sxh[ih]), lo, hi, ad[3], peak_hour, float(np.nanmax([pk[5], ad[4]]))
+
+
+def _fixed_score(st: BinStats, j0, j1, opp_day, seg_ff, cand) -> float:
+    """F: the stretch's low day quantile (q20) of obs per passage per m over that of comparable segments (same
+    zone kind, not in a stretch, within 500 m when >= 5 of them, else the whole direction)."""
+    sl = slice(j0, j1 + 1)
+    with np.errstate(all="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        occ = np.nansum(opp_day[:, sl], axis=1) / st.length[sl].sum()
+        f_num = float(np.nanquantile(occ, 0.2)) if np.isfinite(occ).any() else float("nan")
+    mid = st.x0 + st.length / 2
+    base_m = (~cand) & (st.zone == st.zone[j0]) & np.isfinite(seg_ff)
+    near = base_m & (np.abs(mid - 0.5 * (mid[j0] + mid[j1])) <= 500)
+    pool = seg_ff[near] if near.sum() >= 5 else seg_ff[base_m]
+    base = float(np.median(pool)) if len(pool) else float("nan")
+    return f_num / base if base and base > 0 else float("nan")
+
+
+def _peak_ratio(st: BinStats, sl, hcols, hrs) -> float:
+    """Mean summed excess over the evening at the peak hours over that at the other day hours (6-20 h)."""
+    peak_hours = {h for b in PEAK_BANDS for h in range(*BANDS[b])}
+    dh = [h for h in range(6, 20) if h in set(hrs.tolist())]
+    summed = {h: float(np.nansum(st.x[hcols[np.flatnonzero(hrs == h)[0]], sl])) for h in dh}
+    pv = [v for h, v in summed.items() if h in peak_hours]
+    ov = [v for h, v in summed.items() if h not in peak_hours]
+    pmean = np.mean(pv) if pv else float("nan")
+    omean = np.mean(ov) if ov else float("nan")
+    return float(pmean / max(omean, st.theta / 2)) if np.isfinite(pmean) else float("nan")
+
+
+def _kind(crit, F, ratio, f_min, peak_ratio_min) -> str:
+    if crit == "persistent":
+        return "infrastructure"          # present all day, evening included
+    if crit == "both":
+        return "mixed"                   # a fixed all-day delay plus a peak surplus
+    fixed = np.isfinite(F) and F >= f_min
+    if fixed and not ratio >= peak_ratio_min:
+        return "infrastructure"
+    if ratio >= peak_ratio_min and not fixed:
+        return "congestion"
+    return "mixed"
+
+
+def link_names(links: pl.DataFrame | None) -> dict[str, tuple]:
+    """link_key -> (from stop name, to stop name) of schema.LINK rows (first one per key)."""
+    names: dict[str, tuple] = {}
+    if links is not None:
+        for r in links.select("link_key", "from_name", "to_name").iter_rows():
+            names.setdefault(r[0], (r[1], r[2]))
+    return names
+
+
+def stretch_ends(names: dict[str, tuple], lk0: str, lk1: str) -> tuple:
+    """Stop names at both ends of a stretch from its first link lk0 to its last lk1 (unknown: the link key)."""
+    return names.get(lk0, (lk0, None))[0], names.get(lk1, (None, lk1))[1]
 
 
 def to_geojson(hotspots: pl.DataFrame, segments: pl.DataFrame) -> dict:

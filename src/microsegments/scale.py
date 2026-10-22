@@ -1,4 +1,4 @@
-"""The one fixed colour scale shared by the HTML page (``html/template.html``, constant ``SC``) and the
+"""The one fixed colour scale shared by the HTML page (``html/page/colors.js``, constant ``SC``) and the
 matplotlib figures (``plot.py``).
 
 Colour is a fixed function of the value: nothing is computed from the data (no percentile), so every
@@ -29,9 +29,9 @@ stops: p90 5-11 s, p98 12-23 s; so with ``BASE_S`` = 3 s typical values stay gre
 p90 3-6 (6-12 s), stop zones p98 13-25 (26-50 s, dark red). Metro positions only come at stations, so metro
 lines saturate at stations whatever the scale.
 
-The HTML page shows speeds only (km/h): the colour is the same ramp, on a bar linear in km/h at ``KMH_TICKS``,
-and speed gaps (vs the evening, between two periods) use the diverging ramp over +-``CMP_REL`` of the
-reference speed, red for slower. The matplotlib figures keep the seconds scales below.
+The HTML page shows speeds only (km/h): the colour is the same ramp, on a bar linear in km/h at ``KMH_TICKS``;
+the gap with the evening is the km/h lost (0 .. ``LOSS_KMH``), and two periods use the diverging ramp
+over +-``CMP_REL`` of the reference speed, red for slower. The matplotlib figures keep the seconds scales below.
 
 Comparison of two periods: a fixed symmetric diverging scale, green (faster) - grey - red (slower),
 ``CMP_S`` = +-10 s per passage per 30 m. The colour eases in with the square root of the difference (so a
@@ -51,8 +51,6 @@ CMP_TICKS = (-10, -5, 0, 5, 10)            # linear axis
 KMH_PER_T = 108.0          # 30 m in T s = 108 / T km/h
 # the page shows speeds only: a km/h-linear bar (same ramp), and gaps (evening, two periods)
 KMH_TICKS = (0, 6, 12, 18, 24, 30, 36)    # the page's speed bar: linear in km/h, slow to fast
-CMP_KMH = 10.0             # speed gaps: +-10 km/h (diverging, red = slower)
-CMP_KMH_TICKS = (-10, -5, 0, 5, 10)
 # the page colours speed gaps relative to the reference speed: +-25 % (diverging, red = slower)
 CMP_REL = 0.25
 CMP_REL_TICKS = (-25, -10, 0, 10, 25)      # %
@@ -66,9 +64,8 @@ RAMP = ((4.5, "#7a1020"), (7.5, "#e5484d"), (10.5, "#f0a13a"), (13.5, "#b8e27f")
 # comparison: faster (green) - grey - slower (red)
 DIVERGING = ((-1.0, "#11683e"), (-0.45, "#3fb950"), (0.0, "#4a5470"), (0.45, "#f0a13a"), (1.0, "#e5484d"))
 
-CONSTANTS = {"L": L_M, "T0": T_MIN, "T1": T_MAX, "TICKS": list(T_TICKS), "BASE": BASE_S, "OPH": OPH_S,
-             "CMP": CMP_S, "CTICKS": list(CMP_TICKS), "K": KMH_PER_T, "KTICKS": list(KMH_TICKS), "CMPK": CMP_KMH,
-             "CKTICKS": list(CMP_KMH_TICKS), "CMPR": CMP_REL, "CRTICKS": list(CMP_REL_TICKS),
+# what the page uses (its ``SC``)
+CONSTANTS = {"KTICKS": list(KMH_TICKS), "CMPR": CMP_REL, "CRTICKS": list(CMP_REL_TICKS),
              "LMAX": LOSS_KMH, "LTICKS": list(LOSS_TICKS)}
 
 

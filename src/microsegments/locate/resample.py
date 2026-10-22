@@ -15,7 +15,6 @@ import numpy as np
 import polars as pl
 
 
-
 def _within(n: np.ndarray) -> np.ndarray:
     """0..n_i-1 for each group, concatenated."""
     first = np.repeat(np.cumsum(n) - n, n)
@@ -37,18 +36,28 @@ def resample(placed, tick_s: float = 20.0, max_gap_s: float = 90.0) -> pl.DataFr
     same[:-1] = ((d["track_id"].to_numpy()[1:] == d["track_id"].to_numpy()[:-1])
                  & (d["pattern_uid"].to_numpy()[1:] == d["pattern_uid"].to_numpy()[:-1])
                  & (np.diff(t) <= max_gap_s) & (np.diff(t) > 0))
+    near, g = _grid(t, same, tick_s)
+    out = d[near].with_columns(
+        pl.Series("_g", np.round(g * 1e6).astype(np.int64)).cast(pl.Datetime("us")).dt.replace_time_zone("UTC")
+        .cast(d.schema["ts"]).alias("ts"))
+    # local time of the grid instant: shift hour by whole hours crossed (service_date kept)
+    out = out.with_columns(
+        (pl.col("hour").cast(pl.Int32) + ((pl.col("ts").dt.epoch("s") // 3600) - (pl.col("_t") // 3600)).cast(pl.Int32))
+        .cast(pl.Int8).alias("hour")).drop("_t")
+    return pl.concat([out.select(frame.columns), none.select(frame.columns)], how="vertical_relaxed")
+
+
+def _grid(t: np.ndarray, same: np.ndarray, tick_s: float) -> tuple[np.ndarray, np.ndarray]:
+    """Grid instants (s) and the row of the fix taken at each: between fixes i and i + 1 of a run (``same[i]``),
+    the nearer one; the instants up to half its last (first) interval after (before) a run's end (start) fix."""
     i = np.flatnonzero(same)
     k0 = np.floor(t[i] / tick_s).astype(np.int64)           # grid instants in (t_i, t_i+1]
     k1 = np.floor(t[i + 1] / tick_s).astype(np.int64)
     n = k1 - k0
     pair = np.repeat(i, n)
-    first = np.repeat(np.cumsum(n) - n, n)
-    g = (np.repeat(k0, n) + 1 + (np.arange(n.sum()) - first)) * tick_s
+    g = (np.repeat(k0, n) + 1 + _within(n)) * tick_s
     a, b = t[pair], t[pair + 1]
-    w = (g - a) / (b - a)
-    near = np.where(w < 0.5, pair, pair + 1)
-    # run ends / starts: the end fix is also the nearest fix of the instants up to half its last
-    # interval after it (and the start fix of those half its first interval before it)
+    near = np.where((g - a) / (b - a) < 0.5, pair, pair + 1)
     prev_ok = np.zeros(len(t), bool)
     prev_ok[1:] = same[:-1]
     e = np.flatnonzero(~same & prev_ok)
@@ -59,13 +68,4 @@ def resample(placed, tick_s: float = 20.0, max_gap_s: float = 90.0) -> pl.DataFr
     ns = np.ceil(t[st] / tick_s).astype(np.int64) - np.ceil((t[st] - hs) / tick_s).astype(np.int64)
     ge = (np.repeat(np.floor(t[e] / tick_s), ne) + 1 + _within(ne)) * tick_s
     gs = (np.repeat(np.ceil(t[st] / tick_s), ns) - 1 - _within(ns)) * tick_s
-    near = np.concatenate([near, np.repeat(e, ne), np.repeat(st, ns)])
-    g = np.concatenate([g, ge, gs])
-    out = d[near].with_columns(
-        pl.Series("_g", np.round(g * 1e6).astype(np.int64)).cast(pl.Datetime("us")).dt.replace_time_zone("UTC")
-        .cast(d.schema["ts"]).alias("ts"))
-    # local time of the grid instant: shift hour by whole hours crossed (service_date kept)
-    out = out.with_columns(
-        (pl.col("hour").cast(pl.Int32) + ((pl.col("ts").dt.epoch("s") // 3600) - (pl.col("_t") // 3600)).cast(pl.Int32))
-        .cast(pl.Int8).alias("hour")).drop("_t")
-    return pl.concat([out.select(frame.columns), none.select(frame.columns)], how="vertical_relaxed")
+    return np.concatenate([near, np.repeat(e, ne), np.repeat(st, ns)]), np.concatenate([g, ge, gs])
