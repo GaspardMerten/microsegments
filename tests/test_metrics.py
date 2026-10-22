@@ -165,3 +165,17 @@ def test_tick_from_coverage(sim):
     a = base.result.filter(pl.col("obs_per_passage").is_not_null())["obs_per_passage"].to_numpy()
     b = w.result.filter(pl.col("obs_per_passage").is_not_null())["obs_per_passage"].to_numpy()
     assert np.allclose(b, 1.25 * a)
+
+
+def test_dense_float_without_rows():
+    """No observation in the hours (a night line on the day hours): N stays float, so it can be weighted."""
+    import datetime as dt
+
+    import numpy as np
+    import polars as pl
+
+    from microsegments.dirdata import _dense
+    cube = pl.DataFrame(schema={"service_date": pl.Date, "hour": pl.Int8, "seg_key": pl.Utf8, "obs": pl.Float64})
+    N, P = _dense(cube, None, "n", [dt.date(2026, 7, 1)], [6, 7], np.array(["a"]), np.array(["l"]))
+    assert N.dtype == np.float64 and N.shape == (1, 2, 1)
+    N *= np.full((1, 2, 1), 1.5)

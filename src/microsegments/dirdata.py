@@ -171,7 +171,9 @@ def _dense(cube, passages, passage_col, days_l, hours, seg_keys, link_keys) -> t
              .join(days_df.lazy(), on="service_date").join(hours_df.lazy(), on="hour").join(kdf.lazy(), on=key)
              .select("_d", "_h", "_k", "_v").collect())
         flat = (c["_d"].to_numpy() * H + c["_h"].to_numpy()) * len(keys) + c["_k"].to_numpy()
-        return np.bincount(flat, weights=c["_v"].to_numpy().astype(np.float64), minlength=D * H * len(keys)).reshape(D, H, len(keys))
+        # float even with no rows (bincount of an empty array is int64, and N is weighted in place after)
+        w = c["_v"].to_numpy().astype(np.float64)
+        return np.bincount(flat, weights=w, minlength=D * H * len(keys)).astype(np.float64).reshape(D, H, len(keys))
 
     N = counts(cube.lazy(), "seg_key", seg_keys, pl.col("obs"))
     P = np.zeros((D, H, Lk))
