@@ -12,21 +12,23 @@ const perLabel = P => P && P.first ? `${fmtShort(P.first)} – ${fmtShort(P.last
 function cpick(C, R) {
   const b = bandOf(R), one = R[1] - R[0] === 1 ? CCOLS.indexOf(String(R[0])) : -1, bc = b ? CCOLS.indexOf(b) : -1;
   const ci = one >= 0 ? one : bc;
-  if (ci >= 0) return j => { const g = a => a[ci][j]; return {d: g(C.d), lo: g(C.lo), hi: g(C.hi), sig: g(C.sig), oa: g(C.oa), ob: g(C.ob), fa: g(C.fa), fb: g(C.fb)}; };
+  if (ci >= 0) return j => { const g = a => at(a, ci, j); return {d: g(C.d), lo: g(C.lo), hi: g(C.hi), sig: g(C.sig), oa: g(C.oa), ob: g(C.ob), fa: g(C.fa), fb: g(C.fb)}; };
   const cols = hoursIn(R).map(h => CCOLS.indexOf(String(h))).filter(c => c >= 0);
   return j => {
     let sa = 0, wa = 0, sb = 0, wb = 0, sl = 0, sh = 0, w = 0, fa = 0, fb = 0, n = 0;
     for (const c of cols) {
-      const oa = C.oa[c][j], ob = C.ob[c][j], a = C.fa[c][j], b = C.fb[c][j];
+      const oa = at(C.oa, c, j), ob = at(C.ob, c, j), a = at(C.fa, c, j), b = at(C.fb, c, j), lo = at(C.lo, c, j), hi = at(C.hi, c, j);
       if (oa == null || ob == null || !(a > 0) || !(b > 0)) continue;
       sa += oa * a; wa += a; sb += ob * b; wb += b; fa += a; fb += b; n++;
-      if (C.lo[c][j] != null && C.hi[c][j] != null) { const u = (a + b) / 2; sl += C.lo[c][j] * u; sh += C.hi[c][j] * u; w += u; }
+      if (lo != null && hi != null) { const u = (a + b) / 2; sl += lo * u; sh += hi * u; w += u; }
     }
     if (!n) return {d: null};
     const oa = sa / wa, ob = sb / wb, lo = w ? sl / w : null, hi = w ? sh / w : null;
     return {d: ob - oa, lo, hi, sig: lo != null && (lo > 0 || hi < 0), oa, ob, fa: fa / n, fb: fb / n, ap: n > 1};
   };
 }
+// a matrix cell [col][seg]; null when the matrix or its column is missing (a direction without computed bins)
+const at = (a, c, j) => a && a[c] ? a[c][j] ?? null : null;
 // Per microsegment comparison values for an hour range of the display entry E (speeds: cKmh).
 function cvals(E, R = range()) { return memo(`c|${E.pattern_uid}|${E.dir}|${R}`, () => cvals0(E, R)); }
 function cvals0(E, R) {

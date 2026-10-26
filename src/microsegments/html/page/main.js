@@ -9,10 +9,10 @@ function render() {
   if (CMP) pressed($('modes'), k => k === st.mode);
   $('g_days').hidden = isCmp() || HOST;
   pressed($('stopsT'), k => k === String(st.stops));
-  pressed($('views'), k => k === st.view); $('g_stops').hidden = isIA();
+  pressed($('views'), k => k === st.view);
   const d = dirOf(); if (!$('g_ver').hidden && d) pressed($('vers'), k => k === (st.ver || d.pattern_uid));
   rangeUi();
-  // the side panel: hotspots (when shown), interarrêts or the selection
+  // the side panel: hotspots (when shown) or interarrêts
   const nohs = !hsOn() && st.view === 'ms';
   if (document.body.classList.contains('nohs') !== nohs) { document.body.classList.toggle('nohs', nohs); if (map) setTimeout(() => map.invalidateSize(), 0); }
   if (popBtn) closePop();
@@ -85,7 +85,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && mxCard.cla
 function selectVer(uid) {
   const d = DIRS.find(x => x.pattern_uid === uid || (x.alt || []).some(a => a.pattern_uid === uid));
   if (!d || isCmp()) return false;
-  st.dir = d.dir; st.ver = uid === d.pattern_uid ? null : uid; st.hot = null; st.chg = null; st.sel = null;
+  st.dir = d.dir; st.ver = uid === d.pattern_uid ? null : uid; st.hot = null; st.chg = null;
   return true;
 }
 if (qs.get('ver')) selectVer(qs.get('ver'));
@@ -96,7 +96,8 @@ window.addEventListener('message', e => {
   // the host's excluded interarrêts and display mode (see saveUrl); not echoed back
   if (m.ms === 'xia' && e.source !== window && Array.isArray(m.xia)) {
     st.xia = new Set(m.xia.map(String));
-    if (['ms', 'ia', 'sel'].includes(m.view) && m.view !== st.view) { st.view = m.view; st.sel = null; tiles(); drawAll(); } else { tiles(); render(); }
+    const vw = viewOf(m.view);
+    if (vw && vw !== st.view) { st.view = vw; tiles(); drawAll(); } else { tiles(); render(); }
   }
 });
 document.querySelector('section.method').hidden = !METHOD;

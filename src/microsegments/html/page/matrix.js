@@ -42,10 +42,6 @@ function drawMatrix() {
     const on = cm ? st.chg === h.rank : st.hot === h.rank;
     s += `<rect x="${x(h.x0_m) - 1}" y="${m.t + r0 * RH}" width="${Math.max(3, x(h.x1_m) - x(h.x0_m) + 2)}" height="${(r1 - r0 + 1) * RH}" fill="none" stroke="#ffe600" stroke-opacity="${on ? 1 : .8}" stroke-width="${on ? 2.5 : 1.25}" pointer-events="none"/>`;
   }
-  // the selection, over every hour
-  const S = isSel() && selRange();
-  if (S) { const a = E.seg.x0[S[0]], b = E.seg.x0[S[1]] + E.seg.len[S[1]];
-    s += `<rect x="${x(a) - 1}" y="${m.t - 4}" width="${Math.max(3, x(b) - x(a) + 2)}" height="${D.hours.length * RH + 8}" fill="none" stroke="#eef1f6" stroke-width="2" stroke-dasharray="4 3" pointer-events="none"/>`; }
   // the hours shown
   const hs = hoursIn(range());
   if (hs.length) s += `<rect id="mxhr" x="${m.l - 1}" y="${m.t + D.hours.indexOf(hs[0]) * RH}" width="${W - m.l - m.r + 2}" height="${hs.length * RH}" fill="none" stroke="#b4bdd0" stroke-width="1.5" pointer-events="none"/>`;
@@ -58,13 +54,11 @@ $('mx').addEventListener('mousemove', e => {
   const r = $('mx').getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, {m, RH, inv, Ltot, E, rows} = MX;
   const row = Math.floor((py - m.t) / RH), u = inv(px);
   if (row < 0 || row >= rows.length || u < 0 || u > Ltot) return hideTip();
-  showTip(e, `<span style="font-family:var(--mono)">${rangeLabel([D.hours[row], D.hours[row] + 1])}</span> · ` + MX.tip(E, itemAt(rows[row], u)));
+  const b = itemAt(rows[row], u);
+  showTip(e, `<span style="font-family:var(--mono)">${rangeLabel([D.hours[row], D.hours[row] + 1])}</span> · ` + safeTip(() => MX.tip(E, b), E, b));
 });
 $('mx').addEventListener('mouseleave', hideTip);
 // a row (or its hour label) selects that hour
-// in Sélection, a click in the matrix itself picks the microsegment under it
 for (const id of ['mx', 'mxh']) $(id).addEventListener('click', e => {
-  if (id === 'mx' && isSel() && MX) { const u = MX.inv(e.clientX - $('mx').getBoundingClientRect().left), E = MX.E;
-    return pickSel(E.seg.x0.findIndex((x0, i) => u >= x0 && u < x0 + E.seg.len[i])); }
   const g = e.target.closest('.mxrow'); if (g) { stop(); setRange(+g.dataset.h, +g.dataset.h + 1); renderRange(); } });
 

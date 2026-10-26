@@ -14,7 +14,7 @@ function zoneSpan(lang, one) {
   // "le tram" / "la rame"; the feed is STIB's on the platform, any linear feed otherwise
   const le = fr ? (m1 === 'rame' ? 'la' : 'le') : 'the', who = isStib() ? (fr ? 'la STIB' : 'STIB') : (fr ? 'le flux' : 'the feed');
   if (!FEEDZ) return fr ? `De ${a}\u00a0m avant à ${b}\u00a0m après ${one ? 'l\'arrêt' : 'chaque arrêt'}` : `From ${a} m before to ${b} m after ${one ? 'the stop' : 'each stop'}`;
-  return fr ? (one ? `La partie où ${who} rattache ${le} ${m1} à l'arrêt, de son approche jusqu'à son départ` : `Les parties où ${who} rattache ${le} ${m1} à un arrêt, de son approche jusqu'à son départ`)
+  return fr ? (one ? `La partie où ${who} situe ${le} ${m1} à l'arrêt, de son approche à son départ` : `Les parties où ${who} situe ${le} ${m1} à un arrêt, de son approche à son départ`)
             : (one ? `The stretch where ${who} ties the ${m1} to the stop, from its approach until it leaves` : `The stretches where ${who} ties the ${m1} to a stop, from its approach until it leaves`);
 }
 function zonesOf(E) {
@@ -49,7 +49,7 @@ function blockVals(bs, len, head) {
 // Two-period values of a block, from the microsegment values bs (cvals): summed differences. It is "sure" when the
 // sum of the lower (upper) bounds is above (below) zero: wider than the true interval of the sum, so conservative.
 function cBlockVals(bs, len, head) {
-  const absent = bs.some(b => b.absent), s = f => absent ? null : zsum(bs, f), lo = s('lo'), hi = s('hi');
+  const absent = bs.some(b => b.absent), s = f => absent || !bs.length ? null : zsum(bs, f), lo = s('lo'), hi = s('hi');
   return cKmh({...head, len, nd: 0, flags: 0, absent, d: s('d'), lo, hi, sig: lo != null && hi != null && (lo > 0 || hi < 0),
                oa: s('oa'), ob: s('ob'), fa: zfirst(bs, 'fa'), fb: zfirst(bs, 'fb'), ap: bs.some(b => b.ap)}, len);
 }

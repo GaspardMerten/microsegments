@@ -50,10 +50,14 @@ function drawMap() {
   baseLayer.clearLayers(); segLayer.clearLayers(); zoneLayer.clearLayers(); stopLayer.clearLayers(); segs = [];
   if (!E) return;
   E.seg.c.forEach(c => { if (c.length > 1) Lf.polyline(latlngs(c), {renderer, color: '#05090f', weight: 14, interactive: false}).addTo(baseLayer); });
-  // interarrêts: one polyline per unit; a click excludes it from the line totals (or brings it back)
+  // interarrêts: one polyline per unit; a click excludes it from the line totals (or brings it back). Stop zones
+  // hidden: the unit is drawn between the zones, the zones thin and hatched (as microsegments).
   if (isIA()) unitsOf(E).U.forEach((u, n) => {
-    const p = Lf.polyline(u.idx.flatMap(i => latlngs(E.seg.c[i])), {renderer, weight: 10, lineCap: 'butt'}).addTo(segLayer);
-    p.bindTooltip(() => { const cm = isCmp(), b = uvals(E, cm ? cvals(E) : vals(E), st.xia, cm)[n]; return (cm ? cTipHtml : tipHtml)(E, b, true); }, {sticky: true});
+    const ix = runIdx(E, u.idx, !st.stops);
+    if (!st.stops) u.idx.filter(i => !ix.includes(i)).forEach(i => Lf.polyline(latlngs(E.seg.c[i]), {renderer, color: MASKC, weight: 4, lineCap: 'butt', interactive: false}).addTo(segLayer));
+    if (!ix.length) return segs.push(null);
+    const p = Lf.polyline(ix.flatMap(i => latlngs(E.seg.c[i])), {renderer, weight: 10, lineCap: 'butt'}).addTo(segLayer);
+    p.bindTooltip(() => { const cm = isCmp(), b = drawn(E, cm ? cvals(E) : vals(E), cm)[n]; return safeTip(() => (cm ? cTipHtml : tipHtml)(E, b, true), E, b); }, {sticky: true});
     p.on('click', e => { toggleXia(u.id); p.closeTooltip(); p.openTooltip(e.latlng); });
     segs.push(p);
   });
@@ -62,8 +66,8 @@ function drawMap() {
     p.bindTooltip(() => { const cm = isCmp(), v = cm ? cvals(E) : vals(E), n = zonesOf(E).zi[i];
       // in a shown stop zone, every microsegment carries the zone's tooltip
       const b = st.stops && n >= 0 ? zvals(E, v, cm)[n] : v[i];
-      return cm ? cTipHtml(E, b) : tipHtml(E, b); }, {sticky: true});
-    p.on('click', e => { p.closeTooltip(); if (isSel()) pickSel(i); else svPopup(c, e.latlng); });
+      return safeTip(() => cm ? cTipHtml(E, b) : tipHtml(E, b), E, b); }, {sticky: true});
+    p.on('click', e => { p.closeTooltip(); svPopup(c, e.latlng); });
     segs.push(p);
   });
   E.stops.forEach((s, k) => {
@@ -72,9 +76,7 @@ function drawMap() {
     // label above where the line runs east-west, to the right otherwise
     const nb = E.stops[Math.min(k + 1, E.stops.length - 1)].ll || s.ll, pb = E.stops[Math.max(k - 1, 0)].ll || s.ll;
     const side = Math.abs(nb[0] - pb[0]) * Math.cos(s.ll[1] * Math.PI / 180) > Math.abs(nb[1] - pb[1]) ? 'u' : 'r';
-    // Sélection: stops are clickable too (a first then a last stop: from leaving the first's zone to leaving the last's)
-    const sm = Lf.circleMarker(ll, {renderer, radius: isSel() ? 7 : 4, color: '#0b1224', weight: 2, fillColor: isSel() && st.sel && st.sel.open && st.sel.k === k ? '#ffe600' : '#9aa4b8', fillOpacity: 1, interactive: isSel()}).addTo(stopLayer);
-    if (isSel()) sm.on('click', () => pickStop(k)).bindTooltip(esc(s.name));
+    Lf.circleMarker(ll, {renderer, radius: 4, color: '#0b1224', weight: 2, fillColor: '#9aa4b8', fillOpacity: 1, interactive: false}).addTo(stopLayer);
     const m = Lf.marker(ll, {icon: Lf.divIcon({className: '', html: `<div class="lab ${side}">${esc(s.name)}</div>`, iconSize: [0, 0]}), interactive: false}).addTo(stopLayer);
     m._lab = true;
   });
@@ -89,7 +91,7 @@ function drawHotMap() {
   if (!map) return;
   const E = entry();
   hotLayer.clearLayers();
-  if (E && isMain() && !isSel()) {
+  if (E && isMain()) {
     if (isCmp()) halos(E, chgDir(), st.chg, selectChg, (h, n) => `<div class="hsm" style="background:${signCol(h.sign)};color:#111">${n + 1}</div>`);
     else halos(E, hotOfDir(), st.hot, selectHot, h => `<div class="hsm">${h.rank}</div>`);
   }
@@ -115,12 +117,11 @@ function recolor() {
   zoneLayer.clearLayers();
   // excluded interarrêts: thin and dashed, in grey
   if (isIA()) return drawn(E, v, cm).forEach((b, n) => segs[n] && segs[n].setStyle({color: cm ? cColor(b) : colorFor(b), weight: b.x ? 5 : 10, dashArray: b.x ? '3 6' : null}));
-  // a shown stop zone: all its microsegments in the zone's colour, under one hatched line; outside a selection: faded
-  const S = isSel() ? selRange() : null, op = i => S && (i < S[0] || i > S[1]) ? .25 : 1;
-  segs.forEach((p, i) => { const b = zv && zi[i] >= 0 ? zv[zi[i]] : v[i]; p.setStyle({color: cm ? cColor(b) : colorFor(b), weight: shown(b) ? 10 : 4, opacity: op(i)}); });
+  // a shown stop zone: all its microsegments in the zone's colour, under one hatched line
+  segs.forEach((p, i) => { const b = zv && zi[i] >= 0 ? zv[zi[i]] : v[i]; p.setStyle({color: cm ? cColor(b) : colorFor(b), weight: shown(b) ? 10 : 4}); });
   if (zv) for (const z of Z) {
     const ll = z.idx.flatMap(i => latlngs(E.seg.c[i]));
-    if (ll.length > 1) window.L.polyline(ll, {renderer, color: 'url(#mszone)', weight: 10, opacity: op(z.idx[0]), lineCap: 'butt', interactive: false}).addTo(zoneLayer);
+    if (ll.length > 1) window.L.polyline(ll, {renderer, color: 'url(#mszone)', weight: 10, lineCap: 'butt', interactive: false}).addTo(zoneLayer);
   }
 }
 

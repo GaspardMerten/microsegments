@@ -16,7 +16,6 @@ const whenLabel = () => { const b = bandOf(); return b ? `${tx().bandl[b].toLowe
 const ks = v => v == null ? '–' : signed(v, Math.abs(v) < 10 ? 1 : 0);
 // a gap in km/h and in % of the reference speed
 const gapTxt = (g, r) => g == null ? '–' : `${ks(g)} km/h (${pc(r)})`;
-const lossTxt = g => g == null ? '–' : `${kf(Math.max(0, -g))} km/h`;
 function tipTail(t, v) {
   let h = '';
   if (v.pph != null) h += '<br>' + t.freq(nf(v.pph, 1), noun(true));
@@ -25,7 +24,8 @@ function tipTail(t, v) {
 }
 // an interarrêt: its name, excluded or not, and what a map click does
 const uHead = v => `<b>${tx().tip.uhead(esc(v.u.from), esc(v.u.to))}</b><br>`;
-const uTail = (v, map) => (v.x ? `<br><span style="color:var(--ink-3)">${tx().ia.xtip}</span>` : '') + (map ? `<br><span style="color:var(--ink-3)">${v.x ? tx().ia.off : tx().ia.on}</span>` : '');
+const uTail = (v, map) => (st.stops ? '' : `<br><span style="color:var(--ink-3)">${tx().ia.nozone}</span>`) + (v.x ? `<br><span style="color:var(--ink-3)">${tx().ia.xtip}</span>` : '')
+  + (map ? `<br><span style="color:var(--ink-3)">${v.x ? tx().ia.off : tx().ia.on}</span>` : '');
 // what is under the pointer (an interarrêt; a stop zone or microsegment, towards the link's end)
 function tipHead(E, v) {
   if (v.u) return uHead(v);
@@ -35,18 +35,23 @@ function tipHead(E, v) {
 // one period; map: the interarrêt's map click hint
 function tipHtml(E, v, map) {
   const t = tx().tip;
-  let h = tipHead(E, v) + (v.kmh == null ? t.nodata : (v.z ? t.zopp : t.opp)(kf(v.kmh)) + (v.dv != null ? '<br>' + t.ex(lossTxt(v.dv)) : '')) + tipTail(t, v);
+  let h = tipHead(E, v) + (v.kmh == null ? t.nodata : (v.z ? t.zopp : t.opp)(kf(v.kmh)) + (v.dv != null ? '<br>' + t.ex(gapTxt(v.dv, v.dr)) : '')) + tipTail(t, v);
   if (v.stop && !v.z) h += `<br><i>${t.stop}</i>`;
   return h + (v.u ? uTail(v, map) : '');
 }
-// the item of v (sorted along the line) at u metres; past the end: the last one
-const itemAt = (v, u) => { const i = v.findIndex(b => u >= b.x0 && u < b.x0 + b.len); return v[i < 0 ? v.length - 1 : i]; };
+// the item of v (sorted along the line) at u metres (x1: its end, when it spans more than its counted length); past the end: the last one
+const itemAt = (v, u) => { const i = v.findIndex(b => u >= b.x0 && u < (b.x1 ?? b.x0 + b.len)); return v[i < 0 ? v.length - 1 : i]; };
 // leaflet [lat, lng] of a [lng, lat] polyline
 const latlngs = c => c.map(([x, y]) => [y, x]);
 const tipEl = document.getElementById('tip');
 function showTip(e, html) { tipEl.innerHTML = html; tipEl.style.display = 'block'; const w = tipEl.offsetWidth, hh = tipEl.offsetHeight;
   tipEl.style.left = Math.min(window.innerWidth - w - 8, e.clientX + 14) + 'px'; tipEl.style.top = (e.clientY + 16 + hh > window.innerHeight ? e.clientY - hh - 10 : e.clientY + 16) + 'px'; }
 const hideTip = () => { tipEl.style.display = 'none'; };
+// a tooltip that never fails silently: on an error in f (odd data), the item's name and "no data"
+function safeTip(f, E, v) {
+  try { return f(); } catch (e) { console.error(e); }
+  try { return tipHead(E, v) + tx().tip.nodata; } catch (e) { return tx().tip.nodata; }
+}
 const HOT_TOP = 8;
 // masked stop zone in the profiles: a hatched band over the plot height
 const maskBar = (x, b, m, H) => `<rect x="${x(b.x0).toFixed(1)}" y="${m.t}" width="${Math.max(1, x(b.x0 + b.len) - x(b.x0) - .5).toFixed(1)}" height="${H - m.t - m.b}" fill="${MASKC}" opacity=".55"/>`;

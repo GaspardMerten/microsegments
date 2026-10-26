@@ -30,8 +30,8 @@ p90 3-6 (6-12 s), stop zones p98 13-25 (26-50 s, dark red). Metro positions only
 lines saturate at stations whatever the scale.
 
 The HTML page shows speeds only (km/h): the colour is the same ramp, on a bar linear in km/h at ``KMH_TICKS``;
-the gap with the evening is the km/h lost (0 .. ``LOSS_KMH``), and two periods use the diverging ramp
-over +-``CMP_REL`` of the reference speed, red for slower. The matplotlib figures keep the seconds scales below.
+the gap with the evening and the gap between two periods use the diverging ramp over +-``CMP_REL`` of the
+reference speed, red for slower. The matplotlib figures keep the seconds scales below.
 
 Comparison of two periods: a fixed symmetric diverging scale, green (faster) - grey - red (slower),
 ``CMP_S`` = +-10 s per passage per 30 m. The colour eases in with the square root of the difference (so a
@@ -51,12 +51,10 @@ CMP_TICKS = (-10, -5, 0, 5, 10)            # linear axis
 KMH_PER_T = 108.0          # 30 m in T s = 108 / T km/h
 # the page shows speeds only: a km/h-linear bar (same ramp), and gaps (evening, two periods)
 KMH_TICKS = (0, 6, 12, 18, 24, 30, 36)    # the page's speed bar: linear in km/h, slow to fast
-# the page colours speed gaps relative to the reference speed: +-25 % (diverging, red = slower)
+# the page colours speed gaps (with the evening, between two periods) relative to the reference speed:
+# +-25 % (diverging, red = slower)
 CMP_REL = 0.25
 CMP_REL_TICKS = (-25, -10, 0, 10, 25)      # %
-# gap with the evening on the page: km/h lost against it (0 when faster), linear 0 .. LOSS_KMH
-LOSS_KMH = 15.0
-LOSS_TICKS = (0, 3, 6, 9, 12, 15)
 
 # the STIB speed ramp (km/h, colour), interpolated in OKLab
 RAMP = ((4.5, "#7a1020"), (7.5, "#e5484d"), (10.5, "#f0a13a"), (13.5, "#b8e27f"), (16.5, "#3fb950"),
@@ -65,8 +63,7 @@ RAMP = ((4.5, "#7a1020"), (7.5, "#e5484d"), (10.5, "#f0a13a"), (13.5, "#b8e27f")
 DIVERGING = ((-1.0, "#11683e"), (-0.45, "#3fb950"), (0.0, "#4a5470"), (0.45, "#f0a13a"), (1.0, "#e5484d"))
 
 # what the page uses (its ``SC``)
-CONSTANTS = {"KTICKS": list(KMH_TICKS), "CMPR": CMP_REL, "CRTICKS": list(CMP_REL_TICKS),
-             "LMAX": LOSS_KMH, "LTICKS": list(LOSS_TICKS)}
+CONSTANTS = {"KTICKS": list(KMH_TICKS), "CMPR": CMP_REL, "CRTICKS": list(CMP_REL_TICKS)}
 
 
 def to_seconds(metric: str, value, len_m, tick_s: float = 20.0):

@@ -478,7 +478,8 @@ class CompareResult:
         from .report import name_map, to_contract
         names = name_map(getattr(self.cfg.report, "names", None), self.prepared.network)
         c = to_contract(self.b, self.prepared.network, self.segments, self.hotspots_b, mode=self.mode, names=names,
-                        title=title, source=source)
+                        title=title, source=source, route_color=self.prepared.colors[0],
+                        route_text_color=self.prepared.colors[1])
         c["compare"] = self.comparison.to_contract(names)
         return c
 

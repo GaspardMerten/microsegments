@@ -59,9 +59,8 @@ function vals0(E, R, days) {
   });
 }
 // the value of the chosen measure (km/h) and its colour
-// gap with the evening: the km/h lost against it (0 when faster), on a linear scale 0 .. SC.LMAX km/h
-const lossOf = v => v.dv == null ? null : Math.max(0, -v.dv);
-const metricVal = (v, m = st.metric) => m === 'ex' ? lossOf(v) : v.kmh;
+// gap with the evening: relative to the evening speed (dr), on the diverging scale of two periods (+-SC.CMPR)
+const metricVal = (v, m = st.metric) => m === 'ex' ? v.dr : v.kmh;
 // an excluded interarrêt: flat grey (XC)
 const XC = '#2a3350';
-const colorFor = v => v.x ? XC : !shown(v) ? MASKC : st.metric === 'ex' ? lossColor(lossOf(v)) : kmhColor(v.kmh);
+const colorFor = v => v.x ? XC : !shown(v) ? MASKC : st.metric === 'ex' ? relColor(v.dr) : kmhColor(v.kmh);

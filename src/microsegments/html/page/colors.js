@@ -29,15 +29,13 @@ function colorOf(v) {
 // value, never computed from the data (no percentile): every line, period, day, hour, band and stop-zone toggle
 // shares it. A speed (km/h = 3.6 x length / time per vehicle) is coloured on the STIB ramp (4.5 km/h dark red ..
 // 27 km/h dark green); its legend bar is linear in km/h (0 to >= 36 km/h at KTICKS, slow to fast). Gap with the
-// evening: km/h lost, linear 0 .. LMAX. Two periods: the gap relative to the reference speed, +-CMPR.
+// evening and between two periods: the gap relative to the reference speed, diverging, +-CMPR.
 // Why these constants (tram and bus lines, weekdays 2025): between stops the median is 24-36 km/h, the slowest 2 %
 // 5-9 km/h.
-const SC = {KTICKS: [0, 6, 12, 18, 24, 30, 36], CMPR: 0.25, CRTICKS: [-25, -10, 0, 10, 25], LMAX: 15, LTICKS: [0, 3, 6, 9, 12, 15]};
+const SC = {KTICKS: [0, 6, 12, 18, 24, 30, 36], CMPR: 0.25, CRTICKS: [-25, -10, 0, 10, 25]};
 // no data: flat discreet grey; masked stop zone: grey hatching (SVG pattern #mshatch, legend swatch .sw.hatch)
 const NULLC = '#3a4560', MASKC = 'url(#mshatch)';
 const kmhColor = k => k == null || !isFinite(k) ? NULLC : colorOf(k);
-// km/h lost (0 .. LMAX) on the ramp, from its fastest stop down to its slowest
-const lossColor = k => k == null || !isFinite(k) ? NULLC : colorOf(27 - 22.5 * Math.min(k, SC.LMAX) / SC.LMAX);
 // Relative speed gaps r = gap / reference speed (-3 km/h is a lot at 10 km/h, noise at 40), diverging ramp: green
 // (faster) - grey - red (slower), saturating at +-SC.CMPR. The colour eases in with the square root of the gap (a
 // few % already show); the legend axis is linear. pale: an uncertain gap.

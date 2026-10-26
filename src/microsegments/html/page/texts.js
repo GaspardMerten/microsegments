@@ -6,10 +6,18 @@ function spanLabel(a, b) {
   const first = mo ? (st.lang === 'fr' && da.getDate() === 1 ? '1er' : String(da.getDate())) : fmtDate(a, y ? {day: 'numeric', month: 'long'} : undefined);
   return tx().span(first, fmtDate(b));
 }
+// the line badge in the line's GTFS colours (route_color, route_text_color: "RRGGBB"); no colour: the neutral badge
+// of the stylesheet; no text colour: black or white, whichever reads better on the background
+const hex6 = c => /^#?[0-9a-f]{6}$/i.test(c || '') ? '#' + String(c).replace('#', '') : null;
+const lumaOf = h => { const [r, g, b] = hex2(h).map(lin); return .2126 * r + .7152 * g + .0722 * b; };
+function badgeStyle() {
+  const bg = hex6(D.route_color); if (!bg) return '';
+  return ` style="background:${bg};color:${hex6(D.route_text_color) || (lumaOf(bg) > .18 ? '#111' : '#fff')}"`;
+}
 // one title, "Tram 92 direction Fort-Jaco" (terminus of the shown direction and version), and one period line
 function head() {
   const l = tx(), mode = (MODE[st.lang][D.mode] || MODE[st.lang]._), E = entry();
-  const badge = D.line ? `<span class="badge">${esc(D.line)}</span>` : '';
+  const badge = D.line ? `<span class="badge"${badgeStyle()}>${esc(D.line)}</span>` : '';
   $('h1').innerHTML = DIRS.length || D.line ? l.title(esc(mode), badge, E ? esc(E.to) : '') : esc(D.title || '');
   const x = s => s ? ` <span class="x">· ${esc(s)}</span>` : '';
   $('per').innerHTML = isCmp() ? esc(ctx().per(spanLabel(CMP.a.first, CMP.a.last), spanLabel(CMP.b.first, CMP.b.last)))
@@ -25,7 +33,7 @@ function texts() {
   document.getElementById('stopsT').title = '';
   document.getElementById('hstitle').textContent = l.hstitle;
   document.getElementById('mxtitle').textContent = l.mxtitle;
-  document.getElementById('proftitle').textContent = l.proftitle;
+  document.getElementById('proftitle').textContent = l.proftitle[isIA() ? 'ia' : 'ms'];
   document.getElementById('covtitle').textContent = l.covtitle;
   document.getElementById('mtitle').textContent = l.mtitle;
   document.getElementById('method').innerHTML = l.method(noun(true), noun(false)).filter(x => hsOn() || !/^<b>(Points chauds|Hotspots)\./.test(x)).concat(CMP ? [ctx().method(noun(false), noun(true), perLabel(CMP.a), perLabel(CMP.b))] : []).map(x => `<li>${x}</li>`).join('');

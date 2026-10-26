@@ -21,18 +21,22 @@ function unitsOf(E) {
 // Values of each unit from the microsegment values v: one period (vals) or two (cvals, cm); xs: the excluded ids.
 // Each part counts over the passages of its OWN link (running bins and tail: A→B's, head: B→C's), as the stop-zone
 // blocks do: a single count (A→B's) would charge B→C's head with vehicles that end at B, or cross an hour boundary
-// in between. Each part is itself a ratio of sums over hours and days.
-function uvals(E, v, xs, cm = false) {
-  return unitsOf(E).U.map((u, n) => (cm ? cBlockVals : blockVals)(u.idx.map(i => v[i]), u.len,
-    {u, unit: n, i: u.idx[0], l: u.n, x0: u.x0, stop: false, x: xs.has(u.id)}));
+// in between. Each part is itself a ratio of sums over hours and days. run: without the stop-zone microsegments
+// (the speed between the zones: their length over their time); x1 keeps the unit's whole extent.
+const runIdx = (E, idx, run) => run ? idx.filter(i => E.seg.zone[i] !== 'stop') : idx;
+function uvals(E, v, xs, cm = false, run = false) {
+  return unitsOf(E).U.map((u, n) => { const ix = runIdx(E, u.idx, run);
+    return (cm ? cBlockVals : blockVals)(ix.map(i => v[i]), ix.reduce((t, i) => t + E.seg.len[i], 0),
+      {u, unit: n, i: u.idx[0], l: u.n, x0: u.x0, x1: u.x1, stop: false, x: xs.has(u.id)}); });
 }
 // Totals over microsegments idx (a stretch, the line), skipping those outside a counted unit (excluded, or the first
-// stop's zone): length, obs per passage (both periods when cm), null as soon as one counted part has no value.
-function stretch(E, v, idx, xs, cm) {
+// stop's zone; run: every stop zone): length, obs per passage (both periods when cm), null as soon as one counted
+// part has no value.
+function stretch(E, v, idx, xs, cm, run = false) {
   const {all, ui} = unitsOf(E); let len = 0, n = 0, skip = 0; const t = cm ? {oa: 0, ob: 0} : {opp: 0};
   for (const i of idx) {
     const u = ui[i] >= 0 ? all[ui[i]] : null;
-    if (!u || xs.has(u.id)) { skip += E.seg.len[i]; continue; }
+    if (!u || xs.has(u.id) || run && E.seg.zone[i] === 'stop') { skip += E.seg.len[i]; continue; }
     len += E.seg.len[i]; n++;
     for (const f in t) t[f] = t[f] == null || v[i][f] == null || v[i].absent ? null : t[f] + v[i][f];
   }
@@ -40,9 +44,10 @@ function stretch(E, v, idx, xs, cm) {
   return {len, skip, ...t, ...(cm ? {va: kmhOf(t.oa, len), vb: kmhOf(t.ob, len)} : {kmh: kmhOf(t.opp, len)})};
 }
 // </units>
-const isIA = () => st.view === 'ia', isSel = () => st.view === 'sel';
-// interarrêts: one item per unit; otherwise running microsegments and, when shown, the stop-zone blocks
-const drawn = (E, v, cm = isCmp()) => isIA() ? uvals(E, v, st.xia, cm) : items(v, E, st.stops ? zvals(E, v, cm) : null, st.stops);
+const isIA = () => st.view === 'ia';
+// interarrêts: one item per unit (without the stop zones when they are hidden); otherwise running microsegments
+// and, when shown, the stop-zone blocks
+const drawn = (E, v, cm = isCmp()) => isIA() ? uvals(E, v, st.xia, cm, !st.stops) : items(v, E, st.stops ? zvals(E, v, cm) : null, st.stops);
 // light hatch over a zone block (matrix, profile)
 const zoneHatch = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#mszone)" pointer-events="none"/>`;
 

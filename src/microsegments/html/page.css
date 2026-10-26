@@ -114,15 +114,14 @@ body.nohs #map{height:min(70vh,640px)}
 .hs .n{display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--hot);color:#111;font:700 12px/22px var(--sans);text-align:center}
 .empty{color:var(--ink-3);font-size:14px;padding:8px}
 .lnum{font-size:14px;margin:0 0 10px;color:var(--ink-2)}.lnum b{color:var(--ink);font-variant-numeric:tabular-nums}
-.lk{font:inherit;font-size:13px;color:var(--acc);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
 .ialist{max-height:520px;overflow:auto;margin:0 -4px}
 label.ia{display:grid;grid-template-columns:18px 14px minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px 4px;border-radius:6px;cursor:pointer;font-size:14px}
 label.ia:hover{background:var(--surface-2)}label.ia .sw{margin:0}label.ia.x .nm,label.ia.x .v{color:var(--ink-3);text-decoration:line-through}
 label.ia .ar{color:var(--ink-3)}label.ia .v{font:600 14px var(--mono);font-variant-numeric:tabular-nums}
-.selbig b{font:700 32px/1 var(--serif);font-variant-numeric:tabular-nums}.selbig span{color:var(--ink-3);font:500 12px var(--mono)}
 .side .meta{font:12px/1.5 var(--mono);color:var(--ink-3);margin-top:4px}
-.selctl{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-top:14px;font-size:13px;color:var(--ink-3)}
-.selctl select{font:inherit;font-size:13px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:5px 6px;max-width:150px}
+.iactl{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+.iactl .btn{font-size:13px;padding:5px 10px}
+.btn:disabled{opacity:.4;cursor:default}
 section.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:20px}
 .sub{color:var(--ink-3);font-size:13px;margin:0 0 12px;max-width:110ch}
 .axis text{fill:var(--ink-3);font:11px var(--mono)}

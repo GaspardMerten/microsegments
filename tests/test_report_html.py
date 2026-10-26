@@ -319,7 +319,7 @@ def test_page_speed_only_and_host_api(an_hs):
     hour range and the host's version switch."""
     an, hs = an_hs
     p = render(to_contract(an, hotspots=hs))
-    for s in ("opp: 'Vitesse moyenne', ex: 'Écart avec le soir'", "bands: 'Période'", "school_holiday: ['en vacances scolaires'",
+    for s in ("opp: 'Vitesse moyenne', ex: 'Écart avec la soirée'", "bands: 'Période'", "school_holiday: ['en vacances scolaires'",
               "user_period: ['en période exclue'", "user_period: ['in an excluded period', 'in excluded periods']", "reduced_service: ['de grève'", "m.ms === 'ver'", "qs.get('ver')",
               'id="hA"', 'id="hB"', "tile.openstreetmap.org", "osmdark"):
         assert s in p, s
@@ -334,8 +334,8 @@ def test_page_interarrets_and_selection(an_hs):
     an, hs = an_hs
     p = render(to_contract(an, hotspots=hs))
     script = p[p.index('<script>\n"use strict"'):]
-    for s in ("viewl: {ms: 'Microsegments', ia: 'Interarrêts', sel: 'Sélection'}", "ia: 'Stop to stop'", "all: 'Toute la ligne'",
-              "all: 'Whole line'", "xia=A>B", "q.set('xia', xs)", "ms: 'xia'", "uq('view')", "'Escape' && isSel()"):
+    for s in ("viewl: {ms: 'Microsegments', ia: 'Interarrêts'}", "ia: 'Stop to stop'", "all: 'Tout cocher'", "none: 'Tout décocher'",
+              "all: 'Tick all'", "xia=A>B", "q.set('xia', xs)", "ms: 'xia'", "uq('view')", "v === 'sel' ? 'ia'"):
         assert s in script, s
     zones = script[script.index("// <zones>"):script.index("// </zones>")]
     units = script[script.index("// <units>"):script.index("// </units>")]
@@ -360,3 +360,18 @@ def test_page_interarrets_and_selection(an_hs):
     # the line: every unit (the first stop's head is not counted); without b>c: 90 m and 1.5 obs per passage less
     assert r["L"] == [270, pytest.approx(4.5), 30] and r["Lx"] == [180, pytest.approx(3.0)]
     assert r["few"] is None and r["ok"] == pytest.approx(54.0) and r["gap"] is None
+
+
+def test_page_labels_gap_scale_and_route_colour(an_hs):
+    """Bands: 16-19 is "Soir", 20-24 "Soirée" (the reference); the gap with the evening uses the two-period
+    diverging % scale; "Sélection" is gone; the line badge reads route_color / route_text_color."""
+    an, hs = an_hs
+    c = to_contract(an, hotspots=hs, route_color="#e2001a", route_text_color="ffffff")
+    assert c["route_color"] == "E2001A" and c["route_text_color"] == "FFFFFF"
+    assert to_contract(an, route_color="zz")["route_color"] is None
+    p = render(c)
+    script = p[p.index('<script>\n"use strict"'):]
+    for s in ("pm: 'Soir', evening: 'Soirée'", "pm: 'Late afternoon', evening: 'Evening'", "avec la soirée", "badgeStyle()", "D.route_color"):
+        assert s in script, s
+    for s in ("evening: 'Soir'", "avec le soir", "Sélection", "isSel", "LMAX", "lossColor"):
+        assert s not in script, s

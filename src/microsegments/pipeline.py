@@ -62,6 +62,7 @@ class Prepared:
     per_vehicle: bool = False
     timings: dict[str, float] = field(default_factory=dict)
     mode: str | None = None
+    colors: tuple[str | None, str | None] = (None, None)    # GTFS route_color, route_text_color
 
     def segment_fn(self) -> Callable[..., pl.DataFrame]:
         """``f(length, phase, stop_zone=...)`` for ``tune``: the config's segmentation of this network."""
@@ -99,6 +100,8 @@ class RunResult(Prepared):
         """The page / API JSON (``report.to_contract``)."""
         from .report import to_contract
         kw.setdefault("mode", self.mode)
+        kw.setdefault("route_color", self.colors[0])
+        kw.setdefault("route_text_color", self.colors[1])
         kw.setdefault("names", getattr(getattr(self.cfg, "report", None), "names", None))
         return to_contract(self.analysis, self.network, self.segments, self.hotspots, **kw)
 
@@ -273,7 +276,8 @@ def prepare(cfg: Config, *, log: Callable[[str], None] | None = None) -> Prepare
     per_vehicle = bool(obs["vehicle_id"].null_count() < obs.height / 2) if "vehicle_id" in obs.columns else False
     return Prepared(cfg=cfg, observations=obs, snapshots=snaps, coverage=cov, network=net, placed=placed,
                     passages=pas, events=events, place_report=dict(getattr(res, "report", {}) or {}),
-                    per_vehicle=per_vehicle, timings=tm, mode=_route_mode(source, cfg.select.route, net))
+                    per_vehicle=per_vehicle, timings=tm, mode=_route_mode(source, cfg.select.route, net),
+                    colors=_route_colors(source, cfg.select.route, net))
 
 
 def _read(cfg: Config) -> pl.DataFrame:
@@ -290,6 +294,12 @@ def _route_mode(source, route: str, net) -> str | None:
         return route_mode(source, route, net.dates[0]) if net.dates else None
     except Exception:  # noqa: BLE001
         return None
+
+
+def _route_colors(source, route: str, net) -> tuple[str | None, str | None]:
+    """The GTFS route colours on the first date, (None, None) when unknown."""
+    from .report import route_colors
+    return route_colors(source, route, net.dates[0]) if net.dates else (None, None)
 
 
 def run(cfg: Config | str | Path, *, prepared: Prepared | None = None, hotspots: bool = True,

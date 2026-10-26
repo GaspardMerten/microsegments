@@ -227,14 +227,17 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
                 hotspots: pl.DataFrame | None = None, *, line: str | None = None, route_id: str | None = None,
                 mode: str | None = None, names: dict[str, str] | str | None = None, ctx: list | None = None,
                 coverage: pl.DataFrame | None = None, title: str | None = None,
-                source: str | None = None) -> dict[str, Any]:
+                source: str | None = None, route_color: str | None = None,
+                route_text_color: str | None = None) -> dict[str, Any]:
     """Build the JSON contract (``contract.py``) of an analysis.
 
     ``net``: the :class:`~microsegments.network.Network` (stop names and positions; without it stops are
     numbered). ``segments``: defaults to ``analysis.segments`` (must carry the geometry for the map).
     ``hotspots``: ``hotspots.hotspots(analysis)`` output. ``names``: stop name fixes {gtfs name: shown name},
     or "title" to title-case all-caps names (:func:`title_name`).
-    ``coverage``: COVERAGE table for the coverage strip (else rebuilt from ``analysis.day_hours``)."""
+    ``coverage``: COVERAGE table for the coverage strip (else rebuilt from ``analysis.day_hours``).
+    ``route_color`` / ``route_text_color``: GTFS colours of the line ("RRGGBB", "#" optional) for the page's
+    line badge; invalid values are dropped (:func:`route_colors` reads them from a feed)."""
     an = analysis
     if segments is not None:
         an = _with_segments(an, segments)
@@ -262,6 +265,8 @@ def to_contract(analysis: Analysis, net=None, segments: pl.DataFrame | None = No
         "line": line,
         "route_id": route_id,
         "mode": mode,
+        "route_color": _hex(route_color),
+        "route_text_color": _hex(route_text_color),
         "title": title,
         "source": source,
         "params": {"segment_m": p.segment_m, "phase_m": p.phase_m, "grid": p.grid, "tick_s": p.tick_s,
@@ -343,4 +348,20 @@ def route_mode(source, route: str, date) -> str | None:
         return None
 
 
-__all__ = ["ROUTE_TYPES", "frame_records", "route_mode", "to_contract"]
+def _hex(c) -> str | None:
+    """A GTFS colour as "RRGGBB" (upper case), None when missing or malformed."""
+    c = str(c or "").strip().lstrip("#")
+    return c.upper() if len(c) == 6 and all(x in "0123456789abcdefABCDEF" for x in c) else None
+
+
+def route_colors(source, route: str, date) -> tuple[str | None, str | None]:
+    """GTFS ``route_color`` and ``route_text_color`` of ``route`` on ``date`` ("RRGGBB"; None if unknown)."""
+    try:
+        r = source.feed_for(date, route).routes
+        return tuple(_hex(r[c].drop_nulls()[0]) if c in r.columns and r[c].drop_nulls().len() else None
+                     for c in ("route_color", "route_text_color"))
+    except Exception:  # noqa: BLE001 - optional nicety
+        return None, None
+
+
+__all__ = ["ROUTE_TYPES", "frame_records", "route_colors", "route_mode", "to_contract"]

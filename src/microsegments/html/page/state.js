@@ -2,14 +2,16 @@
 const qs = new URLSearchParams(location.search);
 const st = {lang: T[qs.get('lang')] ? qs.get('lang') : (T[document.documentElement.lang] ? document.documentElement.lang : 'fr'),
             dir: null, ver: null, h0: null, h1: null, metric: 'opp', stops: qs.get('stops') !== 'false', days: [], hot: null,
-            mode: D.compare ? 'cmp' : 'one', chg: null, view: 'ms', xia: new Set(), sel: null};
+            mode: D.compare ? 'cmp' : 'one', chg: null, view: 'ms', xia: new Set()};
 // URL parameters of the display modes (query, or the hash on a page opened from disk):
-//   view=ia|sel   opens "Interarrêts" / "Sélection" (default: microsegments);
+//   view=ia       opens "Interarrêts" (default: microsegments; the former view=sel opens "Interarrêts" too);
 //   xia=A>B,...   the interarrêts left out of the line totals, by their stop ids ("A>B": dirs[].stops[].id of A then B).
 // The page keeps both in its own URL (replaceState); embedded, it also posts {ms: 'xia', xia: [ids], view} to the host
 // on every change so the host can put them in the URL it builds, and follows the host's {ms: 'xia', xia: [ids]}.
 const hq = new URLSearchParams(location.hash.slice(1)), uq = k => hq.get(k) ?? qs.get(k);
-if (['ms', 'ia', 'sel'].includes(uq('view'))) st.view = uq('view');
+// the display mode of a view parameter (null if unknown); the removed "sel" falls back to interarrêts
+const viewOf = v => v === 'ms' || v === 'ia' ? v : v === 'sel' ? 'ia' : null;
+if (viewOf(uq('view'))) st.view = viewOf(uq('view'));
 for (const x of (uq('xia') || '').split(',')) if (x) st.xia.add(x);
 function saveUrl() {
   const xs = [...st.xia].join(','), set = q => { xs ? q.set('xia', xs) : q.delete('xia'); st.view !== 'ms' ? q.set('view', st.view) : q.delete('view'); return q; };
