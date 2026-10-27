@@ -39,21 +39,21 @@ function profile(E, v, {val, col, tip, Y0, YM, step, lab, over, unit}) {
   let s = '<g class="axis">';
   for (let k = Y0; k <= YM + 1e-9; k += step)
     s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(k)}" y2="${y(k)}" stroke-dasharray="${Math.abs(k) < 1e-9 ? '' : '2 4'}"/><text x="${m.l - 6}" y="${y(k) + 4}" text-anchor="end">${lab(k)}</text>`;
-  s += '</g>' + stopTicks(E, x, H, m);
+  s += '</g>';
   v.forEach(b => { if (!shown(b)) s += maskBar(x, b, m, H); });
   // interarrêts without their stop zones: the zones masked
   if (isIA() && !st.stops) for (const z of zonesOf(E).Z) s += maskBar(x, z, m, H);
   v.forEach(b => { const u = val(b); if (u == null || !shown(b)) return; const ys = y(u), y0 = y(0);
     const r = [x(b.x0).toFixed(1), Math.min(ys, y0).toFixed(1), Math.max(1, x(b.x0 + b.len) - x(b.x0) - .5).toFixed(1), Math.max(.5, Math.abs(y0 - ys)).toFixed(1)];
     s += `<rect x="${r[0]}" y="${r[1]}" width="${r[2]}" height="${r[3]}" fill="${col(b)}"/>` + (b.z ? zoneHatch(...r) : ''); });
-  s += (over ? over(x, y) : '') + `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${unit(W)}</text>`;
+  s += stopTicks(E, x, H, m) + (over ? over(x, y) : '') + `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${unit(W)}</text>`;
   svg.innerHTML = s;
   svg.onmousemove = e => { const r = svg.getBoundingClientRect(), u = (e.clientX - r.left - m.l) / (W - m.l - m.r) * Ltot; if (u < 0 || u > Ltot) return hideTip();
     const b = itemAt(v, u); showTip(e, safeTip(() => tip(E, b), E, b)); };
   svg.onmouseleave = hideTip;
 }
-// stop lines and names under a profile
-const stopTicks = (E, x, H, m) => E.stops.map(t => `<line x1="${x(t.x)}" x2="${x(t.x)}" y1="${m.t}" y2="${H - m.b}" stroke="#eef1f6" stroke-opacity=".15"/>`).join('')
+// stop lines (over the bars, which would hide them) and names under a profile
+const stopTicks = (E, x, H, m) => E.stops.map(t => `<line x1="${x(t.x)}" x2="${x(t.x)}" y1="${m.t}" y2="${H - m.b}" stroke="#eef1f6" stroke-opacity=".45" stroke-width="1" stroke-dasharray="3 3" pointer-events="none"/>`).join('')
   + stopNames(E, x, H - m.b + 14, 'var(--ink-3)', 10);
 // stop names along an axis at y, thinned so they do not overlap (profile, matrix)
 function stopNames(E, x, y, fill, size) {
