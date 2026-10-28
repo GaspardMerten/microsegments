@@ -46,7 +46,7 @@ function profile(E, v, {val, col, tip, Y0, YM, step, lab, over, unit}) {
   v.forEach(b => { const u = val(b); if (u == null || !shown(b)) return; const ys = y(u), y0 = y(0);
     const r = [x(b.x0).toFixed(1), Math.min(ys, y0).toFixed(1), Math.max(1, x(b.x0 + b.len) - x(b.x0) - .5).toFixed(1), Math.max(.5, Math.abs(y0 - ys)).toFixed(1)];
     s += `<rect x="${r[0]}" y="${r[1]}" width="${r[2]}" height="${r[3]}" fill="${col(b)}"/>` + (b.z ? zoneHatch(...r) : ''); });
-  s += stopTicks(E, x, H, m) + (over ? over(x, y) : '') + `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--mono)">${unit(W)}</text>`;
+  s += stopTicks(E, x, H, m) + (over ? over(x, y) : '') + `<text x="${m.l}" y="${m.t - 6}" fill="var(--ink-3)" font-size="11" font-family="var(--sans)">${unit(W)}</text>`;
   svg.innerHTML = s;
   svg.onmousemove = e => { const r = svg.getBoundingClientRect(), u = (e.clientX - r.left - m.l) / (W - m.l - m.r) * Ltot; if (u < 0 || u > Ltot) return hideTip();
     const b = itemAt(v, u); showTip(e, safeTip(() => tip(E, b), E, b)); };

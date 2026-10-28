@@ -32,7 +32,7 @@ function drawMatrix() {
     s += `<rect class="mxrow" data-h="${h}" x="${m.l}" y="${y}" width="${W - m.l - m.r}" height="${RH}" fill="#0b1224"/>`;
     v.forEach(b => { const xw = [x(b.x0).toFixed(1), Math.max(.6, x(b.x0 + b.len) - x(b.x0) - .3).toFixed(1)];
       s += `<rect x="${xw[0]}" y="${y + .5}" width="${xw[1]}" height="${RH - 1}" fill="${COL(b)}" pointer-events="none"/>` + (b.z ? zoneHatch(xw[0], y + .5, xw[1], RH - 1) : ''); });
-    lab += `<text class="mxrow" data-h="${h}" x="${LW - 6}" y="${y + RH / 2 + 4}" text-anchor="end" fill="var(--ink-2)" font-size="12" font-family="var(--mono)">${h} h</text>`;
+    lab += `<text class="mxrow" data-h="${h}" x="${LW - 6}" y="${y + RH / 2 + 4}" text-anchor="end" fill="var(--ink-2)" font-size="12" font-family="var(--sans)">${h} h</text>`;
   });
   // dark lines: the stops, or the interarrêt bounds (zone exits)
   for (const u of isIA() ? unitsOf(E).U.map(w => w.x0) : E.stops.map(t => t.x)) s += `<line x1="${x(u)}" x2="${x(u)}" y1="${m.t}" y2="${m.t + D.hours.length * RH}" stroke="#0b1224" stroke-width="1.5" pointer-events="none"/>`;
@@ -55,7 +55,7 @@ $('mx').addEventListener('mousemove', e => {
   const row = Math.floor((py - m.t) / RH), u = inv(px);
   if (row < 0 || row >= rows.length || u < 0 || u > Ltot) return hideTip();
   const b = itemAt(rows[row], u);
-  showTip(e, `<span style="font-family:var(--mono)">${rangeLabel([D.hours[row], D.hours[row] + 1])}</span> · ` + safeTip(() => MX.tip(E, b), E, b));
+  showTip(e, `<span style="font-variant-numeric:tabular-nums">${rangeLabel([D.hours[row], D.hours[row] + 1])}</span> · ` + safeTip(() => MX.tip(E, b), E, b));
 });
 $('mx').addEventListener('mouseleave', hideTip);
 // a row (or its hour label) selects that hour

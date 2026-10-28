@@ -24,7 +24,7 @@ function drawHotList() {
     return `<button type="button" class="hs${st.hot === h.rank ? ' on' : ''}" data-r="${h.rank}"><span class="n">${i + 1}</span>
       <div><div class="nm">${esc(h.from_stop_name)} <span class="ar">→</span> ${esc(h.to_stop_name)}</div>
       <div class="meta">${esc(meta)}</div><div class="meta">${esc([ci, per].filter(Boolean).join(' · '))}</div></div>
-      <div class="v">${k ? ks(k.dk) : '—'}<small>${l.kmh}</small><small>${k ? esc(l.hsv(kf(k.vb), kf(k.va))) : ''}</small></div></button>`;
+      <div class="v">${k ? ks(k.dk) : '–'}<small>${l.kmh}</small><small>${k ? esc(l.hsv(kf(k.vb), kf(k.va))) : ''}</small></div></button>`;
   }).join(''), hotAll().length, l.hsmore, selectHot);
 }
 // the list of hotspots or retained changes (items: their buttons); over HOT_TOP of n, a "show all / top" toggle (more(n))
