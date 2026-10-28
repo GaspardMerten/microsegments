@@ -58,11 +58,11 @@ const chgAll = () => CMP && hsOn() ? (CMP.changes || []).filter(c => c.dir === s
 const chgShown = () => chgAll().filter(c => st.stops || c.zone !== 'stop');
 const chgDir = () => st.hotAll ? chgShown() : chgShown().slice(0, HOT_TOP);
 const signCol = s => s < 0 ? FASTC : SLOWC;
-// the diverging km/h bar: slower (red) on the left, faster (green) on the right
-function gapBar() {
-  const M = 100 * SC.CMPR, pos = v => (Math.min(M, Math.max(-M, v)) / M + 1) * 50;
-  return rampBar(Array.from({length: 41}, (_, i) => relColor(SC.CMPR * (i - 20) / 20)),
-                 SC.CRTICKS.map(v => `<span style="left:${pos(v)}%">${v === M ? '≥ ' : v === -M ? '≤ ' : ''}${v ? signed(v, 0) : '0'} %</span>`));
+// the diverging % bar on +-R: slower (red) on the left, faster (green) on the right
+function gapBar(R = SC.CMPR, ticks = SC.CRTICKS) {
+  const M = 100 * R, pos = v => (Math.min(M, Math.max(-M, v)) / M + 1) * 50;
+  return rampBar(Array.from({length: 41}, (_, i) => relColor(R * (i - 20) / 20, false, R)),
+                 ticks.map(v => `<span style="left:${pos(v)}%">${v === M ? '≥ ' : v === -M ? '≤ ' : ''}${v ? signed(v, 0) : '0'} %</span>`));
 }
 function cmpLegend() {
   const c = ctx().legend;

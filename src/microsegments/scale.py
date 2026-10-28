@@ -51,10 +51,12 @@ CMP_TICKS = (-10, -5, 0, 5, 10)            # linear axis
 KMH_PER_T = 108.0          # 30 m in T s = 108 / T km/h
 # the page shows speeds only: a km/h-linear bar (same ramp), and gaps (evening, two periods)
 KMH_TICKS = (0, 6, 12, 18, 24, 30, 36)    # the page's speed bar: linear in km/h, slow to fast
-# the page colours speed gaps (with the evening, between two periods) relative to the reference speed:
-# +-25 % (diverging, red = slower)
+# the page colours speed gaps (with the evening, between two periods) relative to the reference speed
+# (diverging, red = slower): +-25 % between two periods, +-50 % with the evening (peak hours are much slower)
 CMP_REL = 0.25
 CMP_REL_TICKS = (-25, -10, 0, 10, 25)      # %
+EVE_REL = 0.5
+EVE_REL_TICKS = (-50, -25, 0, 25, 50)      # %
 
 # the STIB speed ramp (km/h, colour), interpolated in OKLab
 RAMP = ((4.5, "#7a1020"), (7.5, "#e5484d"), (10.5, "#f0a13a"), (13.5, "#b8e27f"), (16.5, "#3fb950"),
@@ -63,7 +65,8 @@ RAMP = ((4.5, "#7a1020"), (7.5, "#e5484d"), (10.5, "#f0a13a"), (13.5, "#b8e27f")
 DIVERGING = ((-1.0, "#11683e"), (-0.45, "#3fb950"), (0.0, "#4a5470"), (0.45, "#f0a13a"), (1.0, "#e5484d"))
 
 # what the page uses (its ``SC``)
-CONSTANTS = {"KTICKS": list(KMH_TICKS), "CMPR": CMP_REL, "CRTICKS": list(CMP_REL_TICKS)}
+CONSTANTS = {"KTICKS": list(KMH_TICKS), "CMPR": CMP_REL, "CRTICKS": list(CMP_REL_TICKS),
+             "EXR": EVE_REL, "EXTICKS": list(EVE_REL_TICKS)}
 
 
 def to_seconds(metric: str, value, len_m, tick_s: float = 20.0):

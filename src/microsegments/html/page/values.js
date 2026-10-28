@@ -59,8 +59,8 @@ function vals0(E, R, days) {
   });
 }
 // the value of the chosen measure (km/h) and its colour
-// gap with the evening: relative to the evening speed (dr), on the diverging scale of two periods (+-SC.CMPR)
+// gap with the evening: relative to the evening speed (dr), on the diverging scale, +-SC.EXR
 const metricVal = (v, m = st.metric) => m === 'ex' ? v.dr : v.kmh;
 // an excluded interarrêt: flat grey (XC)
 const XC = '#2a3350';
-const colorFor = v => v.x ? XC : !shown(v) ? MASKC : st.metric === 'ex' ? relColor(v.dr) : kmhColor(v.kmh);
+const colorFor = v => v.x ? XC : !shown(v) ? MASKC : st.metric === 'ex' ? relColor(v.dr, false, SC.EXR) : kmhColor(v.kmh);

@@ -29,22 +29,23 @@ function colorOf(v) {
 // value, never computed from the data (no percentile): every line, period, day, hour, band and stop-zone toggle
 // shares it. A speed (km/h = 3.6 x length / time per vehicle) is coloured on the STIB ramp (4.5 km/h dark red ..
 // 27 km/h dark green); its legend bar is linear in km/h (0 to >= 36 km/h at KTICKS, slow to fast). Gap with the
-// evening and between two periods: the gap relative to the reference speed, diverging, +-CMPR.
+// evening and between two periods: the gap relative to the reference speed, diverging, +-EXR with the evening,
+// +-CMPR between two periods.
 // Why these constants (tram and bus lines, weekdays 2025): between stops the median is 24-36 km/h, the slowest 2 %
 // 5-9 km/h.
-const SC = {KTICKS: [0, 6, 12, 18, 24, 30, 36], CMPR: 0.25, CRTICKS: [-25, -10, 0, 10, 25]};
+const SC = {KTICKS: [0, 6, 12, 18, 24, 30, 36], CMPR: 0.25, CRTICKS: [-25, -10, 0, 10, 25], EXR: 0.5, EXTICKS: [-50, -25, 0, 25, 50]};
 // no data: flat discreet grey; masked stop zone: grey hatching (SVG pattern #mshatch, legend swatch .sw.hatch)
 const NULLC = '#3a4560', MASKC = 'url(#mshatch)';
 const kmhColor = k => k == null || !isFinite(k) ? NULLC : colorOf(k);
 // Relative speed gaps r = gap / reference speed (-3 km/h is a lot at 10 km/h, noise at 40), diverging ramp: green
-// (faster) - grey - red (slower), saturating at +-SC.CMPR. The colour eases in with the square root of the gap (a
+// (faster) - grey - red (slower), saturating at +-R (SC.CMPR, or SC.EXR with the evening). The colour eases in with the square root of the gap (a
 // few % already show); the legend axis is linear. pale: an uncertain gap.
 const DIV = [[-1, '#11683e'], [-.45, '#3fb950'], [0, '#4a5470'], [.45, '#f0a13a'], [1, '#e5484d']];
 const DIV_LAB = labOf(DIV);
 const FASTC = '#3fb950', SLOWC = '#e5484d';
-function relColor(r, pale) {
+function relColor(r, pale, R = SC.CMPR) {
   if (r == null || !isFinite(r)) return NULLC;
-  let t = -Math.sign(r) * Math.min(1, Math.sqrt(Math.abs(r) / SC.CMPR));
+  let t = -Math.sign(r) * Math.min(1, Math.sqrt(Math.abs(r) / R));
   if (pale) t *= .35;
   let i = 0; while (i < DIV_LAB.length - 2 && t > DIV_LAB[i + 1][0]) i++;
   return mixLab(DIV_LAB, i, Math.min(1, Math.max(0, (t - DIV_LAB[i][0]) / (DIV_LAB[i + 1][0] - DIV_LAB[i][0]))));

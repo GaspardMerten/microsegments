@@ -6,9 +6,9 @@ function drawProfile() {
   if (!E) { svg.innerHTML = ''; return; }
   $('proftitle').textContent = l.proftitle[isIA() ? 'ia' : 'ms'];
   if (isCmp()) return cmpProfile();
-  // gap with the evening: % of the evening speed, the scale of two periods
+  // gap with the evening: % of the evening speed, on +-SC.EXR
   if (st.metric === 'ex') {
-    gapProfile(E, drawn(E, vals(E), false), b => b.dr == null ? null : 100 * b.dr, colorFor, tipHtml, 200 * SC.CMPR);
+    gapProfile(E, drawn(E, vals(E), false), b => b.dr == null ? null : 100 * b.dr, colorFor, tipHtml, 200 * SC.EXR);
     return setSub($('profsub'), l.profsub(E.from, E.to, whenLabel(), false, true));
   }
   const v = drawn(E, vals(E), false);
